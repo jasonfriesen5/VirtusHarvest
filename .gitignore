@@ -1,3 +1,39 @@
+# ── macOS ────────────────────────────────────────────────────────────────────
 .DS_Store
 *.DS_Store
 Thumbs.db
+
+# ── Secrets: never commit ────────────────────────────────────────────────────
+# auth_keys/ holds the ECDSA P-256 private key the scale signs its challenge
+# with — it is what makes the anti-clone check meaningful. dfu_keys/ holds the
+# key that signs firmware packages. Leaking either would let someone build a
+# scale the app accepts as genuine, or sign firmware that devices in the field
+# would install. Git history is effectively permanent, so keep them out.
+auth_keys/
+dfu_keys/
+*.pem
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Build output ─────────────────────────────────────────────────────────────
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+native-app/ios/App/Pods/
+native-app/ios/App/build/
+native-app/android/.gradle/
+native-app/android/build/
+native-app/android/app/build/
+native-app/ios/App/App/public/
+native-app/android/app/src/main/assets/public/
+
+# Compiled firmware artefacts
+*.hex
+*.zip
+*.ino.bak
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
