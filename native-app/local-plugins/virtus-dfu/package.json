@@ -1,0 +1,22 @@
+{
+  "name": "virtus-dfu",
+  "version": "1.0.0",
+  "description": "Nordic Secure DFU for Virtus Harvest — thin Capacitor wrapper over Nordic's own IOS-DFU-Library.",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "dist/",
+    "ios/",
+    "Package.swift"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  },
+  "license": "MIT"
+}

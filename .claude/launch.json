@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "virtus",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "/Users/jason/Downloads/Code Folder", "-p", "8090", "-c-1"],
+      "port": 8090
+    }
+  ],
+  "autoVerify": false
+}

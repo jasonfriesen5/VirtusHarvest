@@ -34,9 +34,18 @@ native-app/android/app/src/main/assets/public/
 *.zip
 *.ino.bak
 
+# ── Nested repo: tracked separately ──────────────────────────────────────────
+# Virtus-Farmware/ is its own git repo with its own remote (Virtus-Farmware.git).
+# Ignoring it here keeps git from recording a bare gitlink — a submodule pointer
+# with no .gitmodules entry, which clones as an empty directory. Commit and push
+# firmware changes from inside that directory instead.
+Virtus-Farmware/
+
 # ── Editors ──────────────────────────────────────────────────────────────────
 .idea/
 .vscode/
+# Machine-local Claude Code permissions; launch.json is shared, this is not.
+.claude/settings.local.json
 
 # ── Android signing: keystore + passwords, never commit ──────────────────────
 # Losing the upload key means Google key-reset; leaking it lets someone ship an
