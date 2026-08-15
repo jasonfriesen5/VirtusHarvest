@@ -37,3 +37,10 @@ native-app/android/app/src/main/assets/public/
 # ── Editors ──────────────────────────────────────────────────────────────────
 .idea/
 .vscode/
+
+# ── Android signing: keystore + passwords, never commit ──────────────────────
+# Losing the upload key means Google key-reset; leaking it lets someone ship an
+# update that devices accept as genuine. Same reasoning as auth_keys/ above.
+native-app/android/keystore.properties
+*.jks
+*.keystore
