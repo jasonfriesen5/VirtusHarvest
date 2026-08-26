@@ -975,7 +975,10 @@ body{
 
 
 /* ══ TRANSACTION EDIT / ADD SHEET ══ */
-.tx-sheet-overlay{position:fixed;inset:0;background:rgba(60,40,0,0.26);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);display:flex;align-items:flex-end;justify-content:center;z-index:600;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+/* padding-bottom is set from JS to the keyboard height — see the
+   keyboard-aware bottom sheets block. Transitioned so the lift matches the
+   keyboard's own animation instead of snapping. */
+.tx-sheet-overlay{position:fixed;inset:0;background:rgba(60,40,0,0.26);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);display:flex;align-items:flex-end;justify-content:center;z-index:600;opacity:0;pointer-events:none;transition:opacity 0.2s, padding-bottom 0.22s ease-out;}
 .tx-sheet-overlay.open{opacity:1;pointer-events:all;}
 /* ── Liquid glass: frosted bottom sheet ── */
 .tx-sheet{
@@ -4181,7 +4184,7 @@ function _nativeBleNotify(dataView){
   catch(e){ console.warn('native BLE parse error:', e); }
 }
 
-var APP_VERSION = '1.0.0';
+var APP_VERSION = '1.0.1';
 
 // Detects the actual runtime shell: native Android/iOS via Capacitor's
 // injected bridge (window.Capacitor.getPlatform()), else falls back to
@@ -6126,6 +6129,47 @@ function deleteTxFromTruck(logId, truckId){
   });
 }
 
+// ══ KEYBOARD-AWARE BOTTOM SHEETS ══
+//
+// iOS does not shrink the layout viewport when the keyboard opens, so a sheet
+// pinned to the bottom (the overlay is align-items:flex-end) stays put and the
+// keyboard covers it. On Add Season that hid the name field and both buttons
+// with no way to scroll to them — the sheet is fixed, so scrollIntoView can't
+// help either.
+//
+// visualViewport reports the area actually visible, so the gap between it and
+// window.innerHeight is the keyboard. Pad the overlay by that much and the
+// sheet rides above the keyboard.
+//
+// Padding rather than transform: .tx-sheet's transform drives the open/close
+// slide, and writing to it here would fight that animation.
+(function(){
+  var vv = window.visualViewport;
+  if(!vv) return;   // older WebViews: leave the previous behaviour alone
+
+  function apply(){
+    var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    // Walk every overlay, not just open ones, so a sheet that closes while the
+    // keyboard is up doesn't keep stale padding.
+    document.querySelectorAll('.tx-sheet-overlay').forEach(function(ov){
+      var lift  = ov.classList.contains('open') ? kb : 0;
+      ov.style.paddingBottom = lift ? lift+'px' : '';
+      var sheet = ov.querySelector('.tx-sheet');
+      // A tall sheet has to shrink as well, or lifting it pushes its header off
+      // the top of the screen. .tx-sheet-body already scrolls, so capping the
+      // height is enough — the content stays reachable.
+      if(sheet) sheet.style.maxHeight = lift ? Math.max(180, vv.height - 24)+'px' : '';
+    });
+  }
+
+  vv.addEventListener('resize', apply);
+  vv.addEventListener('scroll', apply);
+  // Moving between fields can change the keyboard's height (a numeric pad is
+  // shorter than the alphabetic one), and a sheet can open while it's already up.
+  document.addEventListener('focusin',  function(){ setTimeout(apply, 60); });
+  document.addEventListener('focusout', function(){ setTimeout(apply, 60); });
+})();
+
 window.addEventListener('online',function(){isOnline=true;updateNetPill();autoSync();});
 window.addEventListener('offline',function(){isOnline=false;updateNetPill();});
 function updateNetPill(){
@@ -6690,6 +6734,51 @@ function _applyAuthGate(){
   _authWasBlocked = blocked;
 }
 
+// ══ SCREEN WAKE LOCK ══
+//
+// While a scale is connected the screen must stay lit: the operator is reading a
+// live weight from the tractor seat, and iOS Auto-Lock would blank it mid-load.
+// When the power-save timer decides the session has gone idle and sends the
+// scale to SLEEP, the lock is released and the device reverts to its own
+// Auto-Lock setting — so an iPad left in the cab overnight doesn't sit burning
+// its screen.
+//
+// Tied to the scale connection rather than to the app being open: with no scale
+// there is nothing live to watch, and holding a tablet awake for a records
+// screen would be rude to the battery.
+//
+// Wake Lock API rather than a native plugin — no new dependency, and the same
+// code covers iOS (16.4+) and Android from the shared bundle. On iOS 15 the API
+// is absent and the app simply behaves as it did before.
+var _wakeLock = null;
+
+async function _wakeLockApply(){
+  var want = _psScaleConnected() && !_psAsleep && document.visibilityState === 'visible';
+  try{
+    if(want && !_wakeLock && navigator.wakeLock){
+      _wakeLock = await navigator.wakeLock.request('screen');
+      // The browser releases the lock by itself whenever the page is hidden, so
+      // drop our handle on that event — otherwise the next apply() believes the
+      // lock is still held and never re-requests it.
+      _wakeLock.addEventListener('release', function(){ _wakeLock = null; });
+      logEvent('scale', 'Screen kept awake while scale is connected');
+    } else if(!want && _wakeLock){
+      var l = _wakeLock; _wakeLock = null;
+      await l.release();
+      logEvent('scale', 'Screen wake lock released — device Auto-Lock now applies');
+    }
+  }catch(e){
+    // request() rejects if the page isn't visible or the OS declines. Neither is
+    // fatal; the screen just behaves as it would without the app.
+    _wakeLock = null;
+    console.warn('[wakelock]', (e && e.message) || e);
+  }
+}
+
+// Returning to the foreground needs an explicit re-acquire — the spec drops the
+// lock whenever the page is hidden.
+document.addEventListener('visibilitychange', function(){ _wakeLockApply(); });
+
 // ══ SCALE POWER SAVING ══
 // After the chosen idle time with no screen activity, tell the connected
 // scale to enter power-saving (SLEEP). Any interaction wakes it (WAKE).
@@ -6717,6 +6806,9 @@ function _psArm(){
         _psSendScale('SLEEP');
         _psAsleep=true;
         _psShowSleepOverlay();
+        // Scale is asleep, so nothing live is on screen — hand the display back
+        // to the device's own Auto-Lock.
+        _wakeLockApply();
       }
     }, _psTimeoutMin*60*1000);
   }
@@ -6739,6 +6831,7 @@ function _psHideSleepOverlay(){
 function _psWake(){
   _psAsleep=false;
   _psHideSleepOverlay();
+  _wakeLockApply();   // live again — hold the screen open
   if(_psScaleConnected()) _psSendScale('WAKE');
   _psArm();
 }
@@ -6978,6 +7071,7 @@ async function connectRealDevice(device){
       setTimeout(function(){ _psSendScale('RES:1');  }, 1200);
       setTimeout(function(){ if(typeof _startScaleAuth==='function') _startScaleAuth(); }, 800);
       _psAsleep=false; if(typeof _psArm==='function') _psArm();
+      _wakeLockApply();   // scale is live — keep the screen on
 
       // Report the negotiated MTU once the link has settled. Android asks for 512
       // after service discovery; iOS negotiates on its own and exposes no request
@@ -7068,6 +7162,7 @@ async function connectRealDevice(device){
       setTimeout(function(){ sendBleCommand('RES:1'); }, 1200);  // report full 1 kg precision; app does display rounding
       setTimeout(function(){ if(typeof _startScaleAuth==='function') _startScaleAuth(); }, 800);  // verify genuine scale
       _psAsleep=false; if(typeof _psArm==='function') _psArm();  // start idle-timeout watch
+      _wakeLockApply();   // scale is live — keep the screen on
     } catch(uartErr){
 
       // ── Priority 2: Standard BLE Weight Scale profile ──
@@ -7132,6 +7227,7 @@ function disconnectBt(){
   _connectedSerial=null;
   updateBtPills(false);
   resetScaleDisplay();
+  _wakeLockApply();   // nothing live to watch — release the screen
   document.getElementById('btn-log').disabled    = true;
   document.getElementById('btn-unload').disabled = true;
   clearDeviceInfo();
@@ -10702,6 +10798,8 @@ function updateDeviceInfo(info){
   // Capture the module's hardware serial — the stable, portable identity we
   // bind grain carts to (survives browser/device/reinstall changes).
   _connectedSerial = (info.serial && info.serial !== 'N/A') ? info.serial : null;
+  _adoptCartDevice();
+  _healActiveCart();
   _updateCartDeviceStatus();
   _checkCartSerialMatch();
   // Now that we know the scale's firmware version, quietly check for a newer one
@@ -10719,6 +10817,54 @@ function _checkCartSerialMatch(){
     // when nothing is actually wrong. Still traceable under Diagnostics.
     logEvent('scale', 'Connected module '+_connectedSerial+' is not '+c.name+'\u2019s paired scale');
   }
+}
+
+// Does this cart belong to the scale currently connected?
+//
+// Two identities, checked in order of cost. deviceId is the local BLE handle:
+// exact, but per-device and deliberately never synced (it is a MAC on Android
+// and a per-app UUID on iOS, so it would be meaningless on the other platform).
+// serial is the module's hardware serial — the portable identity the cloud
+// actually carries, and the one this app already calls "the stable identity we
+// bind grain carts to".
+//
+// Checking serial too is what fixes a cart that arrived by sync: those always
+// have deviceId null, so the deviceId test alone could never match and the
+// scale showed as "Connected — not linked to a cart" forever, no matter how
+// many times you reconnected.
+function _cartMatchesDevice(c){
+  if(!c) return false;
+  if(btDevice && c.deviceId && c.deviceId === btDevice.id) return true;
+  return !!(_connectedSerial && c.serial && c.serial === _connectedSerial);
+}
+
+// Bind the local BLE handle onto whichever cart matched by serial, so the link
+// is direct from here on rather than re-derived on every render. Runs after the
+// INFO packet, which is the first moment the serial is known.
+function _adoptCartDevice(){
+  if(!btDevice || !_connectedSerial) return;
+  var carts = getCarts(), changed = false;
+  carts.forEach(function(c){
+    if(c.serial && c.serial === _connectedSerial && c.deviceId !== btDevice.id){
+      c.deviceId   = btDevice.id;
+      c.deviceName = btDevice.name || c.deviceName || c.name;
+      changed = true;
+    }
+  });
+  // deviceId/deviceName are local-only, so this never needs a cloud push.
+  if(changed) saveCarts(carts);
+}
+
+// vh_active_cart can outlive the cart it names — carts created before sign-in
+// used to be dropped by the merge, leaving the pointer aimed at nothing and no
+// cart selected. Prefer the cart matching the connected scale, else the first.
+function _healActiveCart(){
+  var carts = getCarts();
+  if(!carts.length){ _activeCartId = null; localStorage.removeItem('vh_active_cart'); return; }
+  if(carts.some(function(c){ return c.id === _activeCartId; })) return;
+  var pick = carts.find(_cartMatchesDevice) || carts[0];
+  _activeCartId = pick.id;
+  localStorage.setItem('vh_active_cart', pick.id);
 }
 
 // ══ GRAIN CARTS ══
@@ -10875,7 +11021,7 @@ function renderCarts(){
 
   // A scale can be connected without belonging to any cart — connect straight from
   // a scan, or delete the cart afterwards. Surface it so it can always be released.
-  if(btDevice && !carts.some(function(x){ return x.deviceId === btDevice.id; })){
+  if(btDevice && !carts.some(_cartMatchesDevice)){
     var orphan=document.createElement('div');
     orphan.className='info-row';
     orphan.innerHTML =
@@ -12197,6 +12343,8 @@ async function pullConfig(){
         if(!mergedCarts.find(function(m){ return m.id===l.id; }) && _isDirty('ht_carts', l.id)) mergedCarts.push(l);
       });
       saveCarts(mergedCarts);
+      _adoptCartDevice();
+      _healActiveCart();
       renderCarts();
     }
 
@@ -12549,38 +12697,78 @@ async function pushConfig(){
 
 // ── Auto-push a single farm ──
 function syncFarm(farm){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_farms', farm.id); return; }
   _pushConfig('ht_farms',{id:farm.id, user_id:currentWorker.id, name:farm.name});
 }
 function syncField(field){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_fields', field.id); return; }
   _pushConfig('ht_fields',{id:field.id, user_id:currentWorker.id, farm_id:field.farmId, name:field.name, area:field.area||null, area_unit:field.areaUnit||'ha', notes:field.notes||null});
 }
 function syncTruck(truck){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_trucks', truck.id); return; }
   _pushConfig('ht_trucks',{id:truck.id, user_id:currentWorker.id, name:truck.name, plate:truck.plate||null, driver:truck.driver||null, capacity:truck.capacity||null, make_model:truck.makeModel||null, notes:truck.notes||null});
 }
 function syncCart(cart){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_carts', cart.id); return; }
   _pushConfig('ht_carts',{id:cart.id, user_id:currentWorker.id, name:cart.name, serial:cart.serial||null});
 }
 function deleteSyncCart(id){ if(currentWorker&&currentWorker.id) _deleteConfig('ht_carts',id); }
 function syncDestination(dest){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_destinations', dest.id); return; }
   _pushConfig('ht_destinations',{id:dest.id, user_id:currentWorker.id, name:dest.name});
 }
 function syncOperator(op){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_operators', op.id); return; }
   _pushConfig('ht_operators',{id:op.id, user_id:currentWorker.id, name:op.name, role:op.role||null});
 }
 function syncBoundary(fieldId, points){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_boundaries', fieldId); return; }
   // Boundaries are keyed by field_id, not id — pass it explicitly so change
   // tracking has something to key on.
   _pushConfig('ht_boundaries',{field_id:fieldId, user_id:currentWorker.id, points:points}, fieldId);
 }
 function syncSeason(season){
-  if(!currentWorker||!currentWorker.id) return;
+  // No session yet: still record the change. _pushConfig() marks dirty as its
+  // first act, but this guard returns before reaching it — so anything created
+  // before signing in was never tracked, and pullConfig()'s "keep a local-only
+  // row only if it is dirty" rule silently discarded it on first sign-in.
+  // Marking here means the row survives that merge and syncQueue() uploads it.
+  if(!currentWorker||!currentWorker.id){ _markDirty('ht_seasons', season.id); return; }
   _pushConfig('ht_seasons',{id:season.id, user_id:currentWorker.id, name:season.name, created_at:season.createdAt||new Date().toISOString()});
 }
 function deleteSyncSeason(id){ if(currentWorker&&currentWorker.id) _deleteConfig('ht_seasons',id); }
@@ -12701,13 +12889,16 @@ function renderSeasons(){
         // hand-styled inline (transparent, --text3 outline) with no shared class,
         // so it missed the glass treatment in both themes.
         '<button class="btn-edit-sm" onclick="event.stopPropagation();openEditSeasonSheet(this.dataset.sid)" data-sid="'+s.id+'" style="border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">'+T('Edit')+'</button>' +
+        // Opening the transaction list is its own control now. Tapping the row
+        // used to select AND drill in, so there was no way to just switch the
+        // active season — you always ended up in a list you hadn't asked for.
+        '<button class="btn-edit-sm season-open-btn" onclick="event.stopPropagation();seasonOpenTransactions(this.dataset.sid, this.dataset.sname)" data-sid="'+s.id+'" data-sname="'+esc(s.name)+'" title="'+T('View transactions')+'" style="border-radius:8px;padding:4px 10px;font-size:14px;font-weight:700;cursor:pointer;line-height:1;">›</button>' +
       '</div>';
 
-    // Tap row = select season AND drill into transactions
+    // Tap row = select this season, and nothing else.
     row.addEventListener('click', function(e){
       if(e.target.classList.contains('btn-del-sm')) return;
       selectSeason(s.id);
-      seasonOpenTransactions(s.id, s.name);
     });
 
     var delBtn = document.createElement('button');
@@ -15003,9 +15194,17 @@ function _checkCropOnFieldSelect(field){
   _checkFieldLoadsCropMismatch(field, currentCrop);
 }
 
-// Loads already booked against this field that used a different crop.
+// Loads already booked against this field IN THIS SEASON that used a different
+// crop.
+//
+// Season-scoped deliberately. This used to read getLogs(), i.e. every load ever
+// recorded on the field — so last year's corn on a field warned you this year
+// when you were taking wheat off it. Crops rotate annually, so that fired on
+// completely normal farming and trained people to dismiss it. Within a single
+// season two different crops off one field really is worth questioning, which
+// is the case still worth catching.
 function _checkFieldLoadsCropMismatch(field, currentCrop){
-  var prior = getLogs().filter(function(l){
+  var prior = getSeasonLogs().filter(function(l){
     return !l.isTruckEmpty && l.crop && l.crop !== currentCrop &&
            _logMatchesField(l, field);
   });
