@@ -1,0 +1,46 @@
+[build]
+  base    = "web"
+  command = "npm run build"
+  publish = "web/dist"
+
+# /privacy and /support are on file with Apple and Google for the store
+# listings, so they must keep resolving at the site root. First match wins, so
+# these come before the catch-all — which would otherwise hand them to the
+# React app, which has no such routes.
+#
+# public/_redirects carries the same rules, because a drag-and-drop deploy
+# publishes dist/ and never sees this file.
+[[redirects]]
+  from   = "/privacy"
+  to     = "/privacy.html"
+  status = 200
+
+[[redirects]]
+  from   = "/support"
+  to     = "/support.html"
+  status = 200
+
+# Required by Google Play: an account-deletion page reachable without the app.
+[[redirects]]
+  from   = "/delete-account"
+  to     = "/delete-account.html"
+  status = 200
+
+# React Router owns every other path. Without this, deep links like
+# /records reach Netlify as real paths, find no file, and 404.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options        = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
