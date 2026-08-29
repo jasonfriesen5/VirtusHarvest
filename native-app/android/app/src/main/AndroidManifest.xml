@@ -48,7 +48,20 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+
+    <!-- Location, and NOT capped at API 30. The cap belongs on the legacy Bluetooth
+         permissions above, where location was only ever a proxy for BLE scanning —
+         but this app also uses navigator.geolocation directly to stamp each load
+         with its field position and to centre the map. Capacitor's
+         BridgeWebChromeClient asks for COARSE+FINE at runtime when the WebView
+         requests a position, and Android auto-denies a runtime request for any
+         permission the manifest does not declare: with maxSdkVersion=30 here,
+         every getCurrentPosition/watchPosition call failed silently on Android 12+.
+         iOS has always had the matching NSLocationWhenInUseUsageDescription.
+         BLUETOOTH_SCAN keeps neverForLocation — scan results are still not used
+         to derive location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 </manifest>

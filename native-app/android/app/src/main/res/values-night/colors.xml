@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-mode counterparts: CSS vars bg-top (#19191A) and bg-bot (#101011). -->
+    <color name="systemBarTop">#19191A</color>
+    <color name="systemBarBottom">#101011</color>
+</resources>
