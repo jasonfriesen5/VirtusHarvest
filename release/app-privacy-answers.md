@@ -45,7 +45,7 @@ these answers are expected to agree.
 
 | type | why |
 |---|---|
-| **Photos or Videos** | the profile photo is written to `localStorage` as `ht_profile_photo` and never uploaded. Apple defines "collect" as transmitting off device. |
+| **Photos or Videos** | the profile photo picker was removed in 1.0.1 — the app no longer touches the camera or photo library, and requests neither permission. |
 | **Identifiers** | no IDFA, no advertising or device identifier is transmitted. The Supabase `user_id` scopes a user's own rows; it is not collected *as* a data type for any listed purpose. |
 | **Usage Data / Diagnostics** | no analytics SDK, no crash reporter. |
 | **Financial / Payment / Purchases** | none. No IAP. |
@@ -60,7 +60,12 @@ these answers are expected to agree.
 ## Account deletion (Guideline 5.1.1(v))
 
 - **Supported: Yes.**
-- Reviewer path: **More ▸ Settings ▸ Delete Account**
+- Reviewer path: **More ▸ Settings ▸ Delete Account** — the single location.
+  ⚠ It lived under Cloud Sync until 2026-08-27, when App Review rejected
+  1.0 (9) under 5.1.1(v): the notes pointed at Settings and it wasn't there.
+  Moved to Settings, and Cloud Sync's copy removed so there is one place only.
+  **Verify the path in the running app before writing it into reviewer notes** —
+  this rejection cost a full review cycle.
 - Calls the `delete_own_account()` Postgres function, which clears all ten
   user-owned tables and then the `auth.users` row.
 

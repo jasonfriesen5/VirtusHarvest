@@ -2193,6 +2193,18 @@ function _openPasswordResetWhenReady(){
             window._isRecoveryFlow = false;
           }
         }
+
+        // Supabase fires this on an explicit sign-out AND when a refresh token
+        // is finally rejected. Without it, currentWorker.id survived a dead
+        // session and the app went on believing it was signed in — the root of
+        // the "silently stops syncing while showing Sign Out" bug. Only the
+        // account half is cleared; the operator selection is a separate identity
+        // and stays put.
+        if(event === 'SIGNED_OUT'){
+          try{
+            if(typeof _clearAccountIdentity === 'function') _clearAccountIdentity();
+          }catch(e){ console.warn('SIGNED_OUT cleanup failed:', e); }
+        }
       });
 
       // Safety: if no auth event fires within 6s (e.g. the URL had no real auth
@@ -2646,11 +2658,14 @@ function _openPasswordResetWhenReady(){
 
       <!-- Account strip — shows Sign In or Sign Out depending on state -->
       <div class="more-profile" style="margin-bottom:8px;">
-        <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="openProfilePicOptions()">
-          <div class="profile-avatar" style="background:#2A7AE2;color:#fff;overflow:hidden;" id="settings-avatar">?</div>
-          <div style="position:absolute;bottom:0;right:0;width:18px;height:18px;background:#2D9D5C;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          </div>
+        <!-- Initials, not a photo. The photo picker was removed in 1.0.1: it used
+             <input type="file" capture="user">, which crashed App Review under
+             Guideline 2.1(a) because iOS terminates an app that touches the
+             camera without NSCameraUsageDescription. Nobody was asking for
+             profile photos on a grain-cart app, and dropping it also drops two
+             permission prompts and the Photos question from App Privacy. -->
+        <div style="flex-shrink:0;">
+          <div class="profile-avatar" style="background:#2A7AE2;color:#fff;" id="settings-avatar">?</div>
         </div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px;" id="settings-signin-label">Not signed in</div>
@@ -2968,6 +2983,19 @@ function _openPasswordResetWhenReady(){
           </div>
         </div>
 
+        <!-- Account deletion. App Review 1.0 (9) was rejected under Guideline
+             5.1.1(v) — "does not include an option to initiate account deletion"
+             — because this lived under Cloud Sync while our reviewer notes sent
+             them to Settings. Settings is where a reviewer and a user look
+             first, so this is now the single place it appears; keep it here. -->
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Account">Account</div>
+          <div class="setting-row" style="border-bottom:none;">
+            <div><div class="sr-label"><span data-en="Delete Account">Delete Account</span></div><div class="sr-sub" data-en="Permanently deletes your account and all its data">Permanently deletes your account and all its data</div></div>
+            <button class="btn-small-red" id="btn-delete-account" onclick="deleteAccount()" data-en="Delete">Delete</button>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -3007,13 +3035,6 @@ function _openPasswordResetWhenReady(){
              offering account creation must offer account deletion in-app. Its
              own card so it can't be confused with the Clear actions above,
              which only remove records and leave the account intact. -->
-        <div class="card">
-          <div class="sp-section-lbl" data-en="Account">Account</div>
-          <div class="setting-row" style="border-bottom:none;">
-            <div><div class="sr-label"><span id="lbl-delacct" data-en="Delete Account">Delete Account</span></div><div class="sr-sub" data-en="Permanently deletes your account and all its data">Permanently deletes your account and all its data</div></div>
-            <button class="btn-small-red" id="btn-delete-account" onclick="deleteAccount()" data-en="Delete">Delete</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -3826,36 +3847,7 @@ function _openPasswordResetWhenReady(){
 </div>
 
 
-<!-- Profile photo inputs -->
-<input type="file" id="profile-camera-input" accept="image/*" capture="user" style="display:none;" onchange="handleProfilePhoto(this)">
-<input type="file" id="profile-gallery-input" accept="image/*" style="display:none;" onchange="handleProfilePhoto(this)">
-
-<!-- Photo picker sheet -->
-<div class="tx-sheet-overlay" id="profile-pic-overlay" onclick="if(event.target===this)closeProfilePicSheet()" style="z-index:900;">
-  <div class="tx-sheet" style="padding:0;border-radius:24px 24px 0 0;">
-    <div style="padding:20px 20px 8px;text-align:center;">
-      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">Profile Photo</div>
-      <div style="font-size:12px;color:var(--text3);">Choose how to add your photo</div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:0;padding:8px 16px 16px;">
-      <button onclick="document.getElementById('profile-camera-input').click();closeProfilePicSheet();"
-        style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;margin-bottom:8px;width:100%;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2D9D5C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-        <span style="font-size:15px;font-weight:600;color:var(--text);">Take Photo</span>
-      </button>
-      <button onclick="document.getElementById('profile-gallery-input').click();closeProfilePicSheet();"
-        style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;margin-bottom:8px;width:100%;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A7AE2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        <span style="font-size:15px;font-weight:600;color:var(--text);">Choose from Gallery</span>
-      </button>
-      <button onclick="removeProfilePhoto()"
-        style="display:flex;align-items:center;gap:14px;padding:16px;background:none;border:none;border-radius:14px;cursor:pointer;width:100%;" id="profile-remove-btn">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B03020" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-        <span style="font-size:15px;font-weight:600;color:#B03020;">Remove Photo</span>
-      </button>
-    </div>
-    <button onclick="closeProfilePicSheet()" style="width:calc(100% - 32px);margin:0 16px 20px;padding:14px;background:var(--surface2);border:none;border-radius:14px;font-size:15px;font-weight:600;color:var(--text2);cursor:pointer;">Cancel</button>
-  </div>
+<!-- Profile photo picker removed in 1.0.1 — see the avatar comment above. -->
 </div>
 
 
@@ -4645,6 +4637,8 @@ const _i18n = {
   'Operator updated':'Operador actualizado','Operator added':'Operador agregado',
   'Signed out':'Sesión cerrada',
   'Sign in required to sync':'Inicio de sesión requerido para sincronizar',
+  'Session expired — please sign in again':'Sesión expirada — inicia sesión de nuevo',
+  'No connection — try again when you are back in service':'Sin conexión — inténtalo cuando tengas señal',
   'Pulling config…':'Descargando configuración…',
   'Config sync failed':'Error al sincronizar configuración',
   'Field updated':'Campo actualizado','Farm updated':'Finca actualizada',
@@ -5374,10 +5368,6 @@ function applyLanguage() {
   var lpSub = document.getElementById('lp-sub');
   if (lpSub) lpSub.textContent = T('Save to cloud & access all features');
 
-  // ── Profile photo sheet ──
-  var ppTitle = document.querySelector('#profile-pic-overlay [style*="font-size:16px"]');
-  if (ppTitle) ppTitle.textContent = T('Profile Photo');
-
   // ── Wheel picker ──
   var wheelCustom = document.getElementById('wheel-custom-btn');
   if (wheelCustom) wheelCustom.textContent = T('Custom');
@@ -5676,8 +5666,7 @@ function showTab(id){
   var dvTab = document.getElementById('tab-device'); if(dvTab) dvTab.classList.remove('active');
   if(id==='more'){
     var n=currentWorker&&currentWorker.name?currentWorker.name:'';
-    var ini=n ? n.split(' ').map(function(w){return w&&w[0]?w[0]:'';}).join('').toUpperCase().slice(0,2)||'?' : '?';
-    var sa=document.getElementById('settings-avatar'); if(sa) sa.textContent=ini;
+    var sa=document.getElementById('settings-avatar'); if(sa) sa.textContent=_avatarInitials();
     var sn=document.getElementById('settings-name'); if(sn) sn.textContent=n||T('Not signed in');
     var sf=document.getElementById('settings-farm'); if(sf) sf.textContent=selectedFarm?selectedFarm.name:T('No farm selected');
     if(typeof updateModeBtns==='function') updateModeBtns();  // reflect current mode on the buttons
@@ -11762,7 +11751,10 @@ function updateOperatorDisplay(){
   var ini = (currentWorker && n && n !== 'No Operator Selected') ? (n.split(' ').map(function(w){return w&&w[0]?w[0]:'';}).join('').toUpperCase().slice(0,2)||'?') : '?';
 
   // More tab — operator avatar (amber) — email is set at login only
-  var av = document.getElementById('settings-avatar'); if(av) av.textContent='';  // blue login avatar stays blank/icon
+  // Account avatar shows initials now that the photo picker is gone; blanking it
+  // here (a leftover from when a photo could occupy it) wiped them on every
+  // operator refresh.
+  var av = document.getElementById('settings-avatar'); if(av) av.textContent = _avatarInitials();
   var avOp = document.getElementById('settings-avatar-op'); if(avOp) avOp.textContent=ini;
   var sn = document.getElementById('settings-name');   if(sn) sn.textContent=n;
   // Operators panel
@@ -12289,28 +12281,92 @@ async function fullSync(){
   }
 }
 
+// ══ SESSION VALIDATION ══
+//
+// The app's identity and Supabase's session are stored separately: currentWorker
+// lives in ht_worker, the session in Supabase's own key. Nothing kept them in
+// step — onAuthStateChange only handled PASSWORD_RECOVERY and SIGNED_IN — so a
+// token that died overnight left currentWorker.id sitting there and every
+// "am I signed in?" test still answered yes. The profile card even read
+// "Sign Out" while nothing synced.
+//
+// Worse, an unauthenticated PostgREST request does not fail. Verified against
+// the live API: with no user JWT it returns **200 with []**, not an error. So a
+// dead session looks exactly like "the cloud is empty" — which the authoritative
+// pull would act on by deleting the operator's local records.
+//
+// Ask the server, never the clock: a device with a wrong date will happily
+// declare a dead token valid, so session.expires_at is not consulted anywhere.
+function _isNetworkError(err){
+  if(!err) return false;
+  if(typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  // An explicit 4xx from the auth server is a rejection, not a connectivity fault.
+  if(err.status && err.status >= 400 && err.status < 500) return false;
+  var name = String(err.name || '');
+  var msg  = String(err.message || err || '');
+  return /AuthRetryableFetchError/i.test(name) ||
+         /failed to fetch|networkerror|load failed|network request failed|timeout/i.test(msg);
+}
+
+// Resolves { ok, user, reason }:
+//   ok:true          — session validated server-side; safe to trust cloud results
+//   reason:'auth'    — the server rejected us; genuinely signed out
+//   reason:'offline' — could not reach the server; say nothing, keep working locally
+async function _requireSession(sb){
+  if(!sb) return { ok:false, reason:'auth' };
+  try{
+    var u = await sb.auth.getUser();          // server-side check, not a local decode
+    if(u && u.data && u.data.user) return { ok:true, user:u.data.user };
+    if(_isNetworkError(u && u.error)) return { ok:false, reason:'offline' };
+
+    // Expired access token with a good refresh token is the common case — try
+    // once before declaring the operator signed out.
+    var r = await sb.auth.refreshSession();
+    if(r && r.data && r.data.session && r.data.session.user){
+      return { ok:true, user:r.data.session.user };
+    }
+    return { ok:false, reason: _isNetworkError(r && r.error) ? 'offline' : 'auth' };
+  }catch(e){
+    return { ok:false, reason: _isNetworkError(e) ? 'offline' : 'auth' };
+  }
+}
+
+// Drop the account half of currentWorker, keeping the operator half — they are
+// two identities on one object and only the account is invalidated here.
+function _clearAccountIdentity(){
+  if(!currentWorker) return;
+  currentWorker.id = null;
+  currentWorker.email = null;
+  try{ localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker)); }catch(e){}
+  try{ if(typeof updateProfileStrip==='function') updateProfileStrip(); }catch(e){}
+}
+
 async function pullConfig(){
   var sb = getSupabase();
   // Don't silently promote a recovery session into a logged-in state —
   // the user must actually set a new password first via the reset overlay.
   if(window._isRecoveryFlow || window._showPasswordReset){ return false; }
-  // If currentWorker lost its id, try to recover from live Supabase session
-  if(sb && (!currentWorker || !currentWorker.id)){
-    try{
-      var sessionRes = await sb.auth.getSession();
-      var sessionUser = sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.user;
-      if(sessionUser){
-        currentWorker = currentWorker || {};
-        currentWorker.id    = sessionUser.id;
-        currentWorker.email = sessionUser.email;
-        localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker));
-      }
-    } catch(e){ console.warn('Session recovery failed:', e); }
-  }
-  if(!sb || !currentWorker || !currentWorker.id){
-    showToast('Sign in required to sync','warn');
+  // Validate EVERY time, not only when currentWorker.id happens to be missing.
+  // The old guard skipped the check whenever an id was present — which is the
+  // normal case — so an expired token was never noticed.
+  var _sess = await _requireSession(sb);
+  if(!_sess.ok){
+    if(_sess.reason === 'offline'){
+      // Can't reach the server. Say nothing and change nothing: records stay
+      // queued locally and upload on the next successful sync.
+      console.warn('[sync] pull skipped — offline');
+      return false;
+    }
+    _clearAccountIdentity();
+    showToast(T('Session expired — please sign in again'),'error');
     return false;
   }
+  // Session proven live. Only now may an empty cloud response be believed.
+  var authoritative = true;
+  currentWorker = currentWorker || {};
+  currentWorker.id    = _sess.user.id;
+  currentWorker.email = _sess.user.email || currentWorker.email;
+  try{ localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker)); }catch(e){}
 
   try{
     showToast('Pulling config…','');
@@ -12330,7 +12386,7 @@ async function pullConfig(){
 
     // Grain carts — merge cloud identity (name + serial) with this device's
     // local BLE binding (deviceId/deviceName stay local & per-browser).
-    if(cartsRes && cartsRes.data){
+    if(cartsRes && cartsRes.data && (cartsRes.data.length || authoritative)){
       var localCarts = getCarts();
       var mergedCarts = cartsRes.data.map(function(r){
         var l = localCarts.find(function(x){ return x.id===r.id; }) || {};
@@ -12357,14 +12413,14 @@ async function pullConfig(){
     var byId = function(x){ return x.id; };
 
     // Farms
-    if(farmsRes.data){
+    if(farmsRes.data && (farmsRes.data.length || authoritative)){
       var farms = _reconcileConfig('ht_farms',
         farmsRes.data.map(function(r){ return {id:r.id, name:r.name}; }), getFarms(), byId);
       localStorage.setItem(LS_FARMS, JSON.stringify(farms));
     }
 
     // Fields
-    if(fieldsRes.data){
+    if(fieldsRes.data && (fieldsRes.data.length || authoritative)){
       var fields = _reconcileConfig('ht_fields', fieldsRes.data.map(function(r){
         return {id:r.id, farmId:r.farm_id, name:r.name, area:r.area, areaUnit:r.area_unit, notes:r.notes||'', crop:r.crop||null};
       }), getFields(), byId);
@@ -12372,7 +12428,7 @@ async function pullConfig(){
     }
 
     // Trucks
-    if(trucksRes.data){
+    if(trucksRes.data && (trucksRes.data.length || authoritative)){
       var trucks = _reconcileConfig('ht_trucks', trucksRes.data.map(function(r){
         return {id:r.id, name:r.name, plate:r.plate||'', driver:r.driver||'', capacity:r.capacity||0, makeModel:r.make_model||'', notes:r.notes||''};
       }), getTrucks(), byId);
@@ -12380,28 +12436,28 @@ async function pullConfig(){
     }
 
     // Destinations
-    if(destsRes.data){
+    if(destsRes.data && (destsRes.data.length || authoritative)){
       var dests = _reconcileConfig('ht_destinations',
         destsRes.data.map(function(r){ return {id:r.id, name:r.name}; }), getDestinations(), byId);
       localStorage.setItem(LS_DESTINATIONS, JSON.stringify(dests));
     }
 
     // Operators
-    if(opsRes.data){
+    if(opsRes.data && (opsRes.data.length || authoritative)){
       var ops = _reconcileConfig('ht_operators',
         opsRes.data.map(function(r){ return {id:r.id, name:r.name, role:r.role||''}; }), getOperators(), byId);
       localStorage.setItem(LS_OPERATORS, JSON.stringify(ops));
     }
 
     // Crops — plain strings, so the name is the key.
-    if(cropsRes.data){
+    if(cropsRes.data && (cropsRes.data.length || authoritative)){
       var cloudCrops = cropsRes.data.map(function(r){ return r.name; });
       var crops = _reconcileConfig('ht_crops', cloudCrops, getCrops(), function(c){ return c; });
       localStorage.setItem('ht_crops', JSON.stringify(crops));
     }
 
     // Boundaries — keyed by field_id.
-    if(boundRes.data){
+    if(boundRes.data && (boundRes.data.length || authoritative)){
       var localB = getBoundaries();
       var boundaries = {};
       boundRes.data.forEach(function(r){ boundaries[r.field_id] = r.points; });
@@ -12414,7 +12470,7 @@ async function pullConfig(){
     // Seasons — merge cloud into local by id, keeping any local-only season
     // that hasn't been pushed yet. Runs before the weighings pull so the
     // season a pulled log points at already exists on this device.
-    if(seasonsRes && seasonsRes.data){
+    if(seasonsRes && seasonsRes.data && (seasonsRes.data.length || authoritative)){
       var localSeasons = getSeasons();
       var mergedSeasons = seasonsRes.data.map(function(r){
         return {id:r.id, name:r.name, createdAt:r.created_at};
@@ -12555,7 +12611,10 @@ async function pullConfig(){
       // WEIGH_PULL_LIMIT rows ordered newest-first, so treating a truncated
       // page as "everything that exists" would delete every older record on
       // this device. Below the cap means nothing was truncated.
-      var cloudIsComplete = weighRes.data.length < WEIGH_PULL_LIMIT;
+      // `authoritative` is the interlock: an unauthenticated request returns
+      // 200 [] , which would otherwise read as "everything was deleted" and
+      // wipe every synced record on the device.
+      var cloudIsComplete = authoritative && weighRes.data.length < WEIGH_PULL_LIMIT;
 
       var existingLogs = getLogs().map(function(l){
         var r = cloudById[l.id];
@@ -13540,57 +13599,41 @@ function updateSeasonDisplayLabel(){
 }
 
 
-var LS_PROFILE_PHOTO = 'ht_profile_photo';
-
-function openProfilePicOptions(){
-  var hasPhoto = !!localStorage.getItem(LS_PROFILE_PHOTO);
-  document.getElementById('profile-remove-btn').style.display = hasPhoto ? 'flex' : 'none';
-  document.getElementById('profile-pic-overlay').classList.add('open');
+// ══ ACCOUNT AVATAR ══
+//
+// Initials only. The photo picker was removed in 1.0.1 — it used
+// <input type="file" capture="user">, and iOS terminates an app that reaches the
+// camera without NSCameraUsageDescription, which is how App Review 1.0 (9)
+// crashed on "Take Photo" (Guideline 2.1(a)). Nothing on a grain-cart app needed
+// profile photos, and dropping the feature also drops two permission prompts and
+// the Photos question from App Privacy.
+//
+// Initials come from the operator name where there is one, since that is the
+// person actually hauling; the account email is the fallback before an operator
+// has been picked.
+function _avatarInitials(){
+  var name = (currentWorker && currentWorker.name) ? String(currentWorker.name).trim() : '';
+  if(name){
+    var parts = name.split(/\s+/).filter(Boolean);
+    var ini = parts.slice(0,2).map(function(w){ return w[0]; }).join('');
+    if(ini) return ini.toUpperCase();
+  }
+  var email = (currentWorker && currentWorker.email) ? currentWorker.email : '';
+  return email ? (email[0]||'?').toUpperCase() : '?';
 }
 
-function closeProfilePicSheet(){
-  document.getElementById('profile-pic-overlay').classList.remove('open');
-}
-
-function handleProfilePhoto(input){
-  var file = input.files && input.files[0];
-  if(!file) return;
-  var reader = new FileReader();
-  reader.onload = function(e){
-    var dataUrl = e.target.result;
-    localStorage.setItem(LS_PROFILE_PHOTO, dataUrl);
-    applyProfilePhoto(dataUrl);
-    showToast('Profile photo updated','success');
-  };
-  reader.readAsDataURL(file);
-  input.value = ''; // reset so same file can be picked again
-}
-
-function removeProfilePhoto(){
-  localStorage.removeItem(LS_PROFILE_PHOTO);
-  applyProfilePhoto(null);
-  closeProfilePicSheet();
-  showToast('Photo removed','warn');
-}
-
-function applyProfilePhoto(dataUrl){
+function applyProfilePhoto(){
   var av = document.getElementById('settings-avatar');
   if(!av) return;
-  if(dataUrl){
-    av.innerHTML = '<img src="'+dataUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
-    av.style.background = 'transparent';
-    av.style.padding = '0';
-  } else {
-    // Restore initials
-    var ini = (currentWorker && currentWorker.email) ? (currentWorker.email[0]||'?').toUpperCase() : '?';
-    av.innerHTML = ini;
-    av.style.background = '#2A7AE2';
-  }
+  av.textContent = _avatarInitials();
+  av.style.background = '#2A7AE2';
 }
 
 function loadProfilePhoto(){
-  var saved = localStorage.getItem(LS_PROFILE_PHOTO);
-  if(saved) applyProfilePhoto(saved);
+  // Clear any photo stored by an earlier version so it isn't orphaned in
+  // localStorage forever on devices that upgrade.
+  try{ localStorage.removeItem('ht_profile_photo'); }catch(e){}
+  applyProfilePhoto();
 }
 
 
@@ -14360,14 +14403,26 @@ function updateSyncStatus(){
 
 async function syncQueue(){
   if(syncInProgress||!isOnline){if(!isOnline)showToast('No connection','error');return;}
-  // Recover session if currentWorker.id is missing
+  // Validate the session server-side before pushing. Uploading with a dead token
+  // silently fails per-row and leaves records queued with no explanation.
   var _sbQ = getSupabase();
-  if(_sbQ && (!currentWorker || !currentWorker.id)){
-    try{
-      var _sqSess = await _sbQ.auth.getSession();
-      var _sqUser = _sqSess && _sqSess.data && _sqSess.data.session && _sqSess.data.session.user;
-      if(_sqUser){ currentWorker = currentWorker||{}; currentWorker.id = _sqUser.id; currentWorker.email = _sqUser.email; localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker)); }
-    } catch(e){}
+  if(_sbQ){
+    var _qSess = await _requireSession(_sbQ);
+    if(_qSess.ok){
+      currentWorker = currentWorker||{};
+      currentWorker.id    = _qSess.user.id;
+      currentWorker.email = _qSess.user.email || currentWorker.email;
+      try{ localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker)); }catch(e){}
+    } else if(_qSess.reason === 'auth'){
+      // Genuinely signed out. Keep everything queued — nothing is lost — but say
+      // so, instead of failing quietly and looking like the data vanished.
+      _clearAccountIdentity();
+      refreshQueue();
+      showToast(T('Session expired — please sign in again'),'error');
+      return;
+    }
+    // 'offline' falls through deliberately: the offline sign-in fallback sets an
+    // id without a real session, and the queue must keep working without network.
   }
   var queue=getQueue();
 
@@ -14569,11 +14624,19 @@ async function openCloudScopeChooser(){
   // the offline sign-in fallback sets an id too, but it isn't a real auth session,
   // so a delete against it would silently affect zero rows (RLS blocks it either way,
   // but the user deserves a clear "you're not signed in" instead of a false success).
-  var sessionRes = await sb.auth.getSession();
-  var sessionUser = sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.user;
-  if(!sessionUser){ showToast('Sign in required to clear cloud data','warn'); return; }
+  // getSession() only reports what is in storage; this asks the server, so a
+  // stale token can't green-light a destructive wipe that would then affect
+  // zero rows and report success.
+  var _cSess = await _requireSession(sb);
+  if(!_cSess.ok){
+    if(_cSess.reason === 'auth') _clearAccountIdentity();
+    showToast(_cSess.reason === 'offline'
+      ? T('No connection — try again when you are back in service')
+      : T('Session expired — please sign in again'), 'warn');
+    return;
+  }
   currentWorker = currentWorker || {};
-  currentWorker.id = sessionUser.id;
+  currentWorker.id = _cSess.user.id;
   document.getElementById('cloud-scope-overlay').classList.add('open');
 }
 function closeCloudScopeChooser(){

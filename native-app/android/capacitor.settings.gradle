@@ -7,3 +7,6 @@ project(':capacitor-community-bluetooth-le').projectDir = new File('../node_modu
 
 include ':capacitor-filesystem'
 project(':capacitor-filesystem').projectDir = new File('../node_modules/@capacitor/filesystem/android')
+
+include ':virtus-dfu'
+project(':virtus-dfu').projectDir = new File('../local-plugins/virtus-dfu/android')
