@@ -1,0 +1,4 @@
+# React Router owns every path. Same rules as netlify.toml, kept here because a
+# drag-and-drop deploy of dist/ never reads netlify.toml.
+/privacy    /privacy.html   200
+/*          /index.html     200
