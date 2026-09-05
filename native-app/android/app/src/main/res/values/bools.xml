@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!--
-      Light system bars = dark icons, which is what a cream background needs.
-      Kept as a bool so values-night can flip it without duplicating the whole
-      theme; the style itself stays defined in exactly one place.
-    -->
-    <bool name="lightSystemBars">true</bool>
-</resources>
