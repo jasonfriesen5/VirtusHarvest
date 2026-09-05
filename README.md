@@ -1,36 +1,28 @@
-# Virtus Harvest — web console
+# Virtus Harvest — phone app
 
-The desktop console at `virtusharvest.com`. React 19 + Vite + Tailwind v4 +
-TypeScript, deployed to Netlify, reading the same Supabase project as the phone
-app.
-
-    cd web
-    cp .env.example .env
-    npm install
-    npm run dev
-
-`web/README.md` has the detail: what each page does, the naming caveat that
-shapes the Manage screen, and the two things that have to be set up outside
-this repo.
+The app that runs on the scale: a single-page `index.html` wrapped by Capacitor
+for iOS and Android. No bundler — what ships is what is in the file.
 
 ## What's on this branch
 
 | path | |
 |---|---|
-| `web/` | the console |
-| `supabase/functions/fenex/` | the only code that talks to the Fenex API |
+| `index.html` | the whole app |
+| `native-app/` | the Capacitor wrapper, iOS and Android projects |
+| `privacy.html`, `support.html`, `Reset Password.html` | the pages Apple and Google have on file |
+| `release/` | store listing notes and screenshots |
 
-The phone app is on `harvest-app`. Virtus Feed is on `feed-web` and `feed-app`.
-Firmware lives in its own repository.
+The web console is on `harvest-web`. Virtus Feed is on `feed-web` and
+`feed-app`. Firmware lives in its own repository.
 
-## Nota de Remisión
+## Building
 
-Paraguay only, and off unless an account turns it on. Three files carry the
-integration with Fenex:
+    cd native-app
+    npx cap sync android
+    npx cap sync ios
 
-- `web/src/lib/fenexPayload.ts` — mirrors Fenex's `RemissionCreateRequest`
-  and reimplements its validation, so a bad document fails here rather than
-  at SET, where there is no sandbox and no cancellation.
-- `web/src/lib/fenexMapping.ts` — turns one truckload into that payload.
-- `supabase/functions/fenex/index.ts` — the Edge Function proxy. Fenex tokens
-  never reach the browser.
+Both platforms need syncing after any change to `index.html` — syncing one and
+not the other silently ships the old assets to the other.
+
+Android needs an explicit JDK 21; Android Studio's bundled runtime is Java 25
+and breaks the Gradle version this project uses.
