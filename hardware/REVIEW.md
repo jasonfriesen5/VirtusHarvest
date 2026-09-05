@@ -102,11 +102,72 @@ Not BOM issues, but decide these before routing:
 - **Star ground.** Bring the NAU7802 analog ground and the digital/charging ground together
   at one point near the LDO output, not distributed across the pour.
 
+## 9. Reset button needs UICR.PSELRESET programmed, or it does nothing
+
+The hardware is already right: SW1 (SW1AB-480-T50) and R12 (10 kΩ pull-up) are in the BOM,
+same arrangement as the Feather Sense, and the nRF52840 uses P0.18 as nRESET on both.
+
+But P0.18 is a **normal GPIO until UICR.PSELRESET is programmed**. The flash script at
+[flash_feather.jlink:10–12](../dfu_flash_feather/flash_feather.jlink#L10) writes
+BOOTLOADERADDR, the MBR params page, and REGOUT0 — but not PSELRESET. Line 5 is `erase`,
+which wipes UICR, so nothing else restores it either. On a fresh custom board the button
+will be dead and it will look like a hardware fault.
+
+**Fix:** add both PSELRESET registers to the same UICR block, set to pin 18:
+
+```
+w4 0x10001200 0x00000012   # PSELRESET[0] = P0.18
+w4 0x10001204 0x00000012   # PSELRESET[1] = P0.18
+```
+
+Both must be written — the nRF52840 requires the two to agree before it enables the reset
+function. UICR only takes effect after a reset, which line 13 already does.
+
+**Also add:** a 100 nF cap from RESET to GND for debounce. Not currently in the BOM. Keep it
+at 100 nF — much larger and it slows the rise enough to interfere with SWD attach on J3.
+
+Note this is a per-board provisioning step, not a firmware change — it re-applies every time
+the chip is fully erased.
+
+## 10. Verify the NAU7802's internal LDO can drive a 390 Ω bridge
+
+Applies to the **current V1.0 board**, not just the planned satellite.
+
+The firmware runs the bridge off the NAU7802's *internal* LDO at 3.0 V
+([virtus_scale.ino:459](../virtus_scale/virtus_scale.ino#L459), `setLDO(NAU7802_LDO_3V0)`).
+Grain-cart cells have 380–400 Ω input resistance, so that internal LDO must source
+**~7.7 mA continuously** for excitation, on top of the ADC's own analog draw.
+
+That is in the region where the NAU7802's internal regulator gets marginal. I have not
+confirmed the datasheet's LDO load-current limit — **check it before fab**, because if the
+LDO can't hold regulation into 390 Ω the symptoms are nasty and non-obvious: extra noise,
+thermal drift, and a zero that walks with temperature. It would read plausibly and calibrate
+fine on the bench.
+
+Two things make this less alarming than it sounds:
+
+- The measurement is **ratiometric** — REFP/REFN track the excitation rail, and the cal math
+  explicitly relies on AVDD cancelling
+  ([virtus_scale.ino:156](../virtus_scale/virtus_scale.ino#L156)). Steady sag largely divides
+  out. It's LDO *instability*, not sag, that hurts.
+- 3.0 V is the lowest excitation the part offers, so the current draw is already at its
+  minimum for this bridge.
+
+**If the datasheet says it's marginal**, the fix is to bypass the internal LDO and feed AVDD
+from an external rail (the NAU7802 supports this — clear the `AVDDS` bit instead of calling
+`setLDO`). On the satellite that's easy: it has a real 3.3 V rail with current to spare. On
+the main board it means a dedicated low-noise LDO for AVDD rather than sharing the
+AP2112K output with the radio, since the nRF52840's TX current bursts would otherwise land
+on the excitation rail.
+
+**Decide this before routing** — an external-AVDD design needs a separate rail and its own
+filtering, which is a layout change, not a stuff option.
+
 ---
 
 ## Suggested order of work
 
 1. Resolve #1 (EN pin) — answer the "what is R3 on" question in Flux first.
 2. Add #2 (battery divider) and #3 (protection) to the schematic.
-3. Sweep #4–#7 as a batch BOM edit.
+3. Sweep #4–#7 as a batch BOM edit, and settle #9 (PSELRESET) and #10 (AVDD source).
 4. Re-export BOM, update [BOM.csv](BOM.csv), then route with #8 in mind.

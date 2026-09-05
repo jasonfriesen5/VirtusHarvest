@@ -1459,8 +1459,18 @@ body{
 .fmap-filter-btn{
   padding:9px 18px;
   border-radius:20px;
+  /* Solid gold underneath the gradient. These two are the only toolbar buttons
+     painted with a gradient rather than a flat colour, and they were the only
+     ones reported as rendering white on the first opens after a fresh install —
+     the WebView showed the button before it had composited the gradient layer,
+     and with appearance:none that reads as transparent. Any repaint fixed it,
+     which is why tapping one turned it gold. A base colour means the worst case
+     is a flat gold button for a frame instead of a white one.
+     Longhands, not the `background` shorthand — the shorthand resets
+     background-color to transparent, which would throw the fallback away. */
+  background-color:#F5C842;
   /* Same gold as the tab bar's active pill and .btn-gold. */
-  background:linear-gradient(180deg,#F9D667 0%,#F5C842 55%,#EDB828 100%);
+  background-image:linear-gradient(180deg,#F9D667 0%,#F5C842 55%,#EDB828 100%);
   border:1px solid rgba(255,255,255,0.55);
   box-shadow:
     inset 0 1px 1.5px rgba(255,255,255,0.80),
@@ -1750,6 +1760,17 @@ body{
   border-radius:10px;padding:10px 14px;
   font-size:13px;color:#1A6B3C;margin-bottom:14px;display:none;
 }
+/* Inline action inside an auth message — currently "Resend confirmation email"
+   under the unconfirmed-account notice. Sized for a gloved thumb rather than as
+   a text link, since it is the only way out of that state. */
+.auth-link-btn{
+  display:block;margin-top:8px;padding:9px 14px;
+  background:none;border:1px solid currentColor;border-radius:9px;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+  color:inherit;cursor:pointer;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+.auth-link-btn:active{opacity:0.7;}
 .signin-divider{text-align:center;font-size:12px;color:var(--text3);margin:16px 0;}
 
 
@@ -4572,6 +4593,10 @@ const _i18n = {
   'Truck Full':'Camión Lleno','would be at':'estaría al','Unload anyway':'Descargar de todos modos',
   'Empty truck & switch':'Vaciar camión y cambiar','Unload discarded — no truck selected':'Descarga descartada — ningún camión seleccionado',
   'Account':'Cuenta','Delete Account':'Eliminar Cuenta','Delete Account?':'¿Eliminar Cuenta?',
+  'Could not reach the scale — calibration not changed':'No se pudo comunicar con la báscula — calibración sin cambios',
+  'Scale did not confirm the new factor — nothing changed':'La báscula no confirmó el nuevo factor — nada cambió',
+  'Calibration factor set to':'Factor de calibración ajustado a',
+  'Factor:':'Factor:',
   'Permanently deletes your account and all its data':'Elimina permanentemente su cuenta y todos sus datos',
   'This permanently deletes your account and every record in it — loads, fields, trucks and seasons. It cannot be undone.':'Esto elimina permanentemente su cuenta y todos sus registros — cargas, campos, camiones y temporadas. No se puede deshacer.',
   'Type':'Escriba','to confirm':'para confirmar',
@@ -4711,6 +4736,10 @@ const _i18n = {
   'GPS not available':'GPS no disponible',
   'GPS not available on this device':'GPS no disponible en este dispositivo',
   'Location unavailable':'Ubicación no disponible',
+  'Map unavailable — check your connection':'Mapa no disponible — revise su conexión',
+  'This account still needs to be confirmed. Open the link in the email we sent to':'Esta cuenta aún debe confirmarse. Abra el enlace del correo que enviamos a',
+  'Resend confirmation email':'Reenviar correo de confirmación',
+  'Please wait a minute before requesting another email.':'Espere un minuto antes de solicitar otro correo.',
   'Requesting GPS…':'Solicitando GPS…',
   'Open Field Map first':'Abre el Mapa de Campos primero',
   'Need at least 3 points':'Se necesitan al menos 3 puntos',
@@ -6258,6 +6287,10 @@ function handleBleData(event){
       line = line.trim();
       if(!line) return;
 
+      // Acknowledgements the scale sends back for state-changing commands.
+      // Checked before anything else so a waiter is never starved by an early return.
+      _resolveScaleAck(line);
+
       // ── INFO packet: INFO:firmware=1.0.2,model=VirtusScale,serial=A1B2C3 ──
       if(line.startsWith('INFO:')){
         var parts = {};
@@ -6643,19 +6676,51 @@ function installFirmwareUpdate(){ startFirmwareUpdate(); }
 
 // ── Send a text command to ESP32 via RX characteristic ──
 // Commands: "TARE\n", "ZERO\n", "RESET\n"
+// Returns TRUE only if the bytes actually left the device. This used to return
+// nothing and swallow every failure into a console.warn, which is how a
+// calibration factor could be reported as "set" while the scale never heard it —
+// the app then showed a weight computed from a factor the scale did not have,
+// until the next connect quietly replaced it from the INFO packet.
 async function sendBleCommand(cmd){
   // Native path first — btRxChar only exists on the Web Bluetooth path.
   if(!btRxChar && _isCapacitor && _capBLE && btDevice && btDevice.isCapDevice){
     try{
       await _capBLE.write(btDevice.id, BLE_UART_SERVICE, BLE_UART_RX,
         new DataView(new TextEncoder().encode(cmd + '\n').buffer));
-    } catch(e){ console.warn('native BLE write failed:', e); }
-    return;
+      return true;
+    } catch(e){ console.warn('native BLE write failed:', e); return false; }
   }
-  if(!btRxChar){ return; }
+  if(!btRxChar){ return false; }
   try{
     await btRxChar.writeValue(new TextEncoder().encode(cmd + '\n'));
-  } catch(e){ console.warn('BLE write failed:', e); }
+    return true;
+  } catch(e){ console.warn('BLE write failed:', e); return false; }
+}
+
+// ── Wait for a one-line acknowledgement from the firmware ────────────────────
+// A successful write only proves the bytes reached the radio. For anything that
+// changes state on the scale — calibration above all — we wait for the scale's
+// own reply before telling the operator it worked.
+var _scaleAckWaiters = [];
+function _awaitScaleAck(token, timeoutMs){
+  return new Promise(function(resolve){
+    var w = { token: token, resolve: resolve, timer: null };
+    w.timer = setTimeout(function(){
+      var i = _scaleAckWaiters.indexOf(w);
+      if(i >= 0) _scaleAckWaiters.splice(i, 1);
+      resolve(false);
+    }, timeoutMs || 3000);
+    _scaleAckWaiters.push(w);
+  });
+}
+function _resolveScaleAck(line){
+  for(var i = _scaleAckWaiters.length - 1; i >= 0; i--){
+    if(line.indexOf(_scaleAckWaiters[i].token) === 0){
+      clearTimeout(_scaleAckWaiters[i].timer);
+      _scaleAckWaiters[i].resolve(true);
+      _scaleAckWaiters.splice(i, 1);
+    }
+  }
 }
 
 // ══ SCALE AUTHENTICATION (anti-clone) ══
@@ -6678,36 +6743,85 @@ async function _getAuthPubKey(){
   _authPubKey = await crypto.subtle.importKey('raw', _authHexToBytes(_AUTH_PUBKEY_HEX), {name:'ECDSA',namedCurve:'P-256'}, false, ['verify']);
   return _authPubKey;
 }
+// Two failures look identical to the old code and are not the same thing:
+//
+//   - a counterfeit scale, which answers with a signature that does not verify
+//   - a genuine scale on a marginal link, whose 167-character AUTHR reply is
+//     ~9 chunks at Android's default 23-byte MTU and loses one
+//
+// Blocking on the second is how a real customer gets told their hardware is
+// fake. Reported from the field on 2026-09-01: connected fine, reconnected
+// after an app restart, "Unrecognized Scale". So a round that hears NOTHING now
+// starts a fresh round with a new nonce instead of blocking, and we only give
+// up after several. A reply that arrives and fails verification is treated as
+// what it is — evidence of a bad signer — and blocks on the first round.
+var _authRounds      = 0;   // full challenge rounds attempted this connection
+var _authSawReply    = false; // any well-formed AUTHR for our nonce arrived
+var _authBadSignature = false; // a reply arrived and did NOT verify
+var _AUTH_MAX_ROUNDS = 3;
+
 function _startScaleAuth(){
   _scaleVerified = false;
+  _authRounds = 0;
+  _authSawReply = false;
+  _authBadSignature = false;
+  _authRunRound();
+}
+
+function _authRunRound(){
   try{
+    _authRounds++;
     var nb = crypto.getRandomValues(new Uint8Array(16));
     _authNonceHex = _authBytesToHex(nb);
-    // Retry several times — the scale broadcasts its answer, and a second
-    // device's notification pipe or a chunk can be missed on the first try.
+    // Retry several times within the round — the scale broadcasts its answer,
+    // and a second device's notification pipe or a chunk can be missed.
     var tries = 0;
     var fire = function(){
       if(_scaleVerified || !_psScaleConnected()) return;
       tries++;
-      console.log('[auth] sending challenge (try '+tries+') nonce='+_authNonceHex.substring(0,8)+'…');
+      console.log('[auth] round '+_authRounds+' challenge (try '+tries+') nonce='+_authNonceHex.substring(0,8)+'…');
       sendBleCommand('AUTH:'+_authNonceHex);
       if(tries < 6) setTimeout(fire, 1300);
     };
     fire();
     if(_authTimer) clearTimeout(_authTimer);
     _authTimer = setTimeout(function(){
-      if(!_scaleVerified){ console.warn('[auth] no valid response after retries — scale unverified'); _applyAuthGate(); }
+      if(_scaleVerified) return;
+      if(!_psScaleConnected()){ console.log('[auth] scale gone — abandoning'); return; }
+      // Heard nothing at all, and rounds left: the link is the likely suspect.
+      if(!_authSawReply && !_authBadSignature && _authRounds < _AUTH_MAX_ROUNDS){
+        console.warn('[auth] round '+_authRounds+' silent — retrying with a fresh nonce');
+        logEvent('auth', 'No response to challenge (round '+_authRounds+') — retrying');
+        _authRunRound();
+        return;
+      }
+      console.warn('[auth] unverified after '+_authRounds+' round(s)'
+        + ' sawReply='+_authSawReply + ' badSignature='+_authBadSignature);
+      logEvent('auth', 'Scale unverified after '+_authRounds+' round(s)'
+        + (_authSawReply ? ' — replies received but none verified' : ' — no reply from the scale'));
+      _applyAuthGate();
     }, 9000);
   }catch(e){ console.warn('[auth] start error', e); }
 }
 async function _handleAuthResponse(nonceHex, sigHex){
   console.log('[auth] AUTHR received: nonce='+nonceHex.substring(0,8)+'… mine='+(_authNonceHex?_authNonceHex.substring(0,8):'—')+'… siglen='+sigHex.length);
   if(nonceHex !== _authNonceHex){ console.log('[auth] nonce mismatch — ignoring (meant for another device)'); return; }
-  if(sigHex === 'err' || sigHex.length !== 128){ console.warn('[auth] bad/short signature ('+sigHex.length+') — retrying'); return; }  // let retries continue
+  if(sigHex === 'err' || sigHex.length !== 128){
+    // Short/truncated: almost always a dropped BLE chunk, not a forgery.
+    console.warn('[auth] bad/short signature ('+sigHex.length+') — retrying');
+    return;
+  }
+  _authSawReply = true;
   try{
     var key = await _getAuthPubKey();
     var ok = await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'}, key, _authHexToBytes(sigHex), _authHexToBytes(nonceHex));
-    if(!ok){ console.warn('[auth] signature did not verify — will retry'); return; }  // keep retrying rather than fail hard
+    if(!ok){
+      // A complete, well-formed signature that does not verify is the real
+      // counterfeit signal — record it so the timeout blocks without retrying.
+      _authBadSignature = true;
+      console.warn('[auth] signature did not verify');
+      return;
+    }
     _scaleVerified = true;
     console.log('[auth] scale VERIFIED ✓');
   }catch(e){ console.warn('[auth] verify error', e); return; }
@@ -9894,11 +10008,12 @@ function openFieldMap(){
     if(changed) saveBoundaries(b);
   })();
   setTimeout(function(){
+    _fmapWhenMapsReady(function(){
     _fmapInit();
     _fmapRender(_fmapFilter);
     // If a field is currently selected and has a drawn boundary, zoom
     // straight to it — that's more useful than the general filter view.
-    if(selectedField){
+    if(selectedField && _fmap){
       var blist = getBoundaries()[selectedField.id] || [];
       var b = new google.maps.LatLngBounds();
       var hasAny = false;
@@ -9923,7 +10038,33 @@ function openFieldMap(){
       requestAnimationFrame(_nudge);
       setTimeout(_nudge, 400);
     }
+    });
   }, 320);
+}
+
+// The Maps script is deferred and fetched over the network, so on the first
+// launches after a fresh install it is routinely not ready 320ms in. openFieldMap
+// used to assume it was: _fmapInit() and _fmapRender() both bail out safely when
+// window.google is missing, but the selected-field zoom directly below them called
+// google.maps.LatLngBounds() with no guard, throwing "Can't find variable: google"
+// and aborting the rest of the open — including the resize nudge that makes the
+// map paint at all. It stopped happening once the script was cached, which is why
+// it only showed up on the first few opens.
+//
+// Waiting for the API rather than guessing at a delay. Bails out with a toast
+// instead of hanging silently if it never arrives (no signal in the field).
+function _fmapWhenMapsReady(cb){
+  if(window.google && window.google.maps){ cb(); return; }
+  var waited = 0, step = 100, limit = 12000;
+  (function tick(){
+    if(window.google && window.google.maps){ cb(); return; }
+    waited += step;
+    if(waited >= limit){
+      showToast('Map unavailable — check your connection','warn');
+      return;
+    }
+    setTimeout(tick, step);
+  })();
 }
 
 function _fmapInit(){
@@ -11392,7 +11533,7 @@ function editCapacity(){
   showToast('Capacity set — recalibrate with a known weight','success');
 }
 
-function calculateCalibration(){
+async function calculateCalibration(){
   var certified = parseFloat(document.getElementById('cal-certified').value);
   var scaleRead  = parseFloat(document.getElementById('cal-scale-reading').value);
 
@@ -11403,11 +11544,10 @@ function calculateCalibration(){
   // The firmware's factor must be COMPOUNDED, not replaced — otherwise
   // every recalibration would wipe out the previous one.
   var ratio = certified / scaleRead;
-  _calFactor = parseFloat((_calFactor * ratio).toFixed(4));
-  sendBleCommand('CAL:'+_calFactor.toFixed(4));
+  // Compounded, not replaced — see above. Only committed if the scale confirms.
+  if(!await _pushCalFactor(parseFloat((_calFactor * ratio).toFixed(4)))) return;
   if(rawWeight !== null) _paintScaleDisplay();
 
-  document.getElementById('dev-calibration').textContent = _calFactor.toFixed(4);
   var note = document.getElementById('cal-result-note');
   if(note){
     if(Math.abs(ratio - 1.0) < 0.001){
@@ -11418,7 +11558,7 @@ function calculateCalibration(){
       note.textContent = T('Scale reads HIGH by')+' '+((((1-ratio))*100).toFixed(2))+'%';
     }
   }
-  showToast('Factor: '+_calFactor,'success');
+  showToast(T('Factor:')+' '+_calFactor.toFixed(4),'success');
 }
 
 function saveCalibrationSettings(){
@@ -11429,7 +11569,9 @@ function saveCalibrationSettings(){
   if(compactFactor && sheetFactor && sheetFactor !== '—') compactFactor.textContent = sheetFactor;
   // Sensitivity / capacity now live in Device Info, reported by the
   // firmware (INFO packet) — the sheet only handles the weight factor.
-  localStorage.setItem('ht_cal_factor', _calFactor);
+  // Deliberately does NOT write ht_cal_factor. The factor is only ever committed
+  // by _pushCalFactor(), after the scale acknowledges it. Persisting here as well
+  // let a rejected factor survive locally and reappear as a wrong weight.
 
   if(rawWeight !== null) _paintScaleDisplay();
   showToast('Calibration settings saved','success');
@@ -11467,22 +11609,45 @@ function onCalFactorInput(input){
   btn.style.cursor        = isDifferent ? 'pointer' : 'not-allowed';
 }
 
-function applyCalFactorDirect(){
+async function applyCalFactorDirect(){
   var input = document.getElementById('cal-factor-direct-input');
   if(!input) return;
   var val = parseFloat(input.value);
   if(isNaN(val) || val <= 0){ showToast('Enter a valid factor (e.g. 1.025)','error'); return; }
-  _calFactor = parseFloat(val.toFixed(4));
-  localStorage.setItem('ht_cal_factor', _calFactor);
-  // Firmware owns calibration — push the new factor to the scale now
-  sendBleCommand('CAL:'+_calFactor.toFixed(4));
-  var devCal = document.getElementById('dev-calibration');
-  if(devCal) devCal.textContent = _calFactor.toFixed(4);
-  if(rawWeight !== null) setRawWeight(rawWeight);
+  if(!await _pushCalFactor(parseFloat(val.toFixed(4)))) return;
   // Reset apply button to inactive
   var btn = document.getElementById('cal-apply-btn');
   if(btn){ btn.disabled=true; btn.style.background='var(--surface2)'; btn.style.color='var(--text3)'; btn.style.borderColor='var(--border)'; btn.style.cursor='not-allowed'; }
-  showToast('Calibration factor set to '+_calFactor.toFixed(4),'success');
+  showToast(T('Calibration factor set to')+' '+_calFactor.toFixed(4),'success');
+}
+
+// Push a calibration factor to the scale and commit it locally ONLY if the
+// firmware acknowledges with CAL_OK. The scale owns calibration — the INFO
+// packet overwrites _calFactor from firmware on every connect — so committing
+// a factor the scale never accepted guarantees the operator sees one weight
+// now and a completely different one after the next reconnect. That is exactly
+// what happened in the field: 31,000 kg before, 210,000 kg after.
+async function _pushCalFactor(newFactor){
+  var previous = _calFactor;
+  var sent = await sendBleCommand('CAL:' + newFactor.toFixed(4));
+  if(!sent){
+    logEvent('scale', 'Calibration NOT sent — BLE write failed (factor left at ' + previous.toFixed(4) + ')');
+    showToast(T('Could not reach the scale — calibration not changed'), 'error');
+    return false;
+  }
+  var ok = await _awaitScaleAck('CAL_OK', 4000);
+  if(!ok){
+    logEvent('scale', 'Calibration NOT confirmed — no CAL_OK (factor left at ' + previous.toFixed(4) + ')');
+    showToast(T('Scale did not confirm the new factor — nothing changed'), 'error');
+    return false;
+  }
+  _calFactor = newFactor;
+  localStorage.setItem('ht_cal_factor', _calFactor);
+  var devCal = document.getElementById('dev-calibration');
+  if(devCal) devCal.textContent = _calFactor.toFixed(4);
+  if(rawWeight !== null) setRawWeight(rawWeight);
+  logEvent('scale', 'Calibration factor set to ' + _calFactor.toFixed(4) + ' (confirmed by scale)');
+  return true;
 }
 
 function calLoadSaved(){
@@ -11999,7 +12164,70 @@ async function doSignIn(){
     launchApp();
   } catch(e){
     _setAuthBtnLoading('signin-btn', false, 'Sign In');
+    // Supabase returns "Email not confirmed" for an account that signed up but
+    // never clicked the link. On its own that reads like a fault rather than a
+    // pending step, and leaves no way forward if the mail went to spam or never
+    // arrived — so name the step and offer a resend.
+    if(_isUnconfirmedEmailError(e)){
+      _pendingConfirmEmail = email;
+      _showResendConfirmation(email);
+      return;
+    }
     _setAuthError(e.message||'Sign in failed. Please check your credentials.');
+  }
+}
+
+// The address awaiting confirmation, so Resend knows who to send to without
+// depending on whatever is currently typed in the email box.
+var _pendingConfirmEmail = null;
+
+function _isUnconfirmedEmailError(e){
+  var m = ((e && (e.message||e.error_description)) || '').toLowerCase();
+  var code = (e && (e.code || e.error_code)) || '';
+  return code === 'email_not_confirmed' ||
+         (m.indexOf('email') >= 0 && m.indexOf('confirm') >= 0);
+}
+
+function _showResendConfirmation(email){
+  var el = document.getElementById('signin-error');
+  if(!el){ return; }
+  el.textContent = '';
+  var p = document.createElement('div');
+  p.textContent = T('This account still needs to be confirmed. Open the link in the email we sent to') + ' ' + email + '.';
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'auth-link-btn';
+  btn.textContent = T('Resend confirmation email');
+  btn.onclick = function(){ doResendConfirmation(); };
+  el.appendChild(p);
+  el.appendChild(btn);
+  el.style.display = 'block';
+  var ok = document.getElementById('signin-success');
+  if(ok) ok.style.display = 'none';
+}
+
+async function doResendConfirmation(){
+  var email = _pendingConfirmEmail ||
+              (document.getElementById('signin-email').value||'').trim();
+  if(!email){ _setAuthError('Please enter your email address.'); return; }
+  var sb = getSupabase();
+  if(!sb){ _setAuthError('A server connection is required to resend the email.'); return; }
+  _clearAuthMessages();
+  try{
+    var res = await sb.auth.resend({
+      type: 'signup',
+      email: email,
+      options: { emailRedirectTo: 'https://virtusharvest.com/confirmed' }
+    });
+    if(res.error) throw res.error;
+    _setAuthSuccess('Confirmation email sent again to ' + email + '. Check your spam folder if it does not arrive within a few minutes.');
+  } catch(e){
+    // Supabase rate-limits confirmation sends; say so rather than showing the
+    // raw "For security purposes..." string.
+    var m = (e && e.message) || '';
+    _setAuthError(/rate|security purposes|too many/i.test(m)
+      ? T('Please wait a minute before requesting another email.')
+      : (m || 'Could not resend the confirmation email.'));
   }
 }
 
@@ -12025,13 +12253,18 @@ async function doSignUp(){
     var result = await sb.auth.signUp({
       email: email,
       password: password,
-      options: { data: { full_name: name }, emailRedirectTo: 'https://virtusharvest.com' }
+      options: { data: { full_name: name }, emailRedirectTo: 'https://virtusharvest.com/confirmed' }
     });
     if(result.error) throw result.error;
     _setAuthBtnLoading('signup-btn', false, 'Create Account');
-    _setAuthSuccess('Account created! Please check your email to confirm your account, then sign in.');
+    // Order matters. switchAuthTab() ends with _clearAuthMessages(), so setting
+    // the notice first and switching second hid it in the same frame it was
+    // written — the user was sent to the Sign In tab with no indication an email
+    // had been sent at all. Switch first, then write the notice.
     switchAuthTab('signin');
     document.getElementById('signin-email').value = email;
+    _pendingConfirmEmail = email;
+    _setAuthSuccess('Account created. Check your email — including the spam folder — for a confirmation link from Virtus Harvest. You must confirm before you can sign in.');
   } catch(e){
     _setAuthBtnLoading('signup-btn', false, 'Create Account');
     _setAuthError(e.message||'Could not create account. Please try again.');

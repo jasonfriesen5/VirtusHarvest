@@ -26,6 +26,7 @@ Not yet fabricated. See [REVIEW.md](REVIEW.md) before ordering.
 | [BOM.csv](BOM.csv) | Bill of materials, JLCPCB/LCSC part numbers |
 | [DESIGN.md](DESIGN.md) | Architecture, net-level rationale, pin map |
 | [REVIEW.md](REVIEW.md) | Open issues found reviewing V1.0 — **read before fab** |
+| [MULTI-ADC.md](MULTI-ADC.md) | V1.1 idea: onboard ADC + external 5-cell mux board |
 | `vendor/` | Original exports from Flux (BOM xlsx) |
 | `mech/` | STEP model for enclosure fitting |
 | `kicad/` | *(not yet created — see "Moving off Flux" below)* |
