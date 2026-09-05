@@ -7,12 +7,15 @@ import type {
   Cart,
   Crop,
   Destination,
+  DestinationCustomer,
   Emisor,
   Farm,
   Field,
+  LoadAssignment,
   Operator,
   Season,
   Remision,
+  Route,
   Truck,
   TruckloadTicket,
   Weighing,
@@ -41,7 +44,10 @@ interface DataValue {
   destinations: Destination[];
   boundaries: Boundary[];
   tickets: TruckloadTicket[];
+  assignments: LoadAssignment[];
   remisiones: Remision[];
+  routes: Route[];
+  destinationCustomers: DestinationCustomer[];
   emisor: Emisor | null;
   loading: boolean;
   error: string | null;
@@ -64,7 +70,10 @@ const EMPTY: Omit<DataValue, 'loading' | 'error' | 'refresh' | 'liveStatus'> = {
   destinations: [],
   boundaries: [],
   tickets: [],
+  assignments: [],
   remisiones: [],
+  routes: [],
+  destinationCustomers: [],
   emisor: null,
 };
 
@@ -104,7 +113,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       destinations,
       boundaries,
       tickets,
+      assignments,
       remisiones,
+      routes,
+      destinationCustomers,
       emisor,
     ] = await Promise.all([
       supabase.from('weighings').select('*').eq('user_id', uid).order('timestamp', { ascending: false }),
@@ -118,7 +130,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       supabase.from('ht_destinations').select('*').eq('user_id', uid).order('name'),
       supabase.from('ht_boundaries').select('*').eq('user_id', uid),
       supabase.from('ht_truckloads').select('*').eq('user_id', uid),
+      supabase.from('ht_load_assignments').select('*').eq('user_id', uid),
       supabase.from('ht_remisiones').select('*').eq('user_id', uid),
+      supabase.from('ht_routes').select('*').eq('user_id', uid),
+      supabase.from('ht_destination_customers').select('*').eq('user_id', uid),
       supabase.from('ht_emisor').select('*').eq('user_id', uid).maybeSingle(),
     ]);
 
@@ -136,7 +151,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       destinations,
       boundaries,
       tickets,
+      assignments,
       remisiones,
+      routes,
+      destinationCustomers,
       emisor,
     ].find((r) => r.error);
 
@@ -159,7 +177,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       destinations: (destinations.data ?? []) as Destination[],
       boundaries: (boundaries.data ?? []) as Boundary[],
       tickets: (tickets.data ?? []) as TruckloadTicket[],
+      assignments: (assignments.data ?? []) as LoadAssignment[],
       remisiones: (remisiones.data ?? []) as Remision[],
+      routes: (routes.data ?? []) as Route[],
+      destinationCustomers: (destinationCustomers.data ?? []) as DestinationCustomer[],
       emisor: (emisor.data ?? null) as Emisor | null,
     });
     setLoading(false);

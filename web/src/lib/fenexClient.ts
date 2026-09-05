@@ -7,7 +7,9 @@ import {
   demoCustomers,
   demoDepartments,
   demoDistricts,
+  demoIssuers,
   demoPdfDataUrl,
+  demoProducts,
   demoStatus,
   isDemo,
 } from './fenexDemo';
@@ -20,11 +22,40 @@ import {
 
 export interface FenexLinkStatus {
   linked: boolean;
+  id?: string | null;
+  label?: string | null;
+  is_default?: boolean | null;
   fenex_email?: string | null;
   account_id?: string | null;
   subscription_status?: string | null;
   paid_until?: string | null;
   linked_at?: string | null;
+}
+
+/**
+ * One issuer an account can file under: a Fenex login plus the details that
+ * name them as the hauler when they carry their own grain.
+ *
+ * Fenex reads who issued a document from the token, so an issuer IS a Fenex
+ * login — there is no way to file under a name whose credentials you do not
+ * hold, which is the correct behaviour for a document tied to a timbrado.
+ */
+export interface Issuer {
+  id: string;
+  label: string | null;
+  fenex_email: string | null;
+  account_id: string | null;
+  subscription_status: string | null;
+  paid_until: string | null;
+  linked_at: string | null;
+  is_default: boolean;
+  /** The transportista block, used when no third-party hauler is on the truck. */
+  razon_social: string | null;
+  ruc: string | null;
+  ruc_dv: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
 }
 
 export interface GeoOption {
@@ -43,6 +74,21 @@ export interface FenexCustomer {
   ruc?: string;
   dv?: string;
   address?: string;
+  [k: string]: unknown;
+}
+
+/**
+ * A product in an issuer's Fenex catalogue. `productCode` on a document is the
+ * buyer's own code, not a national one — which is why the list comes from
+ * Fenex rather than from a table we maintain.
+ */
+export interface FenexProduct {
+  id: string;
+  code?: string;
+  name?: string;
+  description?: string;
+  unitCode?: string | number;
+  unitDescription?: string;
   [k: string]: unknown;
 }
 
@@ -81,41 +127,62 @@ async function call<T>(action: string, body: Record<string, unknown> = {}): Prom
   return data as T;
 }
 
-/** Exchanges the password for a token once; the password is never stored. */
-export const linkFenex = (email: string, password: string) =>
-  call<FenexLinkStatus>('link', { email, password });
+/**
+ * Exchanges the password for a token once; the password is never stored.
+ * Re-linking an issuer that already exists refreshes its token in place.
+ */
+export const linkFenex = (email: string, password: string, label?: string) =>
+  call<FenexLinkStatus>('link', { email, password, label });
 
-export const unlinkFenex = () => call<{ linked: boolean }>('unlink');
+export const unlinkFenex = (issuerId: string) =>
+  call<{ linked: boolean }>('unlink', { issuerId });
 
-export const fenexStatus = () =>
-  isDemo() ? demoStatus() : call<FenexLinkStatus>('status');
+export const fenexStatus = (issuerId?: string | null) =>
+  isDemo() ? demoStatus() : call<FenexLinkStatus>('status', { issuerId });
 
-export const fenexDepartments = () =>
-  isDemo() ? demoDepartments() : call<GeoOption[]>('departments');
+export const fenexIssuers = () =>
+  isDemo() ? demoIssuers() : call<{ issuers: Issuer[] }>('issuers').then((r) => r.issuers);
 
-export const fenexDistricts = (departmentCode: string) =>
-  isDemo() ? demoDistricts(departmentCode) : call<GeoOption[]>('districts', { departmentCode });
+/** Saves the label and transportista details. Never touches the token. */
+export const saveIssuer = (issuerId: string, patch: Partial<Issuer>) =>
+  call<{ issuers: Issuer[] }>('saveIssuer', { issuerId, ...patch }).then((r) => r.issuers);
 
-export const fenexCities = (departmentCode: string, districtCode: string) =>
+export const setDefaultIssuer = (issuerId: string) =>
+  call<{ issuers: Issuer[] }>('setDefaultIssuer', { issuerId }).then((r) => r.issuers);
+
+// Geography and customers are read through a specific issuer's Fenex session:
+// two issuers are two accounts, and their customer lists are not the same.
+export const fenexDepartments = (issuerId?: string | null) =>
+  isDemo() ? demoDepartments() : call<GeoOption[]>('departments', { issuerId });
+
+export const fenexDistricts = (departmentCode: string, issuerId?: string | null) =>
+  isDemo()
+    ? demoDistricts(departmentCode)
+    : call<GeoOption[]>('districts', { departmentCode, issuerId });
+
+export const fenexCities = (departmentCode: string, districtCode: string, issuerId?: string | null) =>
   isDemo()
     ? demoCities(departmentCode, districtCode)
-    : call<GeoOption[]>('cities', { departmentCode, districtCode });
+    : call<GeoOption[]>('cities', { departmentCode, districtCode, issuerId });
 
-export const fenexCustomers = () =>
-  isDemo() ? demoCustomers() : call<FenexCustomer[]>('customers');
+export const fenexProducts = (issuerId?: string | null) =>
+  isDemo() ? demoProducts() : call<FenexProduct[]>('products', { issuerId });
+
+export const fenexCustomers = (issuerId?: string | null) =>
+  isDemo() ? demoCustomers() : call<FenexCustomer[]>('customers', { issuerId });
 
 /**
  * Creates and submits in one call. The idempotency key travels inside the
  * payload — Fenex looks it up per account, so a retry after a lost response
  * returns the original document rather than issuing a second one.
  */
-export const createRemission = (payload: FenexRequest) =>
-  isDemo() ? demoCreate(payload) : call<FenexRemissionResult>('create', { payload });
+export const createRemission = (payload: FenexRequest, issuerId?: string | null) =>
+  isDemo() ? demoCreate(payload) : call<FenexRemissionResult>('create', { payload, issuerId });
 
 /** Copies the KuDE PDF into our own storage and returns a signed link. */
-export const fetchRemissionPdf = (remissionId: string) =>
+export const fetchRemissionPdf = (remissionId: string, issuerId?: string | null) =>
   isDemo()
     ? Promise.resolve({ path: 'demo', url: demoPdfDataUrl() })
-    : call<{ path: string; url: string | null }>('pdf', { remissionId });
+    : call<{ path: string; url: string | null }>('pdf', { remissionId, issuerId });
 
 export { FenexError };

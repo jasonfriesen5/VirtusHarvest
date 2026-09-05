@@ -3,8 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useData } from '../state/DataProvider';
 import { useAuth } from '../state/AuthProvider';
 import { supabase } from '../lib/supabase';
-import { ENTITIES, countAffected, entityByKind, newId, renameWithBackfill, visibleFields } from '../lib/entities';
+import { fenexProducts } from '../lib/fenexClient';
+import type { FenexProduct } from '../lib/fenexClient';
+import {
+  ENTITIES,
+  GEOGRAPHY_KEYS,
+  countAffected,
+  entityByKind,
+  newId,
+  renameWithBackfill,
+  visibleFields,
+} from '../lib/entities';
 import type { EntityConfig, EntityFieldSpec } from '../lib/entities';
+import GeographyPicker from '../components/GeographyPicker';
 import type { EntityKind } from '../lib/types';
 import {
   Button,
@@ -257,6 +268,13 @@ function EntityModal({
   const [extra, setExtra] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const f of fields) {
+      if (f.type === 'geography') {
+        for (const k of GEOGRAPHY_KEYS) {
+          const v = row?.[k];
+          init[k] = v == null ? '' : String(v);
+        }
+        continue;
+      }
       const stored = row?.[f.key];
       init[f.key] =
         stored == null || stored === ''
@@ -289,6 +307,10 @@ function EntityModal({
   function buildExtraPatch(): Record<string, unknown> {
     const patch: Record<string, unknown> = {};
     for (const f of fields) {
+      if (f.type === 'geography') {
+        for (const k of GEOGRAPHY_KEYS) patch[k] = extra[k]?.trim() || null;
+        continue;
+      }
       const raw = extra[f.key]?.trim() ?? '';
       if (f.type === 'number') patch[f.key] = raw === '' ? null : Number(raw);
       // The column is NOT NULL with a default, so an unticked box is false.
@@ -372,9 +394,31 @@ function EntityModal({
         </div>
 
         {fields.map((f) => (
-          <div key={f.key}>
-            <Label>{f.label}</Label>
-            {f.type === 'boolean' ? (
+          <div key={f.key} className={f.type === 'geography' ? 'sm:col-span-2' : undefined}>
+            {f.type !== 'geography' && <Label>{f.label}</Label>}
+            {f.type === 'geography' ? (
+              <GeographyPicker
+                value={{
+                  departmentCode: extra.department_code ?? '',
+                  departmentName: extra.department ?? '',
+                  districtCode: extra.district_code ?? '',
+                  districtName: extra.district ?? '',
+                  cityCode: extra.city_code ?? '',
+                  cityName: extra.city_name ?? '',
+                }}
+                onChange={(v) =>
+                  setExtra({
+                    ...extra,
+                    department_code: v.departmentCode,
+                    department: v.departmentName,
+                    district_code: v.districtCode,
+                    district: v.districtName,
+                    city_code: v.cityCode,
+                    city_name: v.cityName,
+                  })
+                }
+              />
+            ) : f.type === 'boolean' ? (
               <label className="flex items-center gap-2 py-1.5 text-sm text-slate-700 dark:text-slate-200">
                 <input
                   type="checkbox"
@@ -394,6 +438,20 @@ function EntityModal({
                   <option key={farm.id} value={farm.id}>{farm.name}</option>
                 ))}
               </Select>
+            ) : f.type === 'fenexProduct' ? (
+              <FenexProductPicker
+                value={extra[f.key] ?? ''}
+                onChange={(code, name) =>
+                  setExtra({
+                    ...extra,
+                    [f.key]: code,
+                    // The catalogue name is what should print, so it comes
+                    // along — but only to fill a blank, never overwriting a
+                    // description someone has deliberately worded.
+                    fiscal_description: extra.fiscal_description || name,
+                  })
+                }
+              />
             ) : f.type === 'select' ? (
               <Select
                 value={extra[f.key] ?? ''}
@@ -455,6 +513,10 @@ function EntityModal({
 /** Farm references store an id; the table has to show the name behind it. */
 function displayCell(spec: EntityFieldSpec, row: Row, farms: { id: string; name: string }[]): string {
   const value = row[spec.key];
+  if (spec.type === 'geography') {
+    const parts = [row.department, row.district, row.city_name].filter(Boolean).map(String);
+    return parts.length > 0 ? parts.join(' / ') : '—';
+  }
   if (spec.type === 'boolean') return value === true ? 'Yes' : 'No';
   if (value == null || value === '') return '—';
   if (spec.type === 'reference') {
@@ -464,4 +526,84 @@ function displayCell(spec: EntityFieldSpec, row: Row, farms: { id: string; name:
     return spec.options.find((o) => o.value === value)?.label ?? String(value);
   }
   return String(value);
+}
+
+/**
+ * Picks a product from the linked issuer's Fenex catalogue.
+ *
+ * A dropdown rather than a text box because `productCode` is the buyer's own
+ * code: one typed by hand is a document Fenex rejects, and there is no sandbox
+ * to discover that in. Picking the same product for a crop called "Soybeans"
+ * and one called "Soja" is also what makes two names carry one code.
+ *
+ * Falls back to a plain input when the catalogue cannot be read — no Fenex
+ * account linked yet, or the network is down. Config editing must not be
+ * blocked by a call to someone else's server.
+ */
+function FenexProductPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (code: string, name: string) => void;
+}) {
+  const [products, setProducts] = useState<FenexProduct[] | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fenexProducts()
+      .then((rows) => {
+        if (!cancelled) setProducts(rows);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setFailed(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (failed || (products && products.length === 0)) {
+    return (
+      <>
+        <Input value={value} onChange={(e) => onChange(e.target.value, '')} />
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+          {failed
+            ? `Could not read the Fenex catalogue (${failed}). Type the code the buyer uses.`
+            : 'That Fenex account has no products yet. Type the code the buyer uses.'}
+        </p>
+      </>
+    );
+  }
+
+  if (!products) return <Input value={value} disabled placeholder="Loading products…" />;
+
+  // A code already saved that is no longer in the catalogue must stay visible,
+  // or opening the sheet would silently blank it.
+  const known = products.some((p) => String(p.code ?? p.id) === value);
+
+  return (
+    <>
+      <Select
+        value={value}
+        onChange={(e) => {
+          const p = products.find((x) => String(x.code ?? x.id) === e.target.value);
+          onChange(e.target.value, String(p?.name ?? p?.description ?? ''));
+        }}
+      >
+        <option value="">— not set —</option>
+        {!known && value && <option value={value}>{value} (not in the catalogue)</option>}
+        {products.map((p) => (
+          <option key={p.id} value={String(p.code ?? p.id)}>
+            {String(p.name ?? p.description ?? p.id)}
+            {p.code ? ` · ${p.code}` : ''}
+          </option>
+        ))}
+      </Select>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        From your Fenex products. Two crops may point at the same one.
+      </p>
+    </>
+  );
 }

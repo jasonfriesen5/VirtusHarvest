@@ -1,5 +1,5 @@
 import geography from './demoGeography.json';
-import type { FenexCustomer, FenexLinkStatus, FenexRemissionResult, GeoOption } from './fenexClient';
+import type { FenexCustomer, FenexLinkStatus, FenexRemissionResult, GeoOption, Issuer, FenexProduct } from './fenexClient';
 import type { FenexRequest } from './fenexPayload';
 
 /**
@@ -52,6 +52,46 @@ export const demoStatus = (): Promise<FenexLinkStatus> =>
     linked_at: new Date().toISOString(),
   });
 
+/**
+ * Two issuers in trial mode, because one would hide the whole point of the
+ * picker — the second is the case where a remisión is filed for someone else.
+ */
+export const demoIssuers = (): Promise<Issuer[]> =>
+  wait([
+    {
+      id: 'demo-issuer-1',
+      label: 'Mi empresa (demo)',
+      fenex_email: 'demo@fenexpy.com',
+      account_id: 'demo-account',
+      subscription_status: 'DEMO',
+      paid_until: null,
+      linked_at: new Date().toISOString(),
+      is_default: true,
+      razon_social: 'AGRO DEMO SOCIEDAD ANONIMA',
+      ruc: '80012345',
+      ruc_dv: '6',
+      address: 'COLONIA DEMO, SAN PEDRO',
+      phone: '0981000000',
+      email: 'demo@fenexpy.com',
+    },
+    {
+      id: 'demo-issuer-2',
+      label: 'Vecino (demo)',
+      fenex_email: 'vecino@fenexpy.com',
+      account_id: 'demo-account-2',
+      subscription_status: 'DEMO',
+      paid_until: null,
+      linked_at: new Date().toISOString(),
+      is_default: false,
+      razon_social: 'PRODUCTOR VECINO',
+      ruc: '3744941',
+      ruc_dv: '9',
+      address: 'COLONIA SANTA CLARA',
+      phone: '0972404045',
+      email: 'vecino@fenexpy.com',
+    },
+  ]);
+
 export const demoDepartments = (): Promise<GeoOption[]> =>
   wait(geo.departments.map((d) => ({ departmentCode: d.code, name: d.name })));
 
@@ -65,6 +105,26 @@ export const demoCities = (departmentCode: string, districtCode: string): Promis
   })));
 
 /** Two buyers with real-looking geography, so the pickers have something to do. */
+/**
+ * A pretend catalogue. Two names for the same commodity on purpose — a farm
+ * whose crop is called "Soybeans" and a buyer who calls it "SOJA" must end up
+ * with the same code on the document.
+ */
+export const demoProducts = (): Promise<FenexProduct[]> =>
+  wait([
+    { id: 'p-soja', code: 'PRO-1', name: 'SOJA', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-maiz', code: 'PRO-2', name: 'MAIZ', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-trigo', code: 'PRO-3', name: 'TRIGO', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-canola', code: 'PRO-4', name: 'CANOLA', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-girasol', code: 'PRO-5', name: 'GIRASOL', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-arroz', code: 'PRO-6', name: 'ARROZ', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-sorgo', code: 'PRO-7', name: 'SORGO', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-avena', code: 'PRO-8', name: 'AVENA', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-chia', code: 'PRO-9', name: 'CHIA', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-mani', code: 'PRO-10', name: 'MANI', unitCode: '83', unitDescription: 'kg' },
+    { id: 'p-algodon', code: 'PRO-11', name: 'ALGODON', unitCode: '83', unitDescription: 'kg' },
+  ]);
+
 export const demoCustomers = (): Promise<FenexCustomer[]> =>
   wait([
     {

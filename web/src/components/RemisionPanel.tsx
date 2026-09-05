@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../state/AuthProvider';
 import { useData } from '../state/DataProvider';
-import { buildFenexRequest } from '../lib/fenexMapping';
-import { normalise, validate } from '../lib/fenexPayload';
+import { buildFenexRequest, routeKeyFor } from '../lib/fenexMapping';
+import { isFenexRequest, normalise, validate } from '../lib/fenexPayload';
 import type { MappingContext } from '../lib/fenexMapping';
 import type { FenexRequest } from '../lib/fenexPayload';
 import { createRemission, fetchRemissionPdf } from '../lib/fenexClient';
+import { useIssuers } from '../state/useIssuers';
 import RemisionForm from './RemisionForm';
 import type { Truckload } from '../lib/truckloads';
 import type { Remision } from '../lib/types';
@@ -24,6 +25,10 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const { issuers, defaultIssuer } = useIssuers();
+  // Which issuer this document goes out under. Null until the list arrives,
+  // then the one already recorded on the draft, else the account default.
+  const [pickedIssuerId, setPickedIssuerId] = useState<string | null>(null);
 
   const closingId = load.closedBy?.id ?? null;
   const remision: Remision | undefined = closingId
@@ -34,23 +39,55 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
     ? data.destinations.find((d) => d.name === load.destination)
     : undefined;
 
+  const issuerId = pickedIssuerId ?? remision?.issuer_id ?? defaultIssuer?.id ?? null;
+  const issuer = issuers.find((i) => i.id === issuerId) ?? defaultIssuer;
+
   const ctx: MappingContext = useMemo(
     () => ({
-      emisor: data.emisor,
+      issuer,
       destinations: data.destinations,
       trucks: data.trucks,
       crops: data.crops,
       fields: data.fields,
       farms: data.farms,
+      routes: data.routes,
     }),
-    [data.emisor, data.destinations, data.trucks, data.crops, data.fields, data.farms],
+    [issuer, data.destinations, data.trucks, data.crops, data.fields, data.farms, data.routes],
   );
 
-  /** The draft as it stands: what was saved, or a fresh prefill if nothing is. */
-  const currentDraft = useMemo<FenexRequest>(
-    () => (remision?.request_payload as FenexRequest) ?? buildFenexRequest(load, ctx),
-    [remision, load, ctx],
-  );
+  /**
+   * The draft as it stands: what was saved, or a fresh prefill.
+   *
+   * A saved payload is only reused when it matches the current shape. Drafts
+   * written before the payload was rebuilt for Fenex have no `remission` key,
+   * and reaching into it threw — which blanked the page instead of showing the
+   * truckload.
+   */
+  const savedPayload = remision?.request_payload;
+  const legacyDraft = savedPayload != null && !isFenexRequest(savedPayload);
+  /**
+   * The buyer chosen last time this destination was shipped under this issuer.
+   * Recalled rather than configured: the same port is a different customer
+   * record in each Fenex account, so there is nothing a destination could
+   * store — but the pairing repeats on every load, so re-picking it every time
+   * would be pure friction.
+   */
+  const rememberedCustomerId = useMemo(() => {
+    if (!destination || !issuerId) return null;
+    return (
+      data.destinationCustomers.find(
+        (d) => d.destination_id === destination.id && d.issuer_id === issuerId,
+      )?.fenex_customer_id ?? null
+    );
+  }, [data.destinationCustomers, destination, issuerId]);
+
+  const currentDraft = useMemo<FenexRequest>(() => {
+    if (isFenexRequest(savedPayload)) return savedPayload;
+    const draft = buildFenexRequest(load, ctx);
+    return rememberedCustomerId
+      ? { ...draft, remission: { ...draft.remission, customerId: rememberedCustomerId } }
+      : draft;
+  }, [savedPayload, load, ctx, rememberedCustomerId]);
 
   // The same rules Fenex enforces, applied here first. With no sandbox and no
   // cancellation, a payload that fails here is a document that never existed.
@@ -58,13 +95,55 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
     () => validate(normalise(currentDraft)).map((i) => `${i.field} — ${i.message}`),
     [currentDraft],
   );
-  const savedDraft = Boolean(remision?.request_payload);
+  const savedDraft = isFenexRequest(savedPayload);
 
   // Off means invisible: a farm that doesn't issue remisiones should never see
   // a button, a warning, or a mention of the feature.
   if (!data.emisor?.remision_enabled) return null;
   // Destinations that aren't sales — your own bins — never need a document.
   if (!closingId || !destination?.requires_remision) return null;
+
+  /**
+   * Distances are learned rather than configured: whatever is entered for this
+   * farm-and-buyer pair is remembered and prefilled next time that route comes
+   * up, so nobody has to maintain a table of kilometres by hand.
+   */
+  async function rememberRoute(draft: FenexRequest) {
+    if (!user) return;
+    const key = routeKeyFor(load, ctx);
+    const km = draft.remission.estimatedDistanceKm;
+    if (!key || km == null) return;
+    await supabase.from('ht_routes').upsert(
+      {
+        user_id: user.id,
+        farm_id: key.farmId,
+        destination_id: key.destinationId,
+        distance_km: km,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,farm_id,destination_id' },
+    );
+  }
+
+  /**
+   * Records which Fenex customer this destination is under this issuer, so the
+   * next load down the same route starts with the buyer already chosen.
+   */
+  async function rememberCustomer(draft: FenexRequest) {
+    if (!user || !destination || !issuerId) return;
+    const customerId = draft.remission.customerId;
+    if (!customerId) return;
+    await supabase.from('ht_destination_customers').upsert(
+      {
+        user_id: user.id,
+        destination_id: destination.id,
+        issuer_id: issuerId,
+        fenex_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,destination_id,issuer_id' },
+    );
+  }
 
   /** Writes the draft without sending, so typed corrections survive a reload. */
   async function saveDraft(draft: FenexRequest) {
@@ -77,6 +156,8 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
         user_id: user.id,
         status: 'draft',
         request_payload: draft,
+        issuer_id: issuerId,
+        issuer_name: issuer?.label ?? issuer?.razon_social ?? null,
         error_message: null,
         updated_at: new Date().toISOString(),
       },
@@ -87,6 +168,8 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
       setError(err.message);
       return;
     }
+    await rememberRoute(draft);
+    await rememberCustomer(draft);
     setFormOpen(false);
     await data.refresh();
   }
@@ -107,6 +190,10 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
         user_id: user.id,
         status: 'sending',
         request_payload: payload,
+        // Recorded before the send, not after: if the response is lost, the
+        // row must still say which account the document was filed under.
+        issuer_id: issuerId,
+        issuer_name: issuer?.label ?? issuer?.razon_social ?? null,
         error_message: null,
         updated_at: new Date().toISOString(),
       },
@@ -118,15 +205,18 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
       return;
     }
 
+    await rememberRoute(payload);
+    await rememberCustomer(payload);
+
     try {
-      const result = await createRemission(payload);
+      const result = await createRemission(payload, issuerId);
 
       // The KuDE lives behind Fenex's token, so a copy is pulled into our own
       // storage — that is what makes a link the driver can actually open.
       let pdfUrl: string | null = null;
       let pdfPath: string | null = null;
       try {
-        const pdf = await fetchRemissionPdf(result.id);
+        const pdf = await fetchRemissionPdf(result.id, issuerId);
         pdfUrl = pdf.url;
         pdfPath = pdf.path;
       } catch {
@@ -290,13 +380,23 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
         <RemisionForm
           initial={currentDraft}
           busy={busy}
+          issuers={issuers}
+          issuerId={issuerId}
+          onIssuerChange={setPickedIssuerId}
           onClose={() => setFormOpen(false)}
           onSaveDraft={(d) => void saveDraft(d)}
           onSend={(d) => void createRemision(d)}
         />
       )}
 
-      {status === 'draft' && Boolean(remision?.request_payload) && !formOpen && (
+      {legacyDraft && !formOpen && (
+        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+          A draft saved under the old format was found and rebuilt from this truckload. Open the
+          details to check it, then save again.
+        </p>
+      )}
+
+      {status === 'draft' && savedDraft && !formOpen && (
         <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
           A filled draft is saved for this truckload. Nothing has been issued yet.
         </p>

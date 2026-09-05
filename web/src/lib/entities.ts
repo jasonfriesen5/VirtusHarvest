@@ -37,7 +37,30 @@ export type EntityFieldSpec =
       defaultValue?: string;
     })
   | (SpecBase & { type: 'reference'; ref: 'farms' })
-  | (SpecBase & { type: 'boolean' });
+  | (SpecBase & { type: 'boolean' })
+  /**
+   * Department → district → city, chosen from the official DNIT lists. Writes
+   * six columns together because SIFEN validates them as a combination, and a
+   * name typed by hand is the reliable way to get a document rejected.
+   */
+  | (SpecBase & { type: 'geography' })
+  /**
+   * A product from the linked issuer's Fenex catalogue. Chosen, never typed:
+   * `productCode` on a document is the buyer's own code, so a hand-typed one
+   * is a rejected document — and picking the same product for "Soja" and for
+   * "Soybeans" is what makes two names carry one code.
+   */
+  | (SpecBase & { type: 'fenexProduct' });
+
+/** The columns a `geography` field reads and writes, in every table. */
+export const GEOGRAPHY_KEYS = [
+  'department_code',
+  'department',
+  'district_code',
+  'district',
+  'city_code',
+  'city_name',
+] as const;
 
 export interface EntityConfig {
   kind: EntityKind;
@@ -58,8 +81,7 @@ export const ENTITIES: EntityConfig[] = [
     backfillColumns: ['farm'],
     fields: [
       { key: 'address', label: 'Address (departure point)', type: 'text', remisionOnly: true },
-      { key: 'district', label: 'District', type: 'text', remisionOnly: true },
-      { key: 'department', label: 'Department', type: 'text', remisionOnly: true },
+      { key: 'geography', label: 'Location (DNIT)', type: 'geography', remisionOnly: true },
     ],
   },
   {
@@ -91,7 +113,7 @@ export const ENTITIES: EntityConfig[] = [
     singular: 'crop',
     backfillColumns: ['crop'],
     fields: [
-      { key: 'product_code', label: 'Product code', type: 'text', remisionOnly: true },
+      { key: 'product_code', label: 'Product in Fenex', type: 'fenexProduct', remisionOnly: true },
       { key: 'fiscal_description', label: 'Document description', type: 'text', remisionOnly: true },
     ],
   },
@@ -147,8 +169,7 @@ export const ENTITIES: EntityConfig[] = [
       { key: 'razon_social', label: 'Legal name (razón social)', type: 'text', remisionOnly: true },
       { key: 'ruc', label: 'RUC', type: 'text', remisionOnly: true },
       { key: 'address', label: 'Address', type: 'text', remisionOnly: true },
-      { key: 'district', label: 'District', type: 'text', remisionOnly: true },
-      { key: 'department', label: 'Department', type: 'text', remisionOnly: true },
+      { key: 'geography', label: 'Location (DNIT)', type: 'geography', remisionOnly: true },
     ],
   },
   {

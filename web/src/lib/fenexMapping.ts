@@ -1,8 +1,9 @@
-import type { Crop, Destination, Emisor, Farm, Field, Truck } from './types';
+import type { Crop, Destination, Farm, Field, Route, Truck } from './types';
+import type { Issuer } from './fenexClient';
 import type { Truckload } from './truckloads';
 import type { FenexItem, FenexRemission, FenexRequest } from './fenexPayload';
 import { REASONS, EMISSION_RESPONSIBILITIES, TRANSPORT_TYPES, splitRuc } from './sifen';
-import { netKg } from './selectors';
+import { wetKg } from './selectors';
 
 /**
  * Turns one truckload into the document Fenex expects.
@@ -13,12 +14,19 @@ import { netKg } from './selectors';
  */
 
 export interface MappingContext {
-  emisor: Emisor | null;
+  /**
+   * Who the document is issued by. Fenex fills the header from the token, so
+   * this is not sent as issuer fields — it is here because the transportista
+   * block names this same person when they haul their own grain, and that IS
+   * sent.
+   */
+  issuer: Issuer | null;
   destinations: Destination[];
   trucks: Truck[];
   crops: Crop[];
   fields: Field[];
   farms: Farm[];
+  routes: Route[];
 }
 
 function day(iso: string | null, plusDays = 0): string {
@@ -30,20 +38,45 @@ function day(iso: string | null, plusDays = 0): string {
 
 const s = (v: string | null | undefined) => (v ?? '').trim();
 
+
+/**
+ * The field the truck was last loaded from.
+ *
+ * A truck can be topped up across two farms, and the punto de salida on the
+ * document is where it departed — so the last load on board decides it, not
+ * the first. `load.fields` is an alphabetical list of names and would pick an
+ * arbitrary one, so this walks the loads backwards in time instead.
+ *
+ * Resolution prefers `field_id` over the name: two fields can share a name,
+ * and matching by name would sometimes pick the wrong farm.
+ */
+function originFieldFor(load: Truckload, ctx: MappingContext): Field | undefined {
+  // load.loads is ordered oldest-first, so the end is the most recent.
+  for (let i = load.loads.length - 1; i >= 0; i--) {
+    const w = load.loads[i];
+    const byId = w.field_id ? ctx.fields.find((f) => f.id === w.field_id) : undefined;
+    if (byId) return byId;
+    const name = s(w.zone);
+    const byName = name ? ctx.fields.find((f) => f.name === name) : undefined;
+    if (byName) return byName;
+  }
+  return undefined;
+}
+
 export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRequest {
   const dest = ctx.destinations.find((d) => d.name === load.destination);
   const truck = ctx.trucks.find((t) => t.name === load.truck);
 
-  // The farm behind the first field these loads came from is the departure point.
-  const originField = load.fields[0] ? ctx.fields.find((f) => f.name === load.fields[0]) : undefined;
+  // The farm the truck was last loaded from is where it departed.
+  const originField = originFieldFor(load, ctx);
   const farm = originField?.farm_id ? ctx.farms.find((f) => f.id === originField.farm_id) : undefined;
 
   const issueDate = day(load.emptiedAt);
   const receiver = splitRuc(s(dest?.ruc));
-  const emisorRuc = splitRuc(s(ctx.emisor?.ruc));
+  const issuerRuc = splitRuc(s(ctx.issuer?.ruc));
 
   // A hauler on the truck means a third party; otherwise the farm hauls its own
-  // grain, which is what "Propio" means, and the emisor is the transportista.
+  // grain, which is what "Propio" means, and the issuer is the transportista.
   const hasHauler = Boolean(s(truck?.transportista_name));
   const haulerRuc = splitRuc(s(truck?.transportista_ruc));
   const docType = (s(truck?.transportista_document_type) || 'RUC') === 'CI' ? 'CI' : 'RUC';
@@ -52,7 +85,9 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
   const byCrop = new Map<string, number>();
   for (const w of load.loads) {
     const name = s(w.crop) || 'Sin especificar';
-    byCrop.set(name, (byCrop.get(name) ?? 0) + netKg(w));
+    // The document declares what is being transported, so this is the scale
+    // reading rather than the moisture-adjusted figure.
+    byCrop.set(name, (byCrop.get(name) ?? 0) + wetKg(w));
   }
 
   const items: FenexItem[] = [...byCrop.entries()].map(([name, kg]) => {
@@ -71,7 +106,10 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
   const totalKg = items.reduce((sum, i) => sum + i.quantity, 0);
 
   const remission: FenexRemission = {
-    customerId: s(dest?.fenex_customer_id) || null,
+    // Chosen in the sheet, under the issuer that is sending: the same buyer
+    // is a different customer record in each Fenex account, so there is no one
+    // id a destination could carry.
+    customerId: null,
     issueDate,
 
     // Grain leaving for a buyer is a sale, which is also the one motivo that
@@ -80,7 +118,11 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     reasonDescription: REASONS[1],
     emissionResponsibilityCode: 1,
     emissionResponsibilityDescription: EMISSION_RESPONSIBILITIES[1],
-    estimatedDistanceKm: null,
+    // Remembered per farm-and-buyer pair: the same silo is a different distance
+    // from each farm, so keying it to the destination alone would be wrong.
+    estimatedDistanceKm:
+      ctx.routes.find((r) => r.farm_id === farm?.id && r.destination_id === dest?.id)?.distance_km ??
+      null,
     futureInvoiceIssueDate: issueDate,
 
     receiverTaxpayerType: '1',
@@ -88,13 +130,15 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     receiverDv: receiver.dv,
     receiverName: s(dest?.razon_social) || s(dest?.name),
     receiverAddress: s(dest?.address),
+    // Paraguayan rural addresses carry no house number; SIFEN wants the field
+    // populated regardless, and "0" is what Fenex's own tests send.
     receiverHouseNumber: '0',
-    receiverDepartmentCode: '',
+    receiverDepartmentCode: s(dest?.department_code),
     receiverDepartmentName: s(dest?.department),
-    receiverDistrictCode: '',
+    receiverDistrictCode: s(dest?.district_code),
     receiverDistrictName: s(dest?.district),
-    receiverCityCode: '',
-    receiverCityName: '',
+    receiverCityCode: s(dest?.city_code),
+    receiverCityName: s(dest?.city_name),
 
     transportType: hasHauler ? 2 : 1,
     transportTypeDescription: TRANSPORT_TYPES[hasHauler ? 2 : 1],
@@ -103,7 +147,7 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     transportEndDate: day(load.emptiedAt, 1),
 
     departureAddress: s(farm?.address),
-    departureHouseNumber: s(farm?.house_number) || '0',
+    departureHouseNumber: '0',
     departureDepartmentCode: s(farm?.department_code),
     departureDepartmentName: s(farm?.department),
     departureDistrictCode: s(farm?.district_code),
@@ -114,12 +158,12 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     // Delivery defaults to the receptor — grain normally goes where the buyer is.
     deliveryAddress: s(dest?.address),
     deliveryHouseNumber: '0',
-    deliveryDepartmentCode: '',
+    deliveryDepartmentCode: s(dest?.department_code),
     deliveryDepartmentName: s(dest?.department),
-    deliveryDistrictCode: '',
+    deliveryDistrictCode: s(dest?.district_code),
     deliveryDistrictName: s(dest?.district),
-    deliveryCityCode: '',
-    deliveryCityName: '',
+    deliveryCityCode: s(dest?.city_code),
+    deliveryCityName: s(dest?.city_name),
 
     vehicleType: s(truck?.vehicle_type) || 'Camion',
     // Capped at 10 characters by SIFEN, so a long make is trimmed rather than
@@ -128,13 +172,13 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     vehiclePlate: s(truck?.plate),
 
     transporterDocumentType: docType,
-    transporterRuc: docType === 'RUC' ? (hasHauler ? haulerRuc.ruc : emisorRuc.ruc) : '',
+    transporterRuc: docType === 'RUC' ? (hasHauler ? haulerRuc.ruc : issuerRuc.ruc) : '',
     transporterDv: docType === 'RUC'
-      ? (hasHauler ? haulerRuc.dv : s(ctx.emisor?.ruc_dv) || emisorRuc.dv)
+      ? (hasHauler ? haulerRuc.dv : s(ctx.issuer?.ruc_dv) || issuerRuc.dv)
       : '',
     transporterCi: docType === 'CI' ? s(truck?.transportista_ci) : '',
-    transporterName: s(truck?.transportista_name) || s(ctx.emisor?.razon_social),
-    transporterFiscalAddress: s(truck?.transportista_address) || s(ctx.emisor?.address),
+    transporterName: s(truck?.transportista_name) || s(ctx.issuer?.razon_social),
+    transporterFiscalAddress: s(truck?.transportista_address) || s(ctx.issuer?.address),
 
     driverCi: s(truck?.driver_ci),
     driverName: s(truck?.driver) || load.operators[0] || '',
@@ -154,4 +198,17 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     remission,
     items,
   };
+}
+
+/** Which farm-and-buyer pair a truckload represents, for remembering distance. */
+export function routeKeyFor(
+  load: Truckload,
+  ctx: MappingContext,
+): { farmId: string; destinationId: string } | null {
+  const dest = ctx.destinations.find((d) => d.name === load.destination);
+  // Must agree with buildFenexRequest, or the remembered distance would belong
+  // to a different farm than the one printed on the document.
+  const farmId = originFieldFor(load, ctx)?.farm_id;
+  if (!farmId || !dest) return null;
+  return { farmId, destinationId: dest.id };
 }

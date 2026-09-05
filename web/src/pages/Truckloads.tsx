@@ -11,27 +11,39 @@ import {
   EmptyState,
   ErrorNote,
   Label,
+  Modal,
   Select,
   Spinner,
   Stat,
   cx,
 } from '../components/ui';
+import EditRecordModal from '../components/EditRecordModal';
+import ErrorBoundary from '../components/ErrorBoundary';
 import RemisionPanel from '../components/RemisionPanel';
+import CreateTruckloadModal from '../components/CreateTruckloadModal';
+import type { Candidate } from '../components/CreateTruckloadModal';
 import { buildTruckloads } from '../lib/truckloads';
+import { deleteManualTruckload, unassignLoad } from '../lib/assignments';
+import { LOCK_REASON, lockedClosingIds, lockedWeighingIds } from '../lib/locking';
 import type { Truckload } from '../lib/truckloads';
+import type { Weighing } from '../lib/types';
 import { formatWeight, weightValue, toKg, UNIT_LABEL } from '../lib/units';
 import { downloadCsv, formatDateTime, relativeTime, toCsv } from '../lib/format';
-import { filterBySeason, netKg } from '../lib/selectors';
+import { filterBySeason, wetKg } from '../lib/selectors';
 
 export default function Truckloads() {
   const { user } = useAuth();
-  const { weighings, trucks, tickets, loading, error, refresh } = useData();
+  const { weighings, trucks, tickets, assignments, remisiones, loading, error, refresh } = useData();
   const { unit, seasonId } = usePrefs();
 
   const [truckFilter, setTruckFilter] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [editingLoad, setEditingLoad] = useState<Weighing | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [busyLoadId, setBusyLoadId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Truckload | null>(null);
 
   /** Ticket weights normalised to kg, keyed by the closing empty-truck row. */
   const ticketKgById = useMemo(() => {
@@ -60,23 +72,19 @@ export default function Truckloads() {
     }
     setSavingId(closingId);
     setActionError(null);
-    const { error: err } =
-      value == null
-        ? await supabase
-            .from('ht_truckloads')
-            .delete()
-            .eq('closing_weighing_id', closingId)
-            .eq('user_id', user.id)
-        : await supabase.from('ht_truckloads').upsert(
-            {
-              closing_weighing_id: closingId,
-              user_id: user.id,
-              ticket_weight: value,
-              ticket_unit: unit === 't' ? 'kg' : unit,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'closing_weighing_id' },
-          );
+    // Clearing a ticket writes a null rather than deleting the row: the same
+    // row also carries the flag marking a console-made truckload, and dropping
+    // it would dissolve the truckload along with the ticket.
+    const { error: err } = await supabase.from('ht_truckloads').upsert(
+      {
+        closing_weighing_id: closingId,
+        user_id: user.id,
+        ticket_weight: value,
+        ticket_unit: unit === 't' ? 'kg' : unit,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'closing_weighing_id' },
+    );
     setSavingId(null);
     if (err) {
       setActionError(err.message);
@@ -87,7 +95,72 @@ export default function Truckloads() {
 
   const seasonRows = useMemo(() => filterBySeason(weighings, seasonId), [weighings, seasonId]);
 
-  const { completed, open } = useMemo(() => buildTruckloads(seasonRows), [seasonRows]);
+  /**
+   * Truckloads whose closing row the console wrote rather than a driver. They
+   * take only the loads pinned to them, so the grouping has to know which ones
+   * they are before it runs.
+   */
+  const grouping = useMemo(
+    () => ({
+      assignments,
+      manualClosingIds: new Set(
+        tickets.filter((t) => t.manual).map((t) => t.closing_weighing_id),
+      ),
+    }),
+    [assignments, tickets],
+  );
+
+  const { completed, open, unassigned } = useMemo(
+    () => buildTruckloads(seasonRows, grouping),
+    [seasonRows, grouping],
+  );
+
+  const locked = useMemo(
+    () => lockedWeighingIds(weighings, remisiones, grouping),
+    [weighings, remisiones, grouping],
+  );
+
+  /** Truckloads that have been filed and may no longer gain or lose loads. */
+  const frozenTruckloads = useMemo(() => lockedClosingIds(remisiones), [remisiones]);
+
+  /**
+   * What the "new truckload" picker may choose from: loads pulled out of a
+   * bundle, plus loads still showing as on a truck. The second group is the
+   * common case — the delivery happened, nobody pressed "empty truck".
+   */
+  const candidates = useMemo<Candidate[]>(() => {
+    const list: Candidate[] = unassigned.map((load) => ({ load, note: 'not in a truckload' }));
+    for (const t of open) {
+      for (const load of t.loads) list.push({ load, note: `still on ${t.truck}` });
+    }
+    return list;
+  }, [unassigned, open]);
+
+  /** Pulls one load out of the truckload it is currently grouped into. */
+  async function removeLoad(load: Weighing) {
+    if (!user) return;
+    setBusyLoadId(load.id);
+    setActionError(null);
+    try {
+      await unassignLoad(user.id, load.id);
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not remove the load.');
+    }
+    setBusyLoadId(null);
+  }
+
+  async function removeTruckload(load: Truckload) {
+    if (!user || !load.closedBy) return;
+    setActionError(null);
+    try {
+      await deleteManualTruckload(user.id, load.closedBy.id, load.loads);
+      setDeleting(null);
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not delete the truckload.');
+    }
+  }
 
   const shown = useMemo(
     () => (truckFilter ? completed.filter((t) => t.truck === truckFilter) : completed),
@@ -188,6 +261,13 @@ export default function Truckloads() {
                 ticketKg={null}
                 saving={false}
                 onSaveTicket={null}
+                onEditLoad={setEditingLoad}
+                locked={locked}
+                // A truck that has not been emptied has no truckload to be
+                // removed from — the loads are simply still on it.
+                onRemoveLoad={null}
+                busyLoadId={busyLoadId}
+                onDelete={null}
                 expanded={expanded === t.key}
                 onToggle={() => setExpanded(expanded === t.key ? null : t.key)}
               />
@@ -196,10 +276,81 @@ export default function Truckloads() {
         </Card>
       )}
 
+      {unassigned.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Loads not in a truckload"
+            subtitle="Taken out of a truckload by hand · pick them up in a new truckload"
+            action={<Button variant="primary" onClick={() => setCreating(true)}>New truckload</Button>}
+          />
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {unassigned.map((w) => (
+              <li key={w.id} className="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-slate-300 dark:bg-slate-600" aria-hidden />
+                <span className="min-w-40 flex-1 text-slate-700 dark:text-slate-200">
+                  {formatDateTime(w.timestamp)}
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {w.zone ? ` · ${w.zone}` : ''}
+                    {w.crop ? ` · ${w.crop}` : ''}
+                    {w.buggy ? ` · ${w.buggy}` : ''}
+                  </span>
+                </span>
+                <span className="shrink-0 font-medium tabular-nums text-slate-900 dark:text-slate-50">
+                  {formatWeight(wetKg(w), unit)}
+                </span>
+                <Button variant="ghost" onClick={() => setEditingLoad(w)}>Edit</Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {creating && (
+        <CreateTruckloadModal
+          candidates={candidates}
+          onClose={() => setCreating(false)}
+          onCreated={async () => {
+            setCreating(false);
+            await refresh();
+          }}
+        />
+      )}
+
+      {deleting && (
+        <Modal title="Delete this truckload?" onClose={() => setDeleting(null)}>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Deletes the truckload {deleting.truck}
+            {deleting.destination ? ` → ${deleting.destination}` : ''} and its buyer&rsquo;s
+            ticket. The {deleting.loads.length} load
+            {deleting.loads.length === 1 ? '' : 's'} on it are kept — they move back to
+            &ldquo;loads not in a truckload&rdquo;.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button onClick={() => setDeleting(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void removeTruckload(deleting)}>
+              Delete truckload
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {editingLoad && (
+        <EditRecordModal
+          record={editingLoad}
+          onClose={() => setEditingLoad(null)}
+          onSaved={async () => {
+            setEditingLoad(null);
+            // Truckloads are derived, so a corrected weight or crop reshapes
+            // the bundle it belongs to as soon as the data comes back.
+            await refresh();
+          }}
+        />
+      )}
+
       <Card>
         <CardHeader
           title="Delivered truckloads"
-          subtitle="Every load bundled between one empty-truck and the next"
+          subtitle="Every load bundled between one empty-truck and the next · scale weight, not dry"
           action={
             <div className="flex items-end gap-2">
               <div className="w-44">
@@ -211,6 +362,7 @@ export default function Truckloads() {
                   ))}
                 </Select>
               </div>
+              <Button onClick={() => setCreating(true)}>New truckload</Button>
               <Button variant="primary" onClick={exportCsv} disabled={shown.length === 0}>
                 Export CSV
               </Button>
@@ -233,6 +385,17 @@ export default function Truckloads() {
                 ticketKg={ticketKgById.get(t.closedBy?.id ?? '') ?? null}
                 saving={savingId === t.closedBy?.id}
                 onSaveTicket={(raw) => void saveTicket(t.closedBy!.id, raw)}
+                onEditLoad={setEditingLoad}
+                locked={locked}
+                onRemoveLoad={
+                  frozenTruckloads.has(t.closedBy?.id ?? '') ? null : (w) => void removeLoad(w)
+                }
+                busyLoadId={busyLoadId}
+                onDelete={
+                  t.manual && !frozenTruckloads.has(t.closedBy?.id ?? '')
+                    ? () => setDeleting(t)
+                    : null
+                }
                 expanded={expanded === t.key}
                 onToggle={() => setExpanded(expanded === t.key ? null : t.key)}
               />
@@ -250,11 +413,23 @@ function TruckloadRow({
   ticketKg,
   saving,
   onSaveTicket,
+  onEditLoad,
+  locked,
+  onRemoveLoad,
+  busyLoadId,
+  onDelete,
   expanded,
   onToggle,
 }: {
   load: Truckload;
   unit: 'kg' | 'lb' | 't';
+  onEditLoad: (w: Weighing) => void;
+  locked: Set<string>;
+  /** Null when the truckload's membership is fixed — filed, or still loading. */
+  onRemoveLoad: ((w: Weighing) => void) | null;
+  busyLoadId: string | null;
+  /** Only console-made truckloads can be deleted; a driver's cannot. */
+  onDelete: (() => void) | null;
   /** Buyer's weight in kg, or null when no ticket has been entered. */
   ticketKg: number | null;
   saving: boolean;
@@ -289,6 +464,14 @@ function TruckloadRow({
             {isOpen && (
               <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                 still loaded
+              </span>
+            )}
+            {load.manual && (
+              <span
+                title="Assembled in the console, not closed off in the field."
+                className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+              >
+                added here
               </span>
             )}
           </p>
@@ -342,6 +525,7 @@ function TruckloadRow({
                 <th className="py-1 font-medium">Crop</th>
                 <th className="py-1 font-medium">Operator</th>
                 <th className="py-1 text-right font-medium">Weight</th>
+                <th className="py-1 text-right font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -351,19 +535,66 @@ function TruckloadRow({
                   <td className="py-1">{w.zone || '—'}</td>
                   <td className="py-1">{w.crop || '—'}</td>
                   <td className="py-1">{w.worker || '—'}</td>
-                  <td className="py-1 text-right tabular-nums">{formatWeight(netKg(w), unit)}</td>
+                  <td className="py-1 text-right tabular-nums">{formatWeight(wetKg(w), unit)}</td>
+                  <td className="py-1 text-right whitespace-nowrap">
+                    {locked.has(w.id) ? (
+                      <span title={LOCK_REASON} className="px-1.5 text-xs text-slate-400" aria-label="Filed">
+                        filed
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onEditLoad(w)}
+                          className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                        >
+                          Edit
+                        </button>
+                        {onRemoveLoad && (
+                          <button
+                            onClick={() => onRemoveLoad(w)}
+                            disabled={busyLoadId === w.id}
+                            title="Take this load off the truckload. It becomes available for a new one."
+                            className="ml-1 rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
+                          >
+                            {busyLoadId === w.id ? 'Removing…' : 'Remove'}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {load.emptiedAt && (
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Truck emptied {formatDateTime(load.emptiedAt)}
-              {load.destination ? ` at ${load.destination}` : ''}.
+          {load.loads.length === 0 && (
+            <p className="py-2 text-xs text-slate-500 dark:text-slate-400">
+              No loads on this truckload. Add some by removing them from wherever they sit
+              now and building a new truckload, or delete this one.
             </p>
           )}
 
-          <RemisionPanel load={load} />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            {load.emptiedAt ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Truck emptied {formatDateTime(load.emptiedAt)}
+                {load.destination ? ` at ${load.destination}` : ''}.
+              </p>
+            ) : (
+              <span />
+            )}
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
+              >
+                Delete truckload
+              </button>
+            )}
+          </div>
+
+          <ErrorBoundary label="The remisión section">
+            <RemisionPanel load={load} />
+          </ErrorBoundary>
 
           {onSaveTicket && (
             <TicketEntry

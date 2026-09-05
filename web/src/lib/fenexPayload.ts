@@ -256,6 +256,24 @@ export function validate(req: FenexRequest): Issue[] {
   return out;
 }
 
+/**
+ * Whether a stored payload is one of these, rather than a draft saved under an
+ * older shape. Drafts persist in the database across releases, so a payload
+ * read back cannot be trusted to match the current type — and reaching into
+ * `.remission` on one that predates it throws, which takes the whole page down.
+ */
+export function isFenexRequest(value: unknown): value is FenexRequest {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Partial<FenexRequest>;
+  return (
+    typeof v.idempotencyKey === 'string' &&
+    Array.isArray(v.items) &&
+    typeof v.remission === 'object' &&
+    v.remission !== null &&
+    typeof (v.remission as FenexRemission).vehiclePlate === 'string'
+  );
+}
+
 /** Normalisations the server applies anyway — done here so what you see is sent. */
 export function normalise(req: FenexRequest): FenexRequest {
   return {

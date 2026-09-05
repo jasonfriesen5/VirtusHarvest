@@ -45,7 +45,6 @@ export interface Farm {
   address: string | null;
   district: string | null;
   department: string | null;
-  house_number: string | null;
   department_code: string | null;
   district_code: string | null;
   city_code: string | null;
@@ -136,8 +135,10 @@ export interface Destination {
   district: string | null;
   department: string | null;
   requires_remision: boolean;
-  /** The matching customer in Fenex, which carries the DNIT geography. */
-  fenex_customer_id: string | null;
+  department_code: string | null;
+  district_code: string | null;
+  city_code: string | null;
+  city_name: string | null;
 }
 
 export interface Season {
@@ -157,7 +158,21 @@ export interface TruckloadTicket {
   user_id: string;
   ticket_weight: number | null;
   ticket_unit: string;
+  /** The closing empty-truck row was written by the console, not by a driver. */
+  manual: boolean | null;
   created_at: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * An override of the derived truckload grouping, stored only for the loads
+ * that need one. `closing_weighing_id` names the truckload the load belongs
+ * to; null means it was pulled out of its bundle and belongs to none yet.
+ */
+export interface LoadAssignment {
+  weighing_id: string;
+  user_id: string;
+  closing_weighing_id: string | null;
   updated_at: string | null;
 }
 
@@ -231,9 +246,43 @@ export interface Remision {
   error_message: string | null;
   request_payload: unknown;
   response_payload: unknown;
+  /**
+   * Which issuer this went out under. Recorded on the document rather than
+   * looked up later: a profile can be renamed or removed, and the answer to
+   * "whose timbrado was used" must never change afterwards.
+   */
+  issuer_id: string | null;
+  issuer_name: string | null;
   fenex_remission_id: string | null;
   fenex_status: string | null;
   pdf_path: string | null;
   created_at: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * Kilometres from one farm to one buyer. Required on every remisión, and fixed
+ * per route — which is why it lives here rather than on the destination: the
+ * same silo is a different distance from each farm.
+ */
+/**
+ * Which Fenex customer a destination is, in one issuer's account. Learned from
+ * whatever was picked last, the same way Route learns a distance — the same
+ * port is a different customer record under each issuer, so it cannot be a
+ * single field on the destination.
+ */
+export interface DestinationCustomer {
+  user_id: string;
+  destination_id: string;
+  issuer_id: string;
+  fenex_customer_id: string;
+  updated_at: string | null;
+}
+
+export interface Route {
+  user_id: string;
+  farm_id: string;
+  destination_id: string;
+  distance_km: number | null;
   updated_at: string | null;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fenexCustomers } from '../lib/fenexClient';
-import type { FenexCustomer } from '../lib/fenexClient';
+import type { FenexCustomer, Issuer } from '../lib/fenexClient';
 import { normalise, validate } from '../lib/fenexPayload';
 import type { FenexRemission, FenexRequest } from '../lib/fenexPayload';
 import {
@@ -30,38 +30,54 @@ type Field = keyof FenexRemission;
 export default function RemisionForm({
   initial,
   busy,
+  issuers,
+  issuerId,
+  onIssuerChange,
   onClose,
   onSaveDraft,
   onSend,
 }: {
   initial: FenexRequest;
   busy: boolean;
+  issuers: Issuer[];
+  issuerId: string | null;
+  onIssuerChange: (id: string) => void;
   onClose: () => void;
   onSaveDraft: (req: FenexRequest) => void;
   onSend: (req: FenexRequest) => void;
 }) {
   const [req, setReq] = useState<FenexRequest>(initial);
-  const [customers, setCustomers] = useState<FenexCustomer[]>([]);
-  const [customerError, setCustomerError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [customers, setCustomers] = useState<FenexCustomer[] | null>(null);
+  const [customerError, setCustomerError] = useState<string | null>(null);
 
   const r = req.remission;
   const set = (patch: Partial<FenexRemission>) =>
     setReq((prev) => ({ ...prev, remission: { ...prev.remission, ...patch } }));
   const field = (k: Field, v: string) => set({ [k]: v } as Partial<FenexRemission>);
 
+  // Reloaded whenever the issuer changes. The same buyer is a different
+  // customer record in each Fenex account, so a list fetched under one issuer
+  // is meaningless under another.
   useEffect(() => {
-    fenexCustomers()
-      .then(setCustomers)
-      .catch((e) => setCustomerError(e instanceof Error ? e.message : String(e)));
-  }, []);
-
-  const issues = useMemo(() => validate(normalise(req)), [req]);
-  const ready = issues.length === 0;
+    let cancelled = false;
+    setCustomers(null);
+    setCustomerError(null);
+    fenexCustomers(issuerId)
+      .then((rows) => {
+        if (!cancelled) setCustomers(rows);
+      })
+      .catch((e) => {
+        if (!cancelled) setCustomerError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [issuerId]);
 
   /** Picking a buyer fills the receptor block from Fenex's own record. */
   function chooseCustomer(id: string) {
-    const c = customers.find((x) => String(x.id) === id);
+    const c = customers?.find((x) => String(x.id) === id);
     if (!c) {
       set({ customerId: null });
       return;
@@ -76,6 +92,9 @@ export default function RemisionForm({
       receiverAddress: String(c.address ?? r.receiverAddress),
     });
   }
+
+  const issues = useMemo(() => validate(normalise(req)), [req]);
+  const ready = issues.length === 0;
 
   const geo = (prefix: 'receiver' | 'departure' | 'delivery'): GeoValue => ({
     departmentCode: r[`${prefix}DepartmentCode`],
@@ -124,22 +143,56 @@ export default function RemisionForm({
 
       <div className="space-y-6">
         <Section
+          title="Emisor"
+          note="The document is issued by whoever's Fenex account sends it — their RUC, timbrado and numbering come from Fenex, not from here."
+        >
+          <div>
+            <Label>Se emite a nombre de</Label>
+            <Select
+              value={issuerId ?? ''}
+              onChange={(e) => onIssuerChange(e.target.value)}
+            >
+              {issuers.length === 0 && <option value="">— no linked issuer —</option>}
+              {issuers.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.label ?? i.fenex_email ?? i.id}
+                  {i.razon_social ? ` · ${i.razon_social}` : ''}
+                </option>
+              ))}
+            </Select>
+            {issuers.length > 1 && (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Timbrado and document number come from this account. Add another issuer in
+                Account → Nota de Remisión.
+              </p>
+            )}
+          </div>
+        </Section>
+
+        <Section
           title="Datos del receptor"
-          note="Choosing the buyer fills their RUC and address from your Fenex records."
+          note="Pick the buyer from this issuer's Fenex records. The fields below fill in from it; corrections apply to this document only."
         >
           <div>
             <Label>Cliente en Fenex</Label>
-            <Select value={r.customerId ?? ''} onChange={(e) => chooseCustomer(e.target.value)}>
-              <option value="">— sin vincular —</option>
-              {customers.map((c) => (
+            <Select
+              value={r.customerId ?? ''}
+              onChange={(e) => chooseCustomer(e.target.value)}
+              disabled={customers == null && customerError == null}
+            >
+              <option value="">
+                {customers == null && customerError == null ? 'Loading buyers…' : '— sin vincular —'}
+              </option>
+              {(customers ?? []).map((c) => (
                 <option key={String(c.id)} value={String(c.id)}>
                   {String(c.legalName ?? c.name ?? c.id)}
+                  {c.ruc ? ` · ${c.ruc}` : ''}
                 </option>
               ))}
             </Select>
             {customerError && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                Could not load customers: {customerError}
+                Could not load buyers: {customerError}. The fields below still stand on their own.
               </p>
             )}
           </div>
@@ -157,7 +210,6 @@ export default function RemisionForm({
               </div>
             </div>
             <T k="receiverAddress" label="Dirección" wide />
-            <T k="receiverHouseNumber" label="Nº de casa" />
             <div>
               <Label>Tipo de contribuyente</Label>
               <Select
@@ -282,7 +334,6 @@ export default function RemisionForm({
         <Section title="Punto de salida" note="Where the truck was loaded — normally the farm.">
           <div className="grid gap-3 sm:grid-cols-2">
             <T k="departureAddress" label="Dirección" wide />
-            <T k="departureHouseNumber" label="Nº de casa" />
           </div>
           <GeographyPicker value={geo('departure')} onChange={(v) => setGeo('departure', v)} />
         </Section>
@@ -290,7 +341,6 @@ export default function RemisionForm({
         <Section title="Punto de entrega">
           <div className="grid gap-3 sm:grid-cols-2">
             <T k="deliveryAddress" label="Dirección" wide />
-            <T k="deliveryHouseNumber" label="Nº de casa" />
           </div>
           <GeographyPicker value={geo('delivery')} onChange={(v) => setGeo('delivery', v)} />
         </Section>
