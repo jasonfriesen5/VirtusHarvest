@@ -1,0 +1,1185 @@
+/* ══ VIRTUS FEED — feed flow screens ══
+   Sized for a tablet mounted in a tractor cab: read at arm's length,
+   tapped with gloves. Nothing here is smaller than 44px of touch target. */
+
+.feed-step{padding:6px 4px 18px;}
+.feed-step-head{text-align:center;margin-bottom:10px;}
+.feed-step-kicker{font-size:12px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--text3);}
+.feed-step-name{font-size:26px;font-weight:800;color:var(--text);line-height:1.15;margin-top:3px;}
+.feed-step-sub{font-size:14px;color:var(--text2);margin-top:2px;}
+
+/* The number the operator is actually watching. */
+.feed-big{
+  font-size:clamp(72px,22vw,140px);font-weight:800;line-height:0.95;text-align:center;
+  color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.03em;margin:6px 0 0;
+}
+.feed-big-unit{text-align:center;font-size:16px;color:var(--text2);margin-bottom:14px;}
+.feed-big-unit b{color:var(--text);font-weight:700;}
+
+/* Fill the bar, not the number — readable from across the cab. */
+.feed-bar-track{height:22px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;overflow:hidden;margin:0 4px;}
+.feed-bar-fill{height:100%;width:0;border-radius:12px;background:linear-gradient(90deg,#7DE3AA,#42D37F);transition:width 0.12s linear,background 0.2s;}
+.feed-bar-fill.good{background:linear-gradient(90deg,var(--green-mid),var(--green));}
+.feed-bar-fill.over{background:linear-gradient(90deg,#E0705A,var(--red));}
+
+.feed-bar-note{text-align:center;font-size:17px;font-weight:700;margin:9px 0 16px;color:var(--text2);}
+.feed-bar-note.good{color:var(--green);}
+.feed-bar-note.over{color:var(--red);}
+
+.feed-actions{display:flex;gap:10px;margin:0 4px 18px;}
+.feed-btn{flex:1;padding:20px 12px;border:none;border-radius:var(--radius-lg);font-family:'Inter',sans-serif;font-size:18px;font-weight:700;cursor:pointer;transition:transform 0.1s,opacity 0.2s;}
+.feed-btn:active{transform:scale(0.97);}
+.feed-btn-skip{flex:0 0 34%;background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);}
+.feed-btn-ok{background:linear-gradient(180deg,#3FBE77 0%,var(--green-mid) 55%,var(--green) 100%);color:#fff;box-shadow:0 4px 16px rgba(31,102,61,0.28);}
+/* Disabled = the scale hasn't settled. Say why rather than looking broken. */
+.feed-btn-ok:disabled{opacity:0.45;box-shadow:none;cursor:default;}
+
+.feed-steplist{margin:0 4px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);}
+.feed-steprow{display:flex;align-items:center;justify-content:space-between;padding:14px 15px;border-bottom:1px solid var(--border);min-height:52px;cursor:pointer;}
+.feed-steprow:last-child{border-bottom:none;}
+.feed-steprow-name{font-size:15px;font-weight:600;color:var(--text2);}
+.feed-steprow-kg{font-size:15px;font-weight:700;color:var(--text3);font-variant-numeric:tabular-nums;}
+.feed-steprow.now{background:var(--surface2);}
+.feed-steprow.now .feed-steprow-name{color:var(--text);font-weight:800;}
+.feed-steprow.done .feed-steprow-name{color:var(--green);}
+.feed-steprow.done .feed-steprow-kg{color:var(--green);}
+/* No tick glyph. A finished pen already reads as finished: its name and its
+   delivered weight both go green, and the weight changes from a target to what
+   actually went in. The tick was also being drawn twice — once here and once
+   by the row renderer. */
+.feed-steprow.done{opacity:.72;}
+
+.feed-total{font-size:44px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--green);}
+
+.feed-pick-row{display:flex;align-items:center;gap:12px;padding:16px 14px;border-bottom:1px solid var(--border);cursor:pointer;min-height:58px;}
+.feed-pick-row .fsc-label{flex:0 0 84px;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text3);}
+.feed-pick-row .fsc-value{flex:1;font-size:16px;font-weight:600;color:var(--text);}
+.feed-pick-row .fsc-arrow{color:var(--text3);font-size:22px;}
+
+/* Harvest's .farm-sel-check is just a coloured glyph with no box, and its row
+   is justify-content:space-between — so a leading checkbox collapsed to zero
+   width and sat on top of the label. Give it a real box and a real gap. */
+.farm-sel-row{justify-content:flex-start;gap:12px;background:var(--surface);}
+.farm-sel-check{
+  flex:0 0 auto;width:26px;height:26px;border-radius:8px;
+  border:1.5px solid var(--border2);background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:800;color:transparent;line-height:1;
+}
+.farm-sel-check.on{background:var(--green);color:#fff;border-color:var(--green);}
+
+/* A 10" tablet has room the phone layout doesn't use. */
+@media (min-width:820px){
+  .feed-big{font-size:clamp(96px,14vw,168px);}
+  .feed-btn{padding:26px 12px;font-size:20px;}
+  .feed-steprow{min-height:60px;padding:16px 18px;}
+}
+
+/* Harvest's gold buttons were sized for inline use; on Feed's screens they are
+   the primary action on the card, so they own the full width. */
+.btn-gold-lg{width:100%;padding:18px;border:none;border-radius:var(--radius-lg);
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;
+  font-family:'Inter',sans-serif;font-size:17px;font-weight:700;cursor:pointer;margin-top:14px;
+  box-shadow:0 4px 16px rgba(29,151,73,0.25);}
+.btn-gold-lg:active{transform:scale(0.99);}
+.btn-add-open{display:block;width:calc(100% - 8px);margin:12px 4px;padding:15px;
+  background:var(--surface);border:1.5px dashed var(--border2);border-radius:var(--radius);
+  color:var(--accent);font-family:'Inter',sans-serif;font-size:15px;font-weight:700;cursor:pointer;}
+.btn-del-sm{display:block;width:100%;margin-top:8px;padding:11px;background:transparent;
+  border:none;color:var(--red);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer;}
+
+/* Settings action row. A full-width solid bar reads as the primary action of
+   the screen; "Sync now" and "Sign out" are incidental, so they sit small on
+   the right with any status note taking the slack on the left. */
+.sp-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;
+  padding:12px 14px 14px;}
+.sp-actions-note{flex:1;min-width:0;color:var(--text3);font-size:12px;}
+.sp-actions .btn-gold-sm{flex-shrink:0;}
+/* Destructive, but not a button that shouts: the weight belongs on the colour,
+   not on a filled box the thumb lands on by accident. */
+.btn-danger-sm{background:none;border:none;padding:6px 2px;font-family:'Inter',sans-serif;
+  font-size:13px;font-weight:600;color:var(--red);cursor:pointer;white-space:nowrap;}
+.btn-danger-sm:active{opacity:0.6;}
+
+/* ── Primary / Remote mode selector (Scale panel) ────────────────
+   Two devices can be on the same scale; only the primary records. The scale
+   itself arbitrates (first connected wins), so this row mostly REPORTS the
+   assigned role -- tapping Remote hands off, tapping Primary is refused. */
+.mode-row{display:flex;gap:8px;padding:12px 14px 0;}
+.mode-row .mode-btn{flex:1;}
+.mode-hint{padding:8px 14px 0;font-size:11.5px;color:var(--text3);line-height:1.35;}
+/* Amber, not red: remote is a normal state, not a fault. */
+.pill-remote{background:rgba(212,147,10,0.12);color:#8A6100;
+  border-color:rgba(212,147,10,0.28);text-transform:uppercase;letter-spacing:.04em;}
+.pill-remote .pill-dot{background:#D4930A;}
+[data-theme="dark"] .pill-remote{background:rgba(212,147,10,0.18);color:#E5B65A;
+  border-color:rgba(212,147,10,0.32);}
+/* Scoped to the action row on purpose: btn-add-open is also the big dashed
+   "+ Add products" inside a ration card, where full width is right. */
+.sp-actions .btn-scan,
+.sp-actions .btn-add-open{width:auto;margin:0;padding:8px 15px;font-size:13px;
+  border-radius:10px;flex-shrink:0;}
+
+.field-item{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:15px 16px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);margin:0 4px 8px;cursor:pointer;min-height:60px;}
+.field-item .fi-name{font-size:16px;font-weight:700;color:var(--text);}
+.field-item .fi-sub{font-size:13px;color:var(--text3);margin-top:2px;font-weight:500;}
+.field-item .fi-right{font-size:15px;font-weight:700;color:var(--text2);text-align:right;white-space:nowrap;}
+.fdp-empty{text-align:center;color:var(--text3);font-size:14px;padding:28px 16px;}
+.section-lbl{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--text3);padding:14px 8px 8px;}
+
+/* app.css gives .btn-gold its colours but leaves padding and radius to the
+   .btn-gold-sm / -lg modifiers, so a bare .btn-gold renders as coloured text.
+   Give the base class a usable default — Feed's empty states use it alone. */
+.btn-gold{padding:13px 22px;border-radius:var(--radius);font-size:15px;}
+
+/* ── Bar semantics after the green rebrand ──
+   When the whole UI was gold, a green bar meant "in tolerance" at a glance.
+   Now that the chrome is green too, that signal is gone unless the off-target
+   state is explicitly NOT green. So: neutral while filling, green only inside
+   tolerance, red when over. The colour has to earn its meaning again. */
+.feed-bar-fill{background:linear-gradient(90deg,#C7D2CC,#9FB3A8);}
+.feed-bar-fill.good{background:linear-gradient(90deg,#3FBE77,#1F8A4D);}
+.feed-bar-fill.over{background:linear-gradient(90deg,#E0705A,var(--red));}
+/* The batch bar is PROGRESS, not a tolerance judgement — grey is the base
+   class's "not yet at target" look and made a working bar read as inactive.
+   The whole load has no tolerance band of its own, so it stays one colour the
+   whole way rather than borrowing the active line's zone. */
+.feed-bar-fill.batch{background:linear-gradient(90deg,#5CDB93,#27AB50);}
+.feed-bar-note{color:var(--text3);}
+.feed-bar-note.good{color:#1F8A4D;}
+.feed-bar-note.over{color:var(--red);}
+
+/* ══ LOAD SHEET — one bar per ingredient ══ */
+.load-sheet{max-height:92vh;display:flex;flex-direction:column;}
+.load-sheet .tx-sheet-body{flex:1;overflow-y:auto;padding:4px 14px 8px;}
+.load-sheet .feed-big{font-size:clamp(56px,16vw,104px);margin:0;}
+.load-sheet .feed-bar-note{margin:6px 0 2px;font-size:15px;}
+.load-sheet .tx-sheet-footer{display:flex;gap:10px;padding:12px 14px;}
+
+.loadbars{display:flex;flex-direction:column;gap:8px;}
+
+.loadbar{padding:11px 13px;border:1.5px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);cursor:pointer;transition:border-color 0.15s,background 0.15s;}
+.loadbar.active{border-color:var(--accent);background:var(--surface2);box-shadow:0 2px 10px rgba(26,134,67,0.10);}
+.loadbar.done{opacity:0.72;}
+
+.loadbar-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:7px;}
+.loadbar-name{font-size:15px;font-weight:700;color:var(--text);}
+.loadbar.active .loadbar-name{font-size:16px;font-weight:800;}
+.loadbar-pct{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text3);}
+
+/* The three zones. Yellow is the only warm colour left in the green UI, which
+   is exactly why it reads as "not there yet" without looking like an error. */
+.loadbar-pct.under{color:#B8860B;}
+.loadbar-pct.good{color:#1F8A4D;}
+.loadbar-pct.over{color:var(--red);}
+
+.loadbar-track{position:relative;height:16px;border-radius:9px;overflow:hidden;
+  background:var(--surface2);border:1px solid var(--border);}
+.loadbar.active .loadbar-track{height:22px;border-radius:12px;}
+
+/* 100% of target sits at 75% of the bar. Marking it means the operator can aim
+   at a place on the track, not at a number they have to read. */
+.loadbar-tick{position:absolute;left:75%;top:0;bottom:0;width:2px;
+  background:rgba(0,0,0,0.20);z-index:2;}
+
+.loadbar-fill{height:100%;width:0;border-radius:9px;transition:width 0.12s linear,background 0.2s;}
+.loadbar-fill.under{background:linear-gradient(90deg,#F7D774,#EFC13C);}
+.loadbar-fill.good{background:linear-gradient(90deg,#3FBE77,#1F8A4D);}
+.loadbar-fill.over{background:linear-gradient(90deg,#E0705A,var(--red));}
+
+.loadbar-bot{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;}
+.loadbar-kg{font-size:13px;font-weight:600;color:var(--text2);font-variant-numeric:tabular-nums;}
+.loadbar-tol{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.04em;}
+
+@media (min-width:820px){
+  .loadbar-name{font-size:16px;}
+  .loadbar.active .loadbar-track{height:26px;}
+}
+
+/* ══ UNLOAD CONFIRM ══
+   Reads as one equation: delivered ÷ head = per head. The head count is the
+   only editable term, because it is the only one the operator knows better
+   than the app does. */
+.uc-summary{display:flex;align-items:flex-end;gap:8px;padding:8px 0 18px;}
+.uc-block{flex:1;text-align:center;min-width:0;}
+.uc-lbl{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:6px;}
+.uc-val{font-size:22px;font-weight:800;color:var(--text2);font-variant-numeric:tabular-nums;}
+.uc-val.uc-strong{font-size:28px;color:var(--green);}
+.uc-arrow{font-size:20px;font-weight:700;color:var(--text3);padding-bottom:6px;flex:0 0 auto;}
+.uc-input{width:100%;padding:10px 6px;text-align:center;font-size:26px;font-weight:800;
+  font-variant-numeric:tabular-nums;color:var(--text);background:var(--surface2);
+  border:2px solid var(--accent);border-radius:var(--radius);outline:none;
+  font-family:'Inter',sans-serif;-moz-appearance:textfield;}
+.uc-input::-webkit-outer-spin-button,.uc-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.uc-hint{font-size:12px;font-weight:600;color:var(--text3);margin-top:6px;min-height:16px;}
+
+/* ══ INGREDIENT CARDS ══
+   Stock and runway carry the row — that is what the screen is opened for. */
+.ing-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  margin:0 4px 8px;overflow:hidden;}
+.ing-card.low{border-color:var(--red);}
+.ing-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 15px;cursor:pointer;min-height:58px;}
+.ing-stock{text-align:right;white-space:nowrap;}
+.ing-kg{font-size:17px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;}
+.ing-runway{font-size:12px;font-weight:600;color:var(--text3);margin-top:2px;}
+.ing-runway.low{color:var(--red);font-weight:800;}
+/* Three actions grouped at the left rather than stretched across the card:
+   spread edge to edge they read as separate zones, and the thumb has to travel
+   the width of a tablet to get from one to the next. */
+.ing-actions{display:flex;gap:8px;padding:0 12px 11px;border-top:1px solid var(--border);
+  padding-top:10px;}
+.ing-btn{flex:0 0 auto;padding:8px 14px;border-radius:10px;cursor:pointer;min-height:38px;
+  background:var(--surface2);border:1px solid var(--border);font-family:'Inter',sans-serif;
+  font-size:12.5px;font-weight:700;color:var(--accent);}
+.ing-btn:active{background:var(--green-light);border-color:var(--border2);}
+.ing-kg.low{color:var(--red);}
+
+/* ══ BUNK READING ══ */
+.bunk-intro{font-size:13px;color:var(--text3);padding:0 4px 12px;line-height:1.45;}
+
+.bunk-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
+  padding:14px 15px;margin:0 4px 8px;cursor:pointer;min-height:62px;}
+.bunk-card.done{border-color:var(--green);background:var(--surface2);}
+.bunk-card-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
+.bunk-lot{font-size:17px;font-weight:800;color:var(--text);}
+.bunk-card.done .bunk-lot{color:var(--green);}
+.bunk-sub{font-size:13px;color:var(--text3);margin-top:3px;font-weight:500;}
+/* The drift from the nutritionist's formula, carried on every card. */
+.bunk-factor{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text3);}
+.bunk-factor.up{color:#B8860B;}
+.bunk-factor.down{color:var(--red);}
+
+/* Five targets, thumb-sized, ordered empty → full the way the bunk empties. */
+.bunk-opt{display:flex;align-items:center;gap:14px;padding:15px 14px;margin-bottom:8px;
+  border:2px solid var(--border);border-radius:var(--radius);background:var(--surface);
+  cursor:pointer;min-height:60px;transition:border-color 0.12s,background 0.12s;}
+.bunk-opt.on{border-color:var(--green);background:var(--surface2);}
+.bunk-opt-score{flex:0 0 40px;height:40px;border-radius:50%;background:var(--surface2);
+  border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:19px;font-weight:800;color:var(--text2);}
+.bunk-opt.on .bunk-opt-score{background:var(--green);border-color:var(--green);color:#fff;}
+.bunk-opt-txt{flex:1;font-size:15px;font-weight:600;color:var(--text);line-height:1.3;}
+.bunk-opt-pct{font-size:14px;font-weight:800;color:var(--text3);font-variant-numeric:tabular-nums;}
+
+.bunk-result{text-align:center;padding:6px 0 2px;min-height:56px;}
+.bunk-res-pct{font-size:38px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--text3);}
+.bunk-res-pct.up{color:#1F8A4D;}
+.bunk-res-pct.down{color:var(--red);}
+.bunk-res-txt{font-size:14px;color:var(--text2);margin-top:5px;font-weight:600;}
+.bunk-res-note{font-size:12px;color:var(--amber);margin-top:6px;font-weight:700;}
+
+/* ══ HOME (weight tab) ══ */
+.home-actions{display:flex;gap:10px;margin:14px 4px 6px;}
+.home-btn{flex:1;padding:20px 12px;border:none;border-radius:var(--radius-lg);
+  font-family:'Inter',sans-serif;font-size:18px;font-weight:800;cursor:pointer;
+  transition:transform 0.1s;min-height:64px;}
+.home-btn:active{transform:scale(0.97);}
+.home-btn-alt{flex:0 0 22%;background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);}
+.home-btn-go{background:linear-gradient(180deg,#3FBE77 0%,var(--green-mid) 55%,var(--green) 100%);
+  color:#fff;box-shadow:0 4px 16px rgba(26,107,60,0.28);}
+
+/* Ration picker — horizontal snap strip, directly under the button it feeds. */
+.ration-picker-wrap{margin:14px 4px 6px;}
+.ration-picker-lbl{font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:7px;padding-left:2px;}
+.ration-picker{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;padding-bottom:4px;}
+.ration-picker::-webkit-scrollbar{display:none;}
+.rp-item{flex:0 0 78%;scroll-snap-align:center;padding:14px 16px;border-radius:var(--radius);
+  border:2px solid var(--border);background:var(--surface);cursor:pointer;min-height:66px;
+  transition:border-color 0.15s,background 0.15s;}
+.rp-item.on{border-color:var(--green);background:var(--surface2);}
+.rp-name{font-size:17px;font-weight:800;color:var(--text2);}
+.rp-item.on .rp-name{color:var(--text);}
+.rp-sub{font-size:12.5px;font-weight:600;color:var(--text3);margin-top:3px;}
+.rp-empty{padding:18px;text-align:center;border:1.5px dashed var(--border2);border-radius:var(--radius);
+  color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;}
+
+/* ══ TRANSACTIONS ══ */
+.tx-day{font-size:11px;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;
+  color:var(--text3);padding:14px 6px 6px;}
+.tx-row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:13px 15px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);margin:0 4px 6px;min-height:58px;}
+.tx-lot{font-size:16px;font-weight:700;color:var(--text);}
+.tx-meta{font-size:12.5px;color:var(--text3);margin-top:2px;font-weight:500;}
+.tx-right{text-align:right;white-space:nowrap;}
+.tx-kg{font-size:17px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;}
+.tx-per{font-size:12.5px;color:var(--text3);font-weight:600;margin-top:2px;}
+
+@media (min-width:820px){ .rp-item{flex:0 0 40%;} }
+
+/* ══ WIDE TABLETS ══
+   .native-shell drops the desktop reading-width cap because on a ~800px tablet
+   that cap only produced dead margins. On a 2560px tablet the opposite is true:
+   the column stretches until the weight sits alone in the far corner and the
+   status pill strands itself the other side of an empty metre of screen.
+   Re-introduce a cap at a width a person can actually read across, and let the
+   background gradient own the rest. */
+@media (min-width: 1100px){
+  .native-shell .app-inner > .tab-page,
+  .native-shell .sub-panel > div{
+    max-width: 1180px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+  }
+  .native-shell .tabbar{ padding-left: 6vw; padding-right: 6vw; }
+}
+
+/* The weight is read from across a cab, so spend the extra height on it rather
+   than leaving the panel half empty. */
+@media (min-width: 900px) and (min-height: 700px){
+  #tp-display .scale-panel{ padding: 22px 30px 20px; min-height: 200px; }
+  #tp-display .scale-main-weight{ --wt-base: 104px; }
+  #tp-display .scale-weight{ font-size: 132px; }
+  /* Scaling the pill pushed it into the kg label — the row is centred with a
+     fixed gap, and a transform does not participate in that layout. */
+  #tp-display .scale-unit-lbl{ font-size: 22px; }
+  #tp-display .home-btn{ min-height: 78px; font-size: 21px; }
+}
+
+/* ══ PROFILE AUTH BUTTON ══
+   Sits on the profile card in More, right-aligned against the name it refers
+   to — Harvest's placement. Green invites you in; red is a destructive-ish
+   action and should not look like the primary path. */
+.more-profile{display:flex;align-items:center;gap:12px;}
+.profile-block{flex:1;min-width:0;}
+.profile-auth-btn{
+  flex:0 0 auto;padding:10px 20px;border-radius:999px;
+  border:1.5px solid rgba(31,138,77,0.24);background:rgba(31,138,77,0.09);
+  color:var(--green);font-family:'Inter',sans-serif;font-size:13.5px;font-weight:800;
+  cursor:pointer;white-space:nowrap;min-height:42px;
+}
+.profile-auth-btn:active{transform:scale(0.97);}
+.profile-auth-btn.is-out{
+  border-color:rgba(176,48,32,0.22);background:rgba(176,48,32,0.08);color:var(--red);
+}
+
+/* ══ SCALE PANEL ON A WIDE SCREEN ══
+   The phone layout right-aligns the number and drops the stability pill to the
+   opposite corner. Stretched across a cab-mounted tablet those two end up a
+   whole screen apart, with the reading marooned in the corner. Centre the
+   column instead, so the number, the pill and the unit read as one group. */
+@media (min-width: 900px){
+  #tp-display .scale-panel{ align-items:center; }
+  /* .scale-main-weight is a FLEX container (justify-content:flex-end,
+     align-items:flex-end), so text-align does nothing to it — the number is
+     positioned by the flex properties. Centre it with those instead. */
+  #tp-display .scale-main-weight{
+    width:100%;
+    justify-content:center;
+    align-items:center;
+    padding-bottom:0;
+  }
+  /* The sub-row repeats the main number verbatim ("Neto 6408.00" under a
+     6408.00 already three times its size). Harmless on a phone where the big
+     figure is small; pure noise once it is 132px. */
+  #tp-display .scale-sub-row{ display:none; }
+  #tp-display .scale-unit-row{ width:100%; max-width:520px; justify-content:center; gap:18px; }
+}
+
+/* ══ SCALE SIM (dev only, ?sim=1 on localhost) ══
+   Deliberately ugly and fixed to the corner so it can never be mistaken for
+   part of the product. */
+#sim-panel{position:fixed;right:12px;bottom:88px;z-index:99999;width:250px;
+  background:#1b1b1f;color:#eee;border-radius:12px;font:12px/1.3 ui-monospace,Menlo,monospace;
+  box-shadow:0 8px 30px rgba(0,0,0,0.4);overflow:hidden;}
+#sim-panel .sim-head{display:flex;align-items:center;gap:8px;padding:8px 10px;
+  background:#2a2a30;font-weight:700;letter-spacing:0.04em;}
+#sim-panel #sim-val{margin-left:auto;color:#5CDB93;}
+#sim-panel .sim-x{background:none;border:none;color:#aaa;font-size:16px;cursor:pointer;padding:0 4px;}
+#sim-panel .sim-body{padding:10px;display:flex;flex-direction:column;gap:8px;}
+#sim-panel.min .sim-body{display:none;}
+#sim-panel input[type=range]{width:100%;}
+#sim-panel .sim-row{display:flex;gap:6px;}
+#sim-panel .sim-row button{flex:1;padding:7px 4px;background:#33333a;border:1px solid #45454e;
+  color:#eee;border-radius:6px;font:11px ui-monospace,Menlo,monospace;cursor:pointer;}
+#sim-panel .sim-row button:active{background:#45454e;}
+
+/* ══ CALIBRATION TOOL ══ */
+.cal-help{font-size:13px;color:var(--text3);line-height:1.45;padding:2px 2px 14px;}
+.cal-grid{display:flex;flex-direction:column;gap:12px;margin-bottom:14px;}
+.cal-row{display:flex;align-items:center;gap:12px;}
+.cal-lbl{flex:1;font-size:14px;font-weight:600;color:var(--text2);}
+.cal-input{width:140px;padding:11px 12px;text-align:center;font-size:19px;font-weight:800;
+  font-variant-numeric:tabular-nums;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:var(--radius);color:var(--text);outline:none;font-family:'Inter',sans-serif;}
+.cal-input:focus{border-color:var(--accent);}
+.cal-calc-btn{width:100%;padding:14px;margin-bottom:14px;border:none;border-radius:var(--radius);
+  background:linear-gradient(180deg,#3FBE77,var(--green));color:#fff;
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:800;cursor:pointer;}
+.cal-result-row{display:flex;align-items:center;gap:12px;padding:14px;border-radius:var(--radius);
+  background:var(--surface2);border:1.5px solid var(--border);}
+.cal-factor-input{width:118px;padding:9px 10px;text-align:center;font-size:21px;font-weight:800;
+  font-variant-numeric:tabular-nums;background:var(--surface);border:1.5px solid rgba(31,138,77,0.3);
+  border-radius:10px;color:var(--green);outline:none;font-family:'Inter',sans-serif;}
+.cal-apply{padding:9px 15px;background:var(--surface);color:var(--text3);
+  border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-weight:700;
+  cursor:not-allowed;white-space:nowrap;transition:all 0.2s;font-family:'Inter',sans-serif;}
+.cal-apply:not(:disabled){background:var(--green);color:#fff;border-color:var(--green);cursor:pointer;}
+.btn-small-green{padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:9px;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;}
+.btn-small-green:disabled{background:var(--surface2);color:var(--text3);cursor:default;}
+.sr-val{font-size:14px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
+.sr-sub{font-size:12px;color:var(--text3);margin-top:2px;font-weight:500;}
+
+/* ══ LOGIN SCREEN IN DARK MODE ══
+   The card was hardcoded #fff while everything inside it used theme variables.
+   In dark mode the contents flipped and the card did not, which left the active
+   tab white-on-white, the field labels light-on-white, and dark inputs sitting
+   on a white panel. Give the card and its parts real dark values.
+   ([data-theme] is always stamped by _applyTheme(), so this is safe to key on.) */
+[data-theme="dark"] .signin-card{
+  background:#1C1C1F;
+  border-color:rgba(255,255,255,0.10);
+  box-shadow:0 12px 48px rgba(0,0,0,0.55);
+}
+[data-theme="dark"] .signin-tab-row{ background:rgba(255,255,255,0.06); }
+[data-theme="dark"] .signin-tab{ color:rgba(255,255,255,0.50); }
+[data-theme="dark"] .signin-tab.active{
+  background:rgba(255,255,255,0.14);
+  color:#F2F2F2;
+  box-shadow:none;
+}
+[data-theme="dark"] .signin-field label{ color:rgba(255,255,255,0.62); }
+[data-theme="dark"] .signin-field input{
+  background:rgba(255,255,255,0.06);
+  border-color:rgba(255,255,255,0.14);
+  color:#F2F2F2;
+}
+[data-theme="dark"] .signin-field input::placeholder{ color:rgba(255,255,255,0.34); }
+[data-theme="dark"] .signin-brand-name{ color:#F2F2F2; }
+[data-theme="dark"] .signin-forgot{ color:#5CDB93; }
+[data-theme="dark"] .signin-close{ color:rgba(255,255,255,0.7); }
+
+/* The auth screen kept gold accents: #D4930A is on the recolor script's
+   protected list (it is an amber warning token elsewhere), so the sign-in
+   button and focus ring never turned green with the rest of the app. */
+.signin-btn{background:linear-gradient(180deg,#3FBE77 0%,var(--green-mid) 55%,var(--green) 100%);}
+.signin-field input:focus{border-color:var(--green-mid);}
+
+/* ══ PEN DETAIL ══ */
+.lot-detail-sheet{max-height:92vh;display:flex;flex-direction:column;}
+.lot-detail-sheet .tx-sheet-body{flex:1;overflow-y:auto;}
+.ld-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.ld-section{font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--text3);margin:20px 0 10px;}
+
+/* The adjustment control. Big stepper for gloved thumbs, slider for a coarse
+   sweep — Libra pairs both and it is the right call. */
+.ld-adjust{display:flex;align-items:center;gap:14px;margin-bottom:10px;}
+.ld-step{width:56px;height:56px;border-radius:16px;border:1.5px solid var(--border);
+  background:var(--surface2);color:var(--text2);font-size:26px;font-weight:800;
+  cursor:pointer;font-family:'Inter',sans-serif;flex:0 0 auto;}
+.ld-step:active{background:var(--border);}
+.ld-pct{flex:1;text-align:center;font-size:38px;font-weight:800;
+  font-variant-numeric:tabular-nums;color:var(--text2);}
+.ld-pct.up{color:#1F8A4D;}
+.ld-pct.down{color:var(--red);}
+.ld-slider{width:100%;accent-color:var(--green);}
+.ld-warn{margin-top:10px;font-size:12.5px;font-weight:700;color:var(--amber);}
+
+.ld-rows{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);}
+.ld-row{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:12px 14px;border-bottom:1px solid var(--border);font-size:14px;color:var(--text2);}
+.ld-row:last-child{border-bottom:none;}
+.ld-row b{color:var(--text);font-variant-numeric:tabular-nums;font-size:15px;}
+.ld-avg-row{display:flex;justify-content:space-between;padding:10px 14px;
+  border-bottom:1px solid var(--border);font-size:13.5px;}
+.ld-avg-row:last-child{border-bottom:none;}
+.ld-avg-d{color:var(--text3);font-weight:600;}
+.ld-avg-v{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums;}
+
+/* ══ FEED GROUPS ══ */
+.grp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  margin:0 4px 8px;overflow:hidden;}
+.grp-head{display:flex;align-items:center;gap:12px;padding:14px 15px;cursor:pointer;}
+.grp-name{font-size:17px;font-weight:800;color:var(--text);}
+.grp-sub{font-size:12.5px;color:var(--text3);margin-top:2px;font-weight:500;}
+.grp-total{text-align:right;white-space:nowrap;}
+.grp-kg{font-size:17px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;}
+.grp-pens{display:flex;flex-wrap:wrap;gap:6px;padding:0 15px 12px;}
+.grp-pen{font-size:12px;font-weight:700;color:var(--green);background:var(--surface2);
+  border:1px solid var(--border);border-radius:999px;padding:4px 10px;}
+.grp-none{font-size:12.5px;color:var(--text3);}
+
+/* ══ RATION BUILDER ══ */
+.rb-new{margin-top:10px;padding:15px;text-align:center;border:1.5px dashed var(--border2);
+  border-radius:var(--radius);color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;}
+
+.rb-row{display:flex;align-items:center;gap:10px;padding:10px 8px;margin-bottom:8px;
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
+  touch-action:none;}   /* the grip needs the pointer stream, not a scroll gesture */
+.rb-row.dragging{border-color:var(--green);box-shadow:0 6px 18px rgba(26,107,60,0.22);opacity:0.95;}
+.rb-grip{flex:0 0 auto;width:34px;height:44px;display:flex;align-items:center;justify-content:center;
+  color:var(--text3);font-size:19px;cursor:grab;user-select:none;}
+.rb-grip:active{cursor:grabbing;}
+.rb-seq{flex:0 0 24px;text-align:center;font-size:13px;font-weight:800;color:var(--text3);
+  font-variant-numeric:tabular-nums;}
+.rb-info{flex:1;min-width:0;}
+.rb-name{font-size:15px;font-weight:700;color:var(--text);}
+.rb-kg{flex:0 0 92px;padding:10px 8px;text-align:center;font-size:17px;font-weight:800;
+  font-variant-numeric:tabular-nums;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:10px;color:var(--text);outline:none;font-family:'Inter',sans-serif;
+  -moz-appearance:textfield;}
+.rb-kg::-webkit-outer-spin-button,.rb-kg::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.rb-kg:focus{border-color:var(--accent);}
+.rb-kg-bad{border-color:var(--red);background:var(--red-light);}
+/* Group pen route editor: numbered rows the operator can reorder. */
+/* Loading drifting from the ration is a warning, not an error: the number is
+   still useful, it just wants a second look. */
+.ing-drift{color:#B07A10;font-weight:700;}
+[data-theme="dark"] .ing-drift{color:#E5B65A;}
+
+/* Toggle field for the generic entity sheet. */
+.es-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:14px;}
+.es-switch{position:relative;flex:0 0 auto;width:50px;height:29px;cursor:pointer;}
+.es-switch input{opacity:0;width:0;height:0;position:absolute;}
+.es-slider{position:absolute;inset:0;background:var(--border2);border-radius:29px;
+  transition:background .18s;}
+.es-slider::before{content:'';position:absolute;left:3px;top:3px;width:23px;height:23px;
+  background:#fff;border-radius:50%;transition:transform .18s;
+  box-shadow:0 1px 3px rgba(0,0,0,0.25);}
+.es-switch input:checked + .es-slider{background:var(--accent);}
+.es-switch input:checked + .es-slider::before{transform:translateX(21px);}
+
+/* Ration problems. Amber, not red: the ration still works, it just needs a
+   look before the next mix. */
+.ration-issues{margin:2px 0 10px;padding:10px 12px;border-radius:12px;
+  background:rgba(212,147,10,0.09);border:1px solid rgba(212,147,10,0.22);}
+.ration-issue{font-size:12.5px;line-height:1.45;color:#8A6100;}
+.ration-issue + .ration-issue{margin-top:3px;}
+[data-theme="dark"] .ration-issues{background:rgba(212,147,10,0.14);
+  border-color:rgba(212,147,10,0.28);}
+[data-theme="dark"] .ration-issue{color:#E5B65A;}
+/* Insumos | Raciones. Sized to their labels and left-aligned, matching the
+   Receive a delivery button below them — stretched edge to edge they read as
+   the main event on the screen, and the ingredient list is. Scoped to this row
+   so the app's other .mode-row segments keep their full-width behaviour. */
+.seg-row{margin-bottom:14px;padding:12px 4px 0;justify-content:flex-start;}
+.seg-row .mode-btn{flex:0 0 auto;padding:10px 20px;font-size:15px;font-weight:800;
+  border-radius:11px;}
+
+/* Edit lives in the detail header, beside the close control. */
+.ld-edit-btn{flex:0 0 auto;margin-right:10px;padding:7px 15px;border-radius:10px;
+  background:var(--surface2);border:1px solid var(--border);
+  font-family:'Inter',sans-serif;font-size:13.5px;font-weight:700;
+  color:var(--text2);cursor:pointer;}
+.ld-edit-btn:active{background:var(--surface);}
+
+/* ══ MAIN-DISPLAY STAGE ══ Sits directly under the weight; the big number
+   above IS the readout for the step, so nothing here repeats it. */
+.ms-head{display:flex;align-items:baseline;gap:10px;padding:2px 4px 6px;flex-wrap:wrap;}
+/* The active line's over/under sits with its NAME now that the bar below tracks
+   the whole batch — otherwise it reads as a comment on the batch. */
+.ms-note-inline{margin:0;font-size:14px;font-weight:800;}
+.ms-kicker{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text3);}
+.ms-name{font-size:19px;font-weight:800;color:var(--text);}
+.ms-sub{font-size:14px;font-weight:700;color:var(--text2);}
+.ms-target{padding:0 4px 7px;font-size:14px;color:var(--text2);}
+.ms-target b{font-size:16px;color:var(--text);font-variant-numeric:tabular-nums;}
+.ms-remaining{color:var(--text3);}
+
+/* Secondary reading, right-aligned under the big net number with its label
+   above it — a scale head's second display, not a caption. */
+/* The panel is a centred flex column, so this has to stretch before
+   text-align:right has any width to align inside. */
+.md-gross{align-self:stretch;width:100%;text-align:right;padding:0 18px 2px;
+  line-height:1.15;font-variant-numeric:tabular-nums;}
+.md-gross-lbl{text-transform:uppercase;letter-spacing:.07em;font-size:13px;
+  font-weight:800;color:var(--text3);}
+.md-gross-val{font-size:34px;font-weight:500;color:var(--text2);}
+.md-gross-tare{font-size:13px;font-weight:600;color:var(--text3);opacity:.85;margin-top:1px;}
+/* Tappable suggestion in the pen route editor. */
+.gp-hint{margin:0 0 8px;padding:9px 12px;border-radius:10px;cursor:pointer;
+  background:rgba(39,171,80,0.08);border:1px dashed rgba(39,171,80,0.35);
+  font-size:12.5px;font-weight:600;color:var(--accent);}
+.gp-hint:active{background:rgba(39,171,80,0.16);}
+
+/* Third line on an unload row: dry matter per head. */
+.tx-dm{font-size:11.5px;color:var(--text3);font-variant-numeric:tabular-nums;margin-top:1px;}
+
+/* Backing out of a load. Outlined, not filled: it is a real action but never
+   the one being encouraged. */
+.md-btn-danger{background:transparent;color:var(--red);
+  border:1.5px solid rgba(176,48,32,0.40);font-weight:700;}
+.md-btn-danger:active{background:rgba(176,48,32,0.10);}
+
+/* Ration editor rows: order, name, amount inline, reorder, remove. */
+.re-row{display:flex;align-items:center;gap:10px;padding:9px 11px;margin-bottom:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);}
+.re-name{flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--text);
+  overflow-wrap:anywhere;}
+.re-amt{width:88px;flex:0 0 auto;padding:8px 9px;text-align:right;
+  background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:800;color:var(--text);
+  font-variant-numeric:tabular-nums;outline:none;}
+.re-amt:focus{border-color:var(--accent);}
+.re-unit{flex:0 0 auto;font-size:12.5px;font-weight:700;color:var(--text3);width:22px;}
+.re-plus{flex:0 0 auto;width:26px;height:26px;border-radius:50%;
+  background:rgba(39,171,80,0.12);color:var(--accent);font-weight:800;font-size:16px;
+  display:flex;align-items:center;justify-content:center;}
+
+/* By-hand toggle on a ration line. Off = outline, on = filled, and it pulses
+   amber when the app can see the line is too small for the scale. */
+.re-hand{flex:0 0 auto;width:34px;height:34px;display:flex;align-items:center;
+  justify-content:center;font-size:15px;border-radius:9px;cursor:pointer;
+  background:var(--surface2);border:1px solid var(--border);
+  filter:grayscale(1);opacity:.5;transition:all .15s;}
+.re-hand.on{background:rgba(39,171,80,0.15);border-color:rgba(39,171,80,0.55);
+  filter:none;opacity:1;}
+.re-hand.hint{border-color:rgba(212,147,10,0.55);background:rgba(212,147,10,0.12);
+  filter:none;opacity:.9;}
+/* The reason, spelled out under the row it is about. */
+.re-sug{margin:-2px 0 8px;padding:8px 11px;border-radius:10px;cursor:pointer;
+  background:rgba(212,147,10,0.09);border:1px dashed rgba(212,147,10,0.35);
+  font-size:12px;line-height:1.4;color:#8A6100;}
+[data-theme="dark"] .re-sug{background:rgba(212,147,10,0.14);color:#E5B65A;}
+
+/* ══ FEED GROUP PICKER ══
+   Single-select, so selection is shown by the row's own state rather than a
+   form control. The load size is the number being compared between groups, so
+   it gets its own column instead of trailing a sentence. */
+.gsel-row{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:8px;
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
+  cursor:pointer;transition:background .15s,border-color .15s;}
+.gsel-row:active{background:var(--surface2);}
+.gsel-row.on{background:rgba(39,171,80,0.10);border-color:var(--accent);border-width:2px;
+  padding:13px 15px;}
+.gsel-main{flex:1;min-width:0;}
+.gsel-name{font-size:16px;font-weight:700;color:var(--text);overflow-wrap:anywhere;}
+.gsel-row.on .gsel-name{font-weight:800;color:var(--accent-dark,var(--accent));}
+.gsel-sub{font-size:12px;color:var(--text3);font-weight:600;margin-top:2px;}
+.gsel-kg{flex:0 0 auto;text-align:right;}
+.gsel-kg-val{font-size:16px;font-weight:800;color:var(--text2);
+  font-variant-numeric:tabular-nums;white-space:nowrap;}
+.gsel-row.on .gsel-kg-val{color:var(--accent);}
+.gsel-kg-lbl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text3);margin-top:1px;}
+
+/* Native number spinners off, everywhere. On a tablet the little up/down
+   arrows are far too small to hit, they only appear once a field is focused
+   (so the row jumps as you tap into it), and inputmode="decimal" already
+   raises a numeric keypad. */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+input[type=number]{-moz-appearance:textfield;appearance:textfield;}
+
+/* ══ DRAG TO REORDER ══ */
+.rr-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.rr-btn{flex:0 0 auto;padding:7px 13px;border-radius:10px;cursor:pointer;
+  background:var(--surface2);border:1px solid var(--border);
+  font-family:'Inter',sans-serif;font-size:12.5px;font-weight:800;color:var(--text2);}
+.rr-btn.on{background:rgba(39,171,80,0.14);border-color:rgba(39,171,80,0.55);color:var(--accent);}
+.rr-bars{font-size:14px;}
+/* touch-action:none is load-bearing — without it the first drag scrolls the
+   sheet instead of moving the row. */
+.rr-handle{flex:0 0 auto;width:38px;height:38px;display:flex;align-items:center;
+  justify-content:center;font-size:19px;color:var(--text3);cursor:grab;
+  touch-action:none;user-select:none;-webkit-user-select:none;
+  border-radius:9px;background:var(--surface2);border:1px solid var(--border);}
+.rr-handle:active{cursor:grabbing;background:var(--border);}
+.re-row.sorting,.gp-row.sorting{border-color:rgba(39,171,80,0.35);background:var(--surface2);}
+.rr-dragging{opacity:.55;outline:2px dashed var(--accent);outline-offset:-2px;}
+
+.gp-sec-lbl{padding:14px 4px 8px;font-size:11px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--text3);}
+.gp-row{display:flex;align-items:center;gap:12px;padding:11px 12px;margin-bottom:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);}
+/* The number IS the answer to "which pen do I feed next", so it leads. */
+.gp-seq{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--accent-soft,rgba(39,171,80,0.12));
+  color:var(--accent);font-size:12.5px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;}
+.gp-remove{flex:0 0 auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+  color:var(--text3);font-size:15px;cursor:pointer;border-radius:8px;}
+.gp-remove:active{background:var(--surface2);color:var(--red);}
+
+.rb-arrows{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;}
+.rb-arrow{width:34px;height:21px;padding:0;background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;color:var(--text2);font-size:10px;cursor:pointer;line-height:1;}
+.rb-arrow:disabled{opacity:0.3;cursor:default;}
+
+.rb-totalbar{display:flex;justify-content:space-between;align-items:center;
+  padding:12px 16px;border-top:1px solid var(--border);background:var(--surface2);
+  font-size:14px;font-weight:600;color:var(--text2);}
+.rb-totalbar b{font-size:17px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;}
+
+/* Scale still settling: dim the action so the operator knows the number may
+   move, without blocking them from recording it. */
+/* Scale has not settled yet. Expressed as a flatter, muted surface with DARK
+   text — never opacity. A 62% fade took the white label down with it, so the
+   primary action looked disabled while in fact staying tappable on purpose
+   (the operator can judge the reading themselves, and a stability flag that
+   never arrives must not trap them). Muted = "not quite ready", still legible. */
+.feed-btn-ok.waiting,.tx-btn-save.waiting{
+  opacity:1;
+  background:linear-gradient(180deg,#A9DcC0 0%,#95D3B0 55%,#84CBA2 100%);
+  color:#0B3D22;
+  box-shadow:0 2px 8px rgba(31,102,61,0.16);
+}
+
+/* ══ GROUP SHEET · meals + split ══ */
+.gs-meals{display:flex;align-items:center;gap:16px;margin-bottom:4px;}
+.gs-meals-n{flex:1;text-align:center;font-size:34px;font-weight:800;
+  color:var(--text);font-variant-numeric:tabular-nums;}
+.gs-hint{font-size:12.5px;color:var(--text3);line-height:1.45;margin:-4px 0 12px;}
+.gs-split-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+.gs-split-lbl{flex:1;font-size:14px;font-weight:600;color:var(--text2);}
+.gs-split-in{flex:0 0 86px;padding:10px 8px;text-align:center;font-size:19px;font-weight:800;
+  font-variant-numeric:tabular-nums;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:10px;color:var(--text);outline:none;font-family:'Inter',sans-serif;-moz-appearance:textfield;}
+.gs-split-in::-webkit-outer-spin-button,.gs-split-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.gs-split-in:focus{border-color:var(--accent);}
+.gs-split-pct{flex:0 0 auto;font-size:14px;font-weight:700;color:var(--text3);}
+.gs-split-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;}
+.gs-even{padding:8px 14px;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:999px;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:700;
+  color:var(--accent);cursor:pointer;}
+.gs-split-total{font-size:15px;font-weight:800;color:var(--text2);font-variant-numeric:tabular-nums;}
+.gs-split-total.bad{color:var(--amber);}
+
+/* The day's loads on the group card */
+.grp-meals{display:flex;gap:8px;padding:0 15px 10px;flex-wrap:wrap;}
+.grp-meal{flex:1;min-width:110px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:8px 10px;}
+.grp-meal span{display:block;font-size:11px;font-weight:700;letter-spacing:0.04em;
+  text-transform:uppercase;color:var(--text3);}
+.grp-meal b{display:block;font-size:16px;font-weight:800;color:var(--text);
+  font-variant-numeric:tabular-nums;margin-top:2px;}
+.grp-meal i{font-size:11px;font-style:normal;font-weight:700;color:var(--text3);}
+
+/* Operator row on the weight screen */
+.home-operator{display:flex;align-items:center;gap:12px;margin:14px 4px 0;padding:14px 15px;
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
+  cursor:pointer;min-height:58px;}
+.home-op-lbl{flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:0.07em;
+  text-transform:uppercase;color:var(--text3);}
+.home-op-name{flex:1;font-size:16px;font-weight:700;color:var(--text);text-align:right;}
+.home-op-name.unset{color:var(--text3);font-weight:600;}
+
+/* Return refused feed */
+.home-return{display:block;width:calc(100% - 8px);margin:8px 4px 0;padding:13px;
+  background:transparent;border:1.5px dashed var(--border2);border-radius:var(--radius);
+  color:var(--text2);font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;}
+.home-return:active{background:var(--surface2);}
+.ret-perhead{font-size:15px;font-weight:700;color:var(--text2);margin-top:6px;}
+.ret-pct{font-size:13px;font-weight:700;color:var(--text3);margin-top:4px;}
+.ret-pct.bad{color:var(--amber);}
+.ret-sources{font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5;}
+.ret-sources b{color:var(--text2);font-weight:700;}
+
+/* ══ MIX TIMER ══
+   Sits under the weight because that is where the operator already looks. */
+.mix-timer{margin:10px 4px 0;padding:14px 16px;border-radius:var(--radius);
+  background:var(--surface);border:1.5px solid var(--accent);text-align:center;}
+.mix-timer.done{border-color:var(--green);background:var(--surface2);}
+.mix-lbl{font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--text3);}
+.mix-clock{font-size:44px;font-weight:800;line-height:1.05;color:var(--text);
+  font-variant-numeric:tabular-nums;margin:2px 0;}
+.mix-timer.done .mix-clock{color:var(--green);}
+.mix-sub{font-size:12.5px;color:var(--text3);font-weight:600;}
+.mix-bar{height:6px;border-radius:4px;background:var(--surface2);overflow:hidden;margin-top:10px;
+  border:1px solid var(--border);}
+.mix-bar-fill{height:100%;background:linear-gradient(90deg,#F7D774,var(--accent));
+  transition:width 1s linear;}
+.mix-timer.done .mix-bar-fill{background:linear-gradient(90deg,#3FBE77,var(--green));}
+
+.mix-warn-clock{font-size:46px;font-weight:800;color:var(--amber);
+  font-variant-numeric:tabular-nums;margin:6px 0 4px;}
+/* Deliberately the quieter of the two: proceeding is allowed, not encouraged. */
+.mix-anyway{padding:13px;background:transparent;border:1.5px solid var(--border2);
+  border-radius:var(--radius);color:var(--text2);font-family:'Inter',sans-serif;
+  font-size:14px;font-weight:700;cursor:pointer;}
+.mix-anyway:active{background:var(--surface2);}
+
+/* ══ DELIVERY WINDOW inputs ══ */
+.gs-win-row{display:flex;align-items:center;gap:8px;margin:-2px 0 14px;padding-left:2px;}
+.gs-win-lbl{flex:1;font-size:12px;font-weight:600;color:var(--text3);}
+.gs-win-in{flex:0 0 auto;padding:7px 11px;font-size:14px;font-weight:700;cursor:pointer;
+  font-variant-numeric:tabular-nums;font-family:'Inter',sans-serif;
+  background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;
+  color:var(--text);outline:none;font-family:'Inter',sans-serif;}
+.gs-win-in:focus{border-color:var(--accent);}
+.gs-win-dash{color:var(--text3);font-weight:700;}
+
+/* ══ HAND-ADDED INGREDIENTS ══ */
+.rb-row{flex-direction:column;align-items:stretch;gap:0;}
+.rb-main{display:flex;align-items:center;gap:10px;}
+.rb-row.manual{border-color:var(--accent);}
+.rb-manual{display:flex;align-items:center;gap:8px;padding:8px 4px 2px 44px;cursor:pointer;}
+.rb-manual input{width:18px;height:18px;accent-color:var(--green);}
+.rb-manual span{font-size:12px;font-weight:600;color:var(--text3);}
+.rb-row.manual .rb-manual span{color:var(--accent);font-weight:700;}
+
+.loadbar.manual{border-style:dashed;}
+.loadbar-hand{font-size:10.5px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;
+  color:var(--accent);background:var(--surface2);border:1px solid var(--border);
+  border-radius:999px;padding:2px 7px;margin-left:6px;vertical-align:middle;}
+.feed-bar-note.manual{color:var(--accent);}
+
+/* Suggestion that a line is too small for the mixer to weigh. */
+.rb-hint{margin:2px 4px 4px 44px;padding:8px 10px;border-radius:9px;
+  background:rgba(168,94,0,0.07);border:1px solid rgba(168,94,0,0.20);
+  font-size:11.5px;line-height:1.45;color:var(--amber);font-weight:600;cursor:pointer;}
+.rb-hint b{font-weight:800;text-decoration:underline;}
+
+/* Whole-load context: what is on the mixer, and what is still to go. */
+.load-onmixer{font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:-2px;text-align:center;}
+.load-remaining{font-size:14px;font-weight:700;color:var(--text2);margin-top:4px;text-align:center;}
+.load-remaining.done{color:var(--green);}
+
+/* ══ MIXER NOT EMPTY ══ */
+.res-kg{font-size:44px;font-weight:800;color:var(--amber);
+  font-variant-numeric:tabular-nums;margin:6px 0 2px;}
+.res-opt{display:block;width:100%;text-align:left;padding:13px 15px;border-radius:var(--radius);
+  border:1.5px solid var(--border);background:var(--surface2);cursor:pointer;
+  font-family:'Inter',sans-serif;}
+.res-opt b{display:block;font-size:15px;font-weight:800;color:var(--text);}
+.res-opt span{display:block;font-size:12.5px;color:var(--text3);margin-top:2px;font-weight:500;}
+.res-opt:active{background:var(--green-light);}
+
+/* The likelier cause leads, but both stay one tap away — so it wears the app's
+   primary green rather than a tinted outline. Which option gets it flips with
+   the reading, so the colour has to carry "recommended", not "carry it in". */
+.res-opt.res-primary{border:1px solid rgba(255,255,255,0.55);
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),
+             inset 0 -2px 3px rgba(25,120,60,0.22),
+             0 3px 9px rgba(35,135,70,0.30);}
+.res-opt.res-primary b{color:#09311A;}
+.res-opt.res-primary span{color:rgba(9,49,26,0.72);}
+.res-opt.res-primary:active{filter:brightness(0.96);background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);}
+
+/* ══ DAILY HEAD COUNT ══ */
+.hc-row{display:flex;align-items:center;gap:8px;padding:11px 10px;margin-bottom:8px;
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);}
+.hc-row.seen{opacity:0.62;}
+.hc-info{flex:1;min-width:0;}
+.hc-name{font-size:15px;font-weight:700;color:var(--text);}
+.hc-step{flex:0 0 auto;width:42px;height:42px;border-radius:11px;border:1.5px solid var(--border);
+  background:var(--surface2);color:var(--text2);font-size:21px;font-weight:800;cursor:pointer;
+  font-family:'Inter',sans-serif;}
+.hc-step:active{background:var(--border);}
+.hc-in{flex:0 0 78px;padding:9px 6px;text-align:center;font-size:19px;font-weight:800;
+  font-variant-numeric:tabular-nums;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:10px;color:var(--text);outline:none;font-family:'Inter',sans-serif;
+  -moz-appearance:textfield;}
+.hc-in::-webkit-outer-spin-button,.hc-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.hc-in:focus{border-color:var(--accent);}
+.hc-totalbar{padding:12px 16px;border-top:1px solid var(--border);background:var(--surface2);
+  text-align:center;font-size:14px;font-weight:600;color:var(--text2);}
+.hc-totalbar b{font-size:17px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;}
+
+/* ══ MAIN DISPLAY ══
+   Pens on the left under a sticky weight panel, every control in one vertical
+   strip on the right. The strip is fixed-width so the buttons stay in the same
+   place as the list scrolls — muscle memory matters more than balance here. */
+.md-wrap{display:flex;gap:10px;align-items:flex-start;height:100%;}
+.md-left{flex:1;min-width:0;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:0 2px 12px;}
+.md-right{flex:0 0 190px;display:flex;flex-direction:column;gap:8px;
+  max-height:100%;overflow-y:auto;padding:0 4px 12px 0;}
+
+/* Sticky, not fixed: it belongs to this column and needs no re-measuring when
+   the tab bar or a panel changes height. */
+/* Solid behind the panel, with the fade BELOW it rather than across it — a
+   gradient that reaches transparent before the panel ends lets scrolled rows
+   show through the gap at the top. */
+/* The sticky wrapper paints NOTHING. It used to carry an opaque background with
+   square corners, sitting 6px proud of an 18px-rounded panel — so at every
+   rounded corner that fill showed through as a triangular sliver.
+   The panel's own gradient is fully opaque and already the right shape, so it
+   does the covering; the wrapper only provides the sticky behaviour. */
+.md-weight{position:sticky;top:0;z-index:5;padding:0;
+  background:transparent;border-radius:0;}
+#tp-display .md-weight .scale-panel{margin-bottom:0;}
+/* A 14px full-width fade strip used to sit here, painting bg-top just below the
+   panel with SQUARE corners — the "second background" showing past the rounded
+   card. It existed to soften rows appearing under the sticky header back when
+   this wrapper was opaque. The panel covers them on its own, so the strip is
+   pure artifact now and is gone. */
+
+.md-btn{width:100%;padding:16px 12px;border:none;border-radius:var(--radius-lg);
+  font-family:'Inter',sans-serif;font-size:16px;font-weight:800;cursor:pointer;
+  min-height:58px;transition:transform 0.1s;}
+.md-btn:active{transform:scale(0.97);}
+.md-btn-go{background:linear-gradient(180deg,#3FBE77 0%,var(--green-mid) 55%,var(--green) 100%);
+  color:#fff;
+  /* Was 0 4px 16px: a 16px blur behind a 4px offset spilled ~12px ABOVE the
+     button, reading as dark patches around its top corners. A negative spread
+     pulls the shadow inside the button's footprint so it only falls below. */
+  box-shadow:0 6px 14px -5px rgba(26,107,60,0.40);
+  min-height:70px;font-size:18px;}
+.md-btn-alt{background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);
+  transition:background .15s,border-color .15s,color .15s,opacity .15s;}
+/* A secondary control is GREEN only while it can actually do something: Tare
+   needs a live reading, Clear needs a tare to clear. Tinted rather than filled —
+   filling them would put three primaries next to Cargar and flatten the
+   hierarchy the operator reads first. */
+.md-btn-alt.armed{background:rgba(39,171,80,0.14);border-color:rgba(39,171,80,0.55);
+  color:var(--accent);font-weight:800;}
+.md-btn-alt.idle{opacity:.45;}
+[data-theme="dark"] .md-btn-alt.armed{background:rgba(92,219,147,0.16);
+  border-color:rgba(92,219,147,0.45);color:#7FE3A9;}
+.md-btn-ghost{background:transparent;color:var(--text2);border:1.5px dashed var(--border2);
+  font-size:14px;min-height:48px;}
+
+.md-sep{height:1px;background:var(--border);margin:4px 0;}
+
+/* min-height, not height: a long group name has to be able to push the card
+   taller rather than being clipped or squeezed. */
+.md-pick{padding:11px 13px;border-radius:var(--radius);background:var(--surface);
+  border:1.5px solid var(--border);cursor:pointer;min-height:58px;flex:0 0 auto;}
+.md-pick:active{background:var(--surface2);}
+.md-pick-lbl{font-size:10px;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;
+  color:var(--text3);}
+/* Wrap instead of overflowing — feed group names run long ("Engorde fase 2",
+   "morning feed") and the card is narrow. */
+.md-pick-val{font-size:15px;font-weight:800;color:var(--text);margin-top:2px;line-height:1.25;
+  overflow-wrap:anywhere;}
+.md-pick-val.unset{color:var(--text3);font-weight:600;}
+.md-pick-sub{font-size:11px;color:var(--text3);font-weight:600;margin-top:2px;}
+
+/* ── Pens ── */
+.md-pens-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:12px 6px 8px;font-size:12px;font-weight:800;letter-spacing:0.05em;
+  text-transform:uppercase;color:var(--text3);}
+.md-pens-head b{color:var(--text2);font-variant-numeric:tabular-nums;letter-spacing:0;}
+
+.md-pen{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:13px 14px;margin-bottom:7px;background:var(--surface);
+  border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;min-height:62px;}
+.md-pen:active{background:var(--surface2);}
+/* Pens not in this load stay visible but recede — noticing one has been left
+   off the round is the reason they are shown at all. */
+.md-pen.off{opacity:0.5;border-style:dashed;}
+.md-pen-name{font-size:16px;font-weight:800;color:var(--text);}
+.md-pen-sub{font-size:12px;color:var(--text3);font-weight:500;margin-top:2px;}
+.md-pen-right{text-align:right;white-space:nowrap;}
+.md-pen-kg{font-size:16px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;}
+.md-pen-per{font-size:11.5px;color:var(--text3);font-weight:600;margin-top:1px;}
+.md-pen-adj{font-size:11px;font-weight:800;}
+.md-pen-adj.up{color:#1F8A4D;}
+.md-pen-adj.down{color:var(--red);}
+.md-empty{padding:22px;text-align:center;border:1.5px dashed var(--border2);
+  border-radius:var(--radius);color:var(--accent);font-size:14px;font-weight:700;
+  cursor:pointer;margin:12px 4px;}
+
+/* A phone has no room for two columns — stack, controls first. */
+@media (max-width: 700px){
+  .md-wrap{flex-direction:column;height:auto;}
+  .md-left,.md-right{width:100%;flex:0 0 auto;max-height:none;overflow:visible;}
+  .md-right{flex-direction:row;flex-wrap:wrap;}
+  .md-right .md-btn{width:auto;flex:1 1 46%;}
+  .md-right .md-pick{flex:1 1 46%;}
+  .md-weight{position:static;}
+}
+
+/* The main display manages its own scrolling in two independent columns, so
+   the page under it must not scroll as well or the sticky weight panel drifts. */
+#tp-display.active{display:flex;flex-direction:column;overflow:hidden;}
+#tp-display .md-wrap{flex:1;min-height:0;}
+
+/* Mid-flight feeding, on the control strip. Tappable — it is the way back into
+   a load the operator stepped away from. */
+.md-inprog{margin-top:4px;padding:11px 13px;border-radius:var(--radius);
+  background:var(--surface2);border:1.5px solid var(--accent);cursor:pointer;}
+.md-inprog-lbl{font-size:10px;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;
+  color:var(--accent);}
+.md-inprog-kg{font-size:17px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;
+  margin-top:2px;}
+.md-inprog-sub{font-size:11px;color:var(--text3);font-weight:600;}
+
+/* ── Ingredient sheet ── */
+.ie-move{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:8px 2px; border-bottom:1px solid var(--border);
+}
+.ie-move:last-child{ border-bottom:0; }
+.ie-move-kind{ font-size:13px; font-weight:600; color:var(--text); }
+.ie-move-kg{ font-size:14px; font-weight:700; color:var(--green-mid); white-space:nowrap; }
+.ie-move-kg.out{ color:var(--text2); }
+
+/* ── Time wheel ────────────────────────────────────────────────────
+   Two drums under a fixed centre band: the value under the band is the
+   value, so there is no separate "selected" affordance to hunt for. */
+.tw-overlay{position:fixed;inset:0;z-index:1400;display:flex;align-items:flex-end;
+  justify-content:center;pointer-events:none;}
+.tw-overlay::before{content:'';position:absolute;inset:0;background:rgba(0,0,0,0.34);
+  opacity:0;transition:opacity 0.24s;}
+.tw-overlay.open{pointer-events:all;}
+.tw-overlay.open::before{opacity:1;}
+/* will-change + backface-visibility keep the sheet on its own compositing
+   layer for the whole slide. Without them WebView re-rasters the sheet — and
+   the two scroll ports inside it — on every frame of the transform, which
+   shows up as a flash of the drums as the picker opens. */
+.tw-sheet{position:relative;width:100%;max-width:420px;background:var(--surface);
+  border-radius:var(--radius-xl) var(--radius-xl) 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));
+  transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);
+  will-change:transform;backface-visibility:hidden;}
+.tw-overlay.open .tw-sheet{transform:translateY(0);}
+
+.tw-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;}
+.tw-title{font-size:15px;font-weight:700;color:var(--text);}
+.tw-value{font-size:20px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;}
+
+.tw-body{position:relative;display:flex;align-items:stretch;justify-content:center;gap:6px;height:196px;}
+.tw-col-wrap{position:relative;width:92px;overflow:hidden;contain:paint;}
+.tw-col{height:100%;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;
+  transform:translateZ(0);}
+.tw-col::-webkit-scrollbar{display:none;}
+.tw-pad{height:78px;}
+.tw-item{height:40px;line-height:40px;text-align:center;scroll-snap-align:center;
+  font-size:22px;font-weight:600;color:var(--text3);font-variant-numeric:tabular-nums;
+  cursor:pointer;transition:color 0.12s,transform 0.12s;transform:scale(0.86);}
+.tw-item.active{color:var(--text);font-weight:800;transform:scale(1.1);}
+.tw-colon{align-self:center;font-size:22px;font-weight:800;color:var(--text2);padding-bottom:2px;}
+
+/* The band sits above the drums and must not eat the drag. */
+.tw-band{position:absolute;left:0;right:0;top:78px;height:40px;pointer-events:none;
+  border-top:1px solid var(--border2);border-bottom:1px solid var(--border2);
+  background:rgba(39,171,80,0.07);border-radius:8px;}
+/* Fade the rows away from the band so the centre reads as the choice. */
+.tw-col-wrap::before,.tw-col-wrap::after{content:'';position:absolute;left:0;right:0;
+  height:74px;pointer-events:none;z-index:2;}
+.tw-col-wrap::before{top:0;background:linear-gradient(to bottom,var(--surface) 12%,rgba(255,255,255,0));}
+.tw-col-wrap::after{bottom:0;background:linear-gradient(to top,var(--surface) 12%,rgba(255,255,255,0));}
+
+.tw-foot{display:flex;gap:10px;margin-top:14px;}
+.tw-btn{flex:1;padding:13px;border-radius:var(--radius);border:1px solid var(--border);
+  background:var(--surface2);font-family:'Inter',sans-serif;font-size:15px;font-weight:700;
+  color:var(--text2);cursor:pointer;}
+.tw-btn.ok{border:none;color:#09311A;
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);}
+
+.gs-win-in.empty{color:var(--text3);font-weight:600;}
+.gsel-pill{flex:0 0 auto;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--accent-dark);
+  background:rgba(39,171,80,0.16);}
+
+/* ── Invoice photo ─────────────────────────────────────────────────
+   Staged on the receive sheet, viewed full-bleed: the whole point is to read
+   the figures on the paper. */
+.es-photo-btn{width:100%;padding:13px;border-radius:var(--radius);cursor:pointer;
+  border:1.5px dashed var(--border2);background:var(--surface2);
+  font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--accent);}
+.es-photo-btn:active{background:var(--green-light);}
+.es-photo-has{display:flex;align-items:center;gap:12px;padding:8px;
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);}
+.es-photo-has img{width:72px;height:72px;object-fit:cover;border-radius:9px;flex:0 0 auto;}
+.es-photo-side{flex:1;min-width:0;}
+.es-photo-ok{font-size:13px;font-weight:700;color:var(--green-mid);}
+.es-photo-x{margin-top:6px;padding:5px 11px;border-radius:8px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);
+  font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:var(--text2);}
+
+.ie-move-cam{cursor:pointer;font-size:13px;margin-left:4px;}
+
+.inv-view-overlay{position:fixed;inset:0;z-index:1500;display:none;
+  align-items:center;justify-content:center;background:rgba(0,0,0,0.88);padding:16px;}
+.inv-view-overlay.open{display:flex;}
+.inv-view-overlay img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;}
+.inv-view-close{position:absolute;top:calc(12px + env(safe-area-inset-top));right:16px;
+  width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.16);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;}
+
+/* ── Receive a delivery ────────────────────────────────────────────
+   One card per product on the invoice, stacked: a tractor cab is no place
+   for a table with four columns. */
+/* Sized to its label and left-aligned, like the other small actions in the
+   app: a full-width bar reads as the primary thing on the screen, and the
+   ingredient list is. */
+.btn-receive-top{display:inline-block;padding:9px 16px;margin:0 0 12px;
+  border-radius:10px;cursor:pointer;border:none;color:#09311A;
+  font-family:'Inter',sans-serif;font-size:13.5px;font-weight:800;
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);}
+
+.dl-line{padding:10px;margin-bottom:10px;border:1px solid var(--border);
+  border-radius:var(--radius);background:var(--surface2);}
+.dl-line-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.dl-ing{flex:1;min-width:0;padding:9px 10px;border-radius:9px;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--text);font-family:'Inter',sans-serif;
+  font-size:14px;font-weight:700;}
+.dl-x{flex:0 0 auto;width:34px;height:34px;border-radius:9px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);color:var(--text3);font-size:14px;}
+.dl-line-bot{display:flex;gap:8px;}
+.dl-f{flex:1;min-width:0;}
+.dl-f label{display:block;font-size:10.5px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--text3);margin-bottom:3px;}
+.dl-f input{width:100%;padding:9px 10px;border-radius:9px;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--text);font-family:'Inter',sans-serif;
+  font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
+.dl-per{margin-top:6px;font-size:11.5px;font-weight:700;color:var(--text3);text-align:right;}
+
+.dl-add{width:100%;padding:11px;border-radius:var(--radius);cursor:pointer;
+  border:1.5px dashed var(--border2);background:transparent;
+  font-family:'Inter',sans-serif;font-size:13.5px;font-weight:700;color:var(--accent);}
+.dl-total{display:flex;justify-content:space-between;gap:12px;margin:12px 2px 4px;
+  font-size:15px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;}
+
+/* A settings block whose control sits UNDER its label rather than beside it.
+   .setting-row's own padding does not apply, so repeat its horizontal inset —
+   without it the label starts at the card edge while every neighbour is at
+   17px, which reads as a misalignment. */
+.setting-stack{padding:2px 17px 15px;}
+.stock-top-actions{display:flex;justify-content:flex-start;padding-left:4px;}
+.tx-btn-del{flex:0 0 auto;padding:13px 18px;border-radius:var(--radius);cursor:pointer;
+  border:1px solid rgba(176,48,32,0.25);background:rgba(176,48,32,0.07);
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:700;color:var(--red);}
+
+/* Ingredient editor footer: both actions sized to their labels rather than a
+   full-width Save. Scoped to this sheet — every other sheet's Save is the one
+   thing you came to press, and stays full width. */
+.ie-footer .tx-btn-save{flex:0 0 auto;padding:13px 18px;font-size:15px;font-weight:700;
+  margin-left:auto;}
+
+@media (orientation:portrait) and (min-width:600px){
+  .seg-row .mode-btn{font-size:15px;padding:10px 20px;}
+}
+
+/* ── Phone: the main display has to scroll ─────────────────────────
+   The tablet layout is two columns that each scroll inside themselves, so the
+   page hides its own overflow. Stacked on a phone there is no inner scroller
+   left and the content is ~250px taller than the screen, so the page itself
+   must scroll — otherwise the action column sits below the fold with no way to
+   reach it and the screen reads as a weight display with no buttons.
+
+   This block lives AFTER `#tp-display.active{...overflow:hidden}` on purpose:
+   same specificity, so source order is what decides it. Putting it up with the
+   other max-width:700px rules looked right and did nothing. */
+@media (max-width: 700px){
+  #tp-display.active{overflow-y:auto;}
+  #tp-display .md-wrap{flex:0 0 auto;min-height:0;}
+  /* Stacked on a phone the reading order changes: weight, then the actions,
+     then what is about to be fed. The pens belong under the Load button, not
+     between it and the number.
+     display:contents dissolves .md-left's box so its three children join the
+     wrap's own flex column — otherwise the weight and the pens are locked
+     together inside it and .md-right can only sit above or below the pair. It
+     also drops the column's height:100%, which was making it reserve the whole
+     screen even when the pen list was empty. */
+  #tp-display .md-left{display:contents;}
+  /* .md-wrap aligns to flex-start so the two tablet columns sit at the top.
+     Once .md-left dissolves, that same rule shrinks the weight panel and the
+     pen list to their content width — they need to fill the phone instead. */
+  #tp-display .md-wrap{align-items:stretch;}
+  #tp-display .md-weight{order:1;}
+  #tp-display .md-right{order:2;}
+  /* The walkthrough and the pen list share the slot below the actions: #md-pens
+     holds the pens when idle and the load/unload steps mid-feeding, so loading
+     appears exactly where the pens were. */
+  #tp-display #md-step{order:3;}
+  #tp-display .md-pens{order:4;}
+  /* The last row would otherwise sit under the tab bar. */
+  .md-right{padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));}
+}

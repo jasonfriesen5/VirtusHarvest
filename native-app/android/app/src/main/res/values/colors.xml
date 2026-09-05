@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Referenced by AppTheme in styles.xml. These were missing entirely;
+         the project built only because nothing resolved them, which is a
+         latent AAPT failure waiting to happen. -->
+    <color name="colorPrimary">#27AB50</color>
+    <color name="colorPrimaryDark">#1B8038</color>
+    <color name="colorAccent">#5CDB93</color>
+
+    <!-- Window background behind the WebView. Matches the light bg-top token
+         in app.css so a frame the WebView has not painted yet blends in
+         instead of flashing. -->
+    <color name="windowBackground">#F7FDFB</color>
+</resources>

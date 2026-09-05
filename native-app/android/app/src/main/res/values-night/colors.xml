@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppTheme.NoActionBar is a DayNight theme, so the window follows the
+         system. Matches the dark bg-top token in app.css. -->
+    <color name="windowBackground">#19191A</color>
+</resources>

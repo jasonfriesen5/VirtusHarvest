@@ -1,0 +1,67 @@
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+*.DS_Store
+Thumbs.db
+
+# ── Secrets: never commit ────────────────────────────────────────────────────
+# auth_keys/ holds the ECDSA P-256 private key the scale signs its challenge
+# with — it is what makes the anti-clone check meaningful. dfu_keys/ holds the
+# key that signs firmware packages. Leaking either would let someone build a
+# scale the app accepts as genuine, or sign firmware that devices in the field
+# would install. Git history is effectively permanent, so keep them out.
+auth_keys/
+dfu_keys/
+*.pem
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Build output ─────────────────────────────────────────────────────────────
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+native-app/ios/App/Pods/
+native-app/ios/App/build/
+native-app/android/.gradle/
+native-app/android/build/
+native-app/android/app/build/
+native-app/ios/App/App/public/
+native-app/android/app/src/main/assets/public/
+
+# Compiled firmware artefacts
+*.hex
+*.zip
+*.ino.bak
+
+# ── Nested repo: tracked separately ──────────────────────────────────────────
+# Virtus-Farmware/ is its own git repo with its own remote (Virtus-Farmware.git).
+# Ignoring it here keeps git from recording a bare gitlink — a submodule pointer
+# with no .gitmodules entry, which clones as an empty directory. Commit and push
+# firmware changes from inside that directory instead.
+Virtus-Farmware/
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+# Machine-local Claude Code permissions; launch.json is shared, this is not.
+.claude/settings.local.json
+
+# ── Android signing: keystore + passwords, never commit ──────────────────────
+# Losing the upload key means Google key-reset; leaking it lets someone ship an
+# update that devices accept as genuine. Same reasoning as auth_keys/ above.
+native-app/android/keystore.properties
+*.jks
+*.keystore
+
+# Virtus Feed
+Virtus Feed Folder/native-app/node_modules/
+Virtus Feed Folder/native-app/android/build/
+Virtus Feed Folder/native-app/android/app/build/
+Virtus Feed Folder/native-app/android/.gradle/
+Virtus Feed Folder/www/
+Virtus Feed Folder/native-app/www/
+Virtus Feed Folder/web/node_modules/
+Virtus Feed Folder/web/dist/
+Virtus Feed Folder/web/.env
+Virtus Feed Folder/web/*.tsbuildinfo

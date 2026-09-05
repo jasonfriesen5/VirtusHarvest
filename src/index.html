@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<script>
+// ══ ANDROID WEBVIEW: NO BACKDROP BLUR ══
+// The Android WebView composites backdrop-filter surfaces unreliably: they
+// render half-drawn or not at all, and a change behind them can leave the layer
+// unpainted entirely — the tab bar simply vanished when switching to Unloads,
+// while still being laid out, visible and hit-testable.
+// app.css carries the .no-blur escape hatch for this (ported from Harvest, which
+// hit the same thing) but nothing here ever set the class. Set it before any CSS
+// is applied so nothing paints blurred first.
+// iOS and desktop are untouched and keep the frosted glass.
+if(/Android/i.test(navigator.userAgent)) document.documentElement.classList.add('no-blur');
+</script>
+<!-- Startup error trap. First script in the document so it is installed before
+     anything else can throw. Capacitor forwards console output to the native
+     log, so a failure shows up in Logcat/Xcode with its file:line, and the
+     on-screen banner means it is visible even if the UI never renders.
+     A silent black screen is the worst failure mode to debug on a device. -->
+<script>
+(function(){
+  function report(kind, msg, src, line, col, err){
+    var where = src ? (' @ ' + String(src).split('/').pop() + ':' + line + ':' + col) : '';
+    var text  = kind + ': ' + msg + where;
+    try { console.error('[STARTUP-ERROR] ' + text); } catch(e){}
+    if (err && err.stack) { try { console.error('[STARTUP-STACK] ' + String(err.stack).split('\n').slice(0,4).join(' | ')); } catch(e){} }
+    try {
+      var d = document.getElementById('__bootErr');
+      if (!d) {
+        d = document.createElement('div'); d.id = '__bootErr';
+        d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:2147483647;background:#B03020;color:#fff;font:12px/1.4 -apple-system,sans-serif;padding:44px 12px 10px;white-space:pre-wrap;max-height:60vh;overflow:auto;';
+        (document.body || document.documentElement).appendChild(d);
+      }
+      d.textContent += text + '\n';
+    } catch(e){}
+  }
+  window.addEventListener('error', function(e){ report('JS error', e.message, e.filename, e.lineno, e.colno, e.error); });
+  window.addEventListener('unhandledrejection', function(e){ var r=e.reason; report('Unhandled promise', (r&&r.message)||String(r), null, 0, 0, r); });
+})();
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Virtus Feed">
+<meta name="application-name" content="Virtus Feed">
+<meta name="theme-color" content="#D4930A">
+<title>Virtus Feed</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/app.css">
+<link rel="stylesheet" href="./css/feed.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- ══ SIGN IN ══ -->
+<div class="screen" id="s-login">
+  <div class="signin-close" onclick="closeAuthScreen()">✕</div>
+  <div class="signin-brand">
+    <div class="signin-brand-name">VIRTUS</div>
+    <div class="signin-brand-sub">FEED</div>
+  </div>
+  <div class="signin-card">
+    <div class="signin-tab-row">
+      <div class="signin-tab active" id="stab-signin" onclick="switchAuthTab('signin')" data-en="Sign In">Ingresar</div>
+      <div class="signin-tab" id="stab-signup" onclick="switchAuthTab('signup')" data-en="Create Account">Crear cuenta</div>
+    </div>
+    <div class="signin-error" id="signin-error"></div>
+    <div class="signin-success" id="signin-success"></div>
+
+    <div id="signin-form">
+      <div class="signin-field"><label data-en="Email">Email</label><input type="email" id="signin-email" autocomplete="email"></div>
+      <div class="signin-field"><label data-en="Password">Contraseña</label>
+        <div class="pw-wrap"><input type="password" id="signin-password" autocomplete="current-password"><button class="pw-eye" onclick="togglePw('signin-password',this)">👁</button></div>
+      </div>
+      <button class="signin-btn" onclick="doSignIn()" data-en="Sign In">Ingresar</button>
+      <div class="signin-forgot" onclick="showForgotPassword()" data-en="Forgot your password?">¿Olvidaste tu contraseña?</div>
+    </div>
+
+    <div id="signup-form" style="display:none;">
+      <div class="signin-field"><label data-en="Name">Nombre</label><input type="text" id="signup-name" autocomplete="name"></div>
+      <div class="signin-field"><label data-en="Email">Email</label><input type="email" id="signup-email" autocomplete="email"></div>
+      <div class="signin-field"><label data-en="Password">Contraseña</label>
+        <div class="pw-wrap"><input type="password" id="signup-password" autocomplete="new-password"><button class="pw-eye" onclick="togglePw('signup-password',this)">👁</button></div>
+      </div>
+      <button class="signin-btn" onclick="doSignUp()" data-en="Create Account">Crear cuenta</button>
+    </div>
+
+    <div id="forgot-form" style="display:none;">
+      <div class="signin-field"><label data-en="Email">Email</label><input type="email" id="forgot-email" autocomplete="email"></div>
+      <button class="signin-btn" onclick="doForgotPassword()">Enviar enlace</button>
+      <div class="signin-forgot" onclick="showSignInForm()">Volver</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div class="screen active" id="s-app">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <div class="topbar-logo" style="line-height:1.05;">VIRTUS<br><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:#20A44C;">FEED</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="gps-pill gps-off" id="pill-gps" onclick="requestGPS()" style="display:none"><div class="gps-dot"></div><span id="pill-gps-txt">GPS</span></div>
+      <div class="status-pill pill-offline" id="pill-net" style="display:none"><div class="pill-dot"></div><span id="pill-net-txt">Offline</span></div>
+      <div id="pill-bt" style="display:none;"></div>
+      <div class="status-pill pill-remote" id="pill-remote" style="display:none;"><div class="pill-dot"></div><span data-en="Remote">Remoto</span></div>
+      <div class="unsynced-pill hidden" id="unsynced-pill" onclick="fullSync()"><span id="unsynced-count">0</span> <span data-en="not synced">sin sincronizar</span></div>
+      <div class="sync-circle" id="sync-circle" onclick="fullSync()" title="Sincronizar">
+        <span class="sync-icon" style="display:flex;align-items:center;justify-content:center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg></span>
+        <div class="sync-badge hidden" id="sync-badge">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-inner">
+    <!-- FEED -->
+    <!-- ══ 1 · WEIGHT — the operator's home screen ══ -->
+    <!-- ══ 1 · MAIN DISPLAY ══
+         Two columns: pens on the left, every control in one vertical strip on
+         the right. The weight panel is sticky, so the pen list scrolls
+         underneath it and the reading is never off-screen. -->
+    <div class="tab-page active" id="tp-display">
+      <div class="md-wrap">
+
+        <div class="md-left">
+          <!-- Sticky rather than fixed: it stays with the column it belongs to
+               and does not have to be re-measured when the tab bar changes. -->
+          <div class="md-weight">
+            <div class="scale-panel">
+              <div class="scale-panel-fill" id="scale-panel-fill"></div>
+              <div class="scale-panel-toprow">
+                <div class="scale-status-dot" id="scale-status-dot"></div>
+                <div style="flex:1;"></div>
+                <div class="scale-mode-lbl active-mode" id="scale-mode-lbl" style="display:none;"></div>
+              </div>
+              <div class="scale-main-weight" id="scale-weight"><span id="scale-weight-val" class="wt-blank">000000</span></div>
+              <div class="scale-sub-row" style="display:none;">
+                <div class="scale-sub-item"><div class="scale-sub-lbl" id="scale-sub-lbl-left">Bruto</div>
+                  <div class="scale-sub-val" id="scale-target">- -</div></div>
+                <div style="flex:1"></div>
+                <div class="scale-sub-item" style="text-align:right;">
+                  <div class="scale-sub-lbl" id="scale-sub-lbl-right">Neto</div>
+                  <div class="scale-sub-val" id="scale-gross">- -</div></div>
+              </div>
+              <!-- Secondary reading, in the Harvest arrangement: a small label
+                   over its value, right-aligned under the big number. Only shown
+                   when a tare is applied — with none, net IS gross and it would
+                   repeat the number above it. -->
+              <div class="md-gross" id="md-gross"></div>
+              <div class="scale-unit-row">
+                <div class="stable-pill-inline" id="stable-pill" style="visibility:hidden;">
+                  <div class="stable-dot" id="stable-dot"></div>
+                  <span id="stable-txt">Esperando</span>
+                </div>
+                <div class="scale-unit-lbl" id="main-unit">kg</div>
+              </div>
+            </div>
+            <div class="scale-hint" id="scale-hint"></div>
+            <div class="mix-timer" id="mix-timer" style="display:none;"></div>
+          </div>
+
+          <!-- The load/unload walkthrough runs HERE, under the weight, instead
+               of in an overlay with its own duplicate readout. -->
+          <div id="md-step"></div>
+
+          <!-- Idle: what is about to be fed. Mid-feeding: the step list. -->
+          <div class="md-pens" id="md-pens"></div>
+        </div>
+
+        <div class="md-right" id="md-right">
+          <button class="md-btn md-btn-go" id="home-load-btn" onclick="homeLoadFeed()" data-en="Load feed">Cargar</button>
+          <button class="md-btn md-btn-alt" id="md-skip-btn" style="display:none;" onclick="feedSkipStep()" data-en="Skip">Saltar</button>
+          <button class="md-btn md-btn-alt" id="md-tare-btn" onclick="zeroScale()" data-en="Tare">Tara</button>
+          <button class="md-btn md-btn-alt" id="md-clear-btn" onclick="clearScale()" data-en="Clear">Anular</button>
+          <button class="md-btn md-btn-ghost" id="md-return-btn" onclick="openReturnPicker()" data-en="Return refused feed">Devolver</button>
+          <!-- Only while a feeding is running. Lets the operator back out and
+               pick a different group instead of being stuck until it finishes. -->
+          <button class="md-btn md-btn-danger" id="md-cancel-btn" style="display:none;" onclick="feedCancel()" data-en="Cancel load">Cancelar carga</button>
+
+          <div class="md-sep"></div>
+
+          <div class="md-pick" onclick="openWorkerPicker()">
+            <div class="md-pick-lbl" data-en="Operator">Operario</div>
+            <div class="md-pick-val" id="home-op-name">—</div>
+          </div>
+
+          <div class="md-pick" onclick="openGroupPicker()">
+            <div class="md-pick-lbl" data-en="Feed group">Grupo</div>
+            <div class="md-pick-val" id="md-group-name">—</div>
+            <div class="md-pick-sub" id="md-group-sub"></div>
+          </div>
+
+          <div id="home-status"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ 2 · TRANSACTIONS ══ -->
+    <div class="tab-page" id="tp-tx">
+      <div class="section-lbl" data-en="Unloaded">Descargado</div>
+      <div id="tx-body"></div>
+    </div>
+
+    <!-- ══ 3 · RATIONS + INVENTORY ══ -->
+    <div class="tab-page" id="tp-stock">
+      <!-- Two unrelated things used to share one scroll under a tab named for
+           only half of them. A segment separates them without spending a slot
+           in the tab bar, which the operator pays for all day. -->
+      <div class="mode-row seg-row">
+        <button class="mode-btn active" id="seg-ing" onclick="setStockSeg('ing')" data-en="Ingredients">Insumos</button>
+        <button class="mode-btn" id="seg-rat" onclick="setStockSeg('rat')" data-en="Rations">Raciones</button>
+      </div>
+
+      <div id="stock-pane-ing">
+        <!-- A delivery is one event with several products on it, so it is
+             entered at the top of the list rather than per card. -->
+        <div class="stock-top-actions">
+          <button class="btn-receive-top" onclick="openDeliverySheet()"
+                  data-en="Receive a delivery">Registrar una entrega</button>
+        </div>
+        <div id="ingredients-body"></div>
+        <button class="btn-add-open" onclick="openIngredientSheet()" data-en="+ New Ingredient">+ Nuevo ingrediente</button>
+      </div>
+
+      <div id="stock-pane-rat" style="display:none;">
+        <div id="rations-body"></div>
+        <button class="btn-add-open" id="btn-new-ration" onclick="openRationSheet()" data-en="+ New Ration">+ Nueva ración</button>
+      </div>
+    </div>
+
+    <!-- Lots moved under More; the page still exists for that route. -->
+    <div class="tab-page" id="tp-lots">
+      <div class="section-lbl" data-en="Lots">Lotes</div>
+      <div id="lots-body"></div>
+      <button class="btn-add-open" onclick="openLotSheet()" data-en="+ New Lot">+ Nuevo lote</button>
+    </div>
+
+    <!-- The load/deliver flow, reached from the Load button above. -->
+    <div class="tab-page" id="tp-feed">
+      <div class="queue-banner hidden" id="queue-banner"><span class="queue-text">Pendientes: <span class="queue-count" id="queue-count">0</span></span></div>
+      <div id="feed-body"></div>
+    </div>
+
+    <div class="tab-page" id="tp-more">
+      <div class="more-profile">
+        <div class="profile-avatar" id="settings-avatar">?</div>
+        <div class="profile-block">
+          <div class="profile-name" id="settings-name" data-en="Not signed in">Sin sesión</div>
+          <div class="profile-farm" id="settings-farm">—</div>
+        </div>
+        <button class="profile-auth-btn" id="profile-auth-btn" onclick="handleTopbarAuth()"></button>
+      </div>
+      <div class="more-list">
+        <div class="more-section-lbl" data-en="Data">Datos</div>
+        <div class="more-row" onclick="openCyclePanel()"><div class="more-row-icon">🗓️</div><div class="more-row-label" data-en="Cycle">Ciclo</div><div class="more-row-chevron">›</div></div>
+        <div class="more-row" onclick="showTab('lots')"><div class="more-row-icon">🐂</div><div class="more-row-label" data-en="Lots">Lotes</div><div class="more-row-chevron">›</div></div>
+        <div class="more-row" onclick="openGroupsPanel()"><div class="more-row-icon">🧺</div><div class="more-row-label" data-en="Feed groups">Grupos de alimentación</div><div class="more-row-chevron">›</div></div>
+        <div class="more-row" onclick="openBunkPanel()"><div class="more-row-icon">📏</div><div class="more-row-label" data-en="Bunk reading">Lectura de comederos</div><div class="more-row-chevron">›</div></div>
+        <div class="more-row" onclick="openOperatorsPanel()"><div class="more-row-icon">👤</div><div class="more-row-label" data-en="Operators">Operarios</div><div class="more-row-chevron">›</div></div>
+
+        <div class="more-section-lbl" data-en="Equipment">Equipo</div>
+        <div class="more-row" onclick="openDeviceTab()"><div class="more-row-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.6"/><circle cx="9.7" cy="9.7" r="0.9" fill="currentColor" stroke="none"/><path d="M10.5 7V4M13.5 7V4M10.5 17v3M13.5 17v3M7 10.5H4M7 13.5H4M17 10.5h3M17 13.5h3"/></svg></div><div class="more-row-label" data-en="Scale">Báscula</div><div class="more-row-chevron">›</div></div>
+        <div class="more-row" onclick="openMorePanel('sp-settings')"><div class="more-row-icon">⚙️</div><div class="more-row-label" data-en="Settings">Ajustes</div><div class="more-row-chevron">›</div></div>
+
+        <div class="more-section-lbl" data-en="Account">Cuenta</div>
+        <div class="more-row" onclick="openMorePanel('sp-cloud')"><div class="more-row-icon">☁️</div><div class="more-row-label" data-en="Cloud &amp; sync">Nube y sincronización</div><div class="more-row-chevron">›</div></div>
+        <div class="more-row" onclick="openMorePanel('sp-about')"><div class="more-row-icon">ℹ️</div><div class="more-row-label" data-en="About">Acerca de</div><div class="more-row-chevron">›</div></div>
+      </div>
+    </div>
+
+    <!-- ══ SCALE HARDWARE (opened from More) ══ -->
+    <div class="sub-panel" id="sp-devices">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title" data-en="Scale">Báscula</div></div>
+      <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Connection">Conexión</div>
+          <div class="mode-row">
+            <button id="mode-btn-primary" class="mode-btn active" onclick="setAppMode('primary')" data-en="Primary">Primario</button>
+            <button id="mode-btn-remote"  class="mode-btn" onclick="setAppMode('remote')" data-en="Remote">Remoto</button>
+          </div>
+          <div class="mode-hint" id="mode-sub-label" data-en="The scale assigns primary automatically">La báscula asigna la principal automáticamente</div>
+          <div class="sp-actions">
+            <button class="btn-scan" id="btn-scan" onclick="scanBluetooth()">
+              <div class="scan-spinner" id="scan-spinner"></div>
+              <span id="scan-label" data-en="Scan for scale">Buscar báscula</span>
+            </button>
+          </div>
+          <div class="bt-device-list-inner" id="bt-device-list"></div>
+        </div>
+        <div class="card">
+          <div class="sp-section-lbl">Mixers</div>
+          <div id="mixers-list"></div>
+          <div class="sp-actions">
+            <button class="btn-add-open" onclick="openAddMixerSheet()" data-en="+ New Mixer">+ Nuevo mixer</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Weight Device">Módulo de pesaje</div>
+          <div class="setting-row"><div class="sr-label" data-en="Model">Modelo</div><div class="sr-val" id="dev-model">N/A</div></div>
+          <div class="setting-row"><div class="sr-label" data-en="Serial Number">Número de serie</div><div class="sr-val" id="dev-serial">N/A</div></div>
+          <div class="setting-row">
+            <div>
+              <div class="sr-label" data-en="Firmware">Firmware</div>
+              <div class="sr-sub" id="dev-update-sub" style="display:none;color:var(--green);font-weight:600;"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="sr-val" id="dev-firmware">N/A</div>
+              <button id="dev-ota-btn" onclick="installFirmwareUpdate()" style="display:none;" class="btn-small-green" data-en="Update">Actualizar</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="sr-label" data-en="Battery">Batería <span id="dev-battery-icon" style="font-size:11px;"></span></div>
+            <div class="sr-val" id="dev-battery">N/A</div>
+          </div>
+          <!-- Read by the status parser and diagnostics; not shown. -->
+          <div class="setting-row" style="display:none;"><div class="sr-label">Input Voltage</div><div class="sr-val" id="dev-ext-power">N/A</div></div>
+          <div class="setting-row" onclick="editSensitivity()" style="cursor:pointer;">
+            <div class="sr-label" data-en="Sensitivity">Sensibilidad</div>
+            <div class="sr-val" id="dev-sensitivity">N/A</div>
+          </div>
+          <div class="setting-row" onclick="editCapacity()" style="cursor:pointer;border-bottom:none;">
+            <div class="sr-label" data-en="Rated Capacity">Capacidad nominal</div>
+            <div class="sr-val" id="dev-capacity">N/A</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Calibration">Calibración</div>
+          <div style="display:none;" id="dev-calibration"></div>
+          <div class="setting-row" onclick="openCalibrationSheet()" style="cursor:pointer;">
+            <div>
+              <div class="sr-label" data-en="Calibration factor">Factor de calibración</div>
+              <div class="sr-sub" data-en="Weigh a known weight to correct the reading">Pesá un peso conocido para corregir la lectura</div>
+            </div>
+            <div class="sr-val" id="cal-factor-display">—</div>
+          </div>
+          <div class="setting-row" style="border-bottom:none;">
+            <div>
+              <div class="sr-label" data-en="Zero Scale">Cero permanente</div>
+              <div class="sr-sub" data-en="Permanently re-zeros the scale">Re-cero permanente de la báscula</div>
+            </div>
+            <button class="btn-small-green" id="btn-zero" onclick="sendZeroToScale()" disabled data-en="Zero">Cero</button>
+          </div>
+          <div style="display:none;"><div id="zero-raw"></div><div id="zero-note"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ BUNK READING ══ -->
+    <div class="sub-panel" id="sp-bunk">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title" data-en="Bunk reading">Lectura de comederos</div></div>
+      <div style="padding:14px;">
+        <div class="bunk-intro" data-en="Score each bunk before the morning feed, on what is left from the last drop.">Puntuá cada comedero antes de la carga de la mañana, sobre lo que quedó de la vez anterior.</div>
+        <div id="bunk-body"></div>
+      </div>
+    </div>
+
+    <!-- ══ FEED GROUPS ══ -->
+    <div class="sub-panel" id="sp-groups">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title" data-en="Feed groups">Grupos de alimentación</div></div>
+      <div style="padding:14px;">
+        <div class="bunk-intro" data-en="A group is one mixer load: a ration and the lots that get it. A lot can be in more than one.">Un grupo es una carga del mixer: una ración y los lotes que la reciben. Un lote puede estar en más de uno.</div>
+        <div id="groups-body"></div>
+        <button class="btn-add-open" onclick="openGroupSheet()" data-en="+ New group">+ Nuevo grupo</button>
+      </div>
+    </div>
+
+    <!-- ══ SETTINGS ══ -->
+    <div class="sub-panel" id="sp-settings">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title" data-en="Settings">Ajustes</div></div>
+      <div style="padding:14px;display:flex;flex-direction:column;gap:6px;">
+
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Units">Unidades</div>
+          <div class="setting-row">
+            <div><div class="sr-label" data-en="Weight">Peso</div></div>
+            <div class="seg-ctrl" id="seg-weight">
+              <button class="seg-btn active" onclick="setWeightUnit('kg',this)">kg</button>
+              <button class="seg-btn" onclick="setWeightUnit('lb',this)">lb</button>
+            </div>
+          </div>
+          <div class="setting-row" style="border-bottom:none;">
+            <div><div class="sr-label"><span id="lbl-round" data-en="Display Rounding">Redondeo</span></div></div>
+            <div class="seg-ctrl" id="seg-round">
+              <button class="seg-btn" onclick="setDisplayRound(1,this)">1</button>
+              <button class="seg-btn" onclick="setDisplayRound(2,this)">2</button>
+              <button class="seg-btn" onclick="setDisplayRound(5,this)">5</button>
+              <button class="seg-btn" onclick="setDisplayRound(10,this)">10</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Language &amp; theme">Idioma y tema</div>
+          <div class="setting-row">
+            <div><div class="sr-label" data-en="Language">Idioma</div></div>
+            <div class="seg-ctrl" id="seg-lang">
+              <button class="seg-btn" data-lang="auto" onclick="setLanguage('auto')">Auto</button>
+              <button class="seg-btn" data-lang="en" onclick="setLanguage('en')">English</button>
+              <button class="seg-btn" data-lang="es" onclick="setLanguage('es')">Español</button>
+            </div>
+          </div>
+          <div class="setting-row" style="border-bottom:none;">
+            <div><div class="sr-label"><span id="lbl-darkmode" data-en="Dark Mode">Modo oscuro</span></div></div>
+            <div class="seg-ctrl" id="seg-theme">
+              <button class="seg-btn" data-mode="auto" onclick="setTheme('auto',this)"><span id="lbl-theme-auto">Auto</span></button>
+              <button class="seg-btn" data-mode="light" onclick="setTheme('light',this)"><span id="lbl-theme-light">Claro</span></button>
+              <button class="seg-btn" data-mode="dark" onclick="setTheme('dark',this)"><span id="lbl-theme-dark">Oscuro</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Scale Power Saving">Ahorro de batería de la báscula</div>
+          <!-- A label above a full-width control, not a side-by-side row, so it
+               cannot use .setting-row — but it must still start on the same
+               left edge as every other setting. -->
+          <div class="setting-stack">
+            <div class="sr-label"><span id="lbl-idletimeout" data-en="Idle Timeout">Tiempo de inactividad</span></div>
+            <div class="seg-ctrl" id="seg-powersave" style="width:100%;margin-top:10px;">
+              <button class="seg-btn" onclick="setPowerSaveTimeout(0,this)" data-en="Never">Nunca</button>
+              <button class="seg-btn" onclick="setPowerSaveTimeout(30,this)">30 min</button>
+              <button class="seg-btn" onclick="setPowerSaveTimeout(60,this)">1 h</button>
+              <button class="seg-btn" onclick="setPowerSaveTimeout(120,this)">2 h</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account actions live in Settings, where people look for them. -->
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Account">Cuenta</div>
+          <div class="setting-row" style="border-bottom:none;">
+            <div>
+              <div class="sr-label" data-en="Delete account">Eliminar cuenta</div>
+              <div class="sr-sub" data-en="Removes this account and all of its data, including invoice photos. This cannot be undone.">Elimina esta cuenta y todos sus datos, incluidas las fotos de facturas. No se puede deshacer.</div>
+            </div>
+            <button class="btn-danger-sm" onclick="deleteAccount()" data-en="Delete">Eliminar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CLOUD / SYNC ══ -->
+    <div class="sub-panel" id="sp-cloud">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title">Nube</div></div>
+      <div style="padding:14px;display:flex;flex-direction:column;gap:6px;">
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Status">Estado</div>
+          <div class="info-rows" id="cloud-info-rows"></div>
+          <div class="sp-actions">
+            <div class="sp-actions-note" id="set-sync-status"></div>
+            <button class="btn-gold btn-gold-sm" onclick="fullSync()" data-en="Sync now">Sincronizar ahora</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Account">Cuenta</div>
+          <div class="info-row"><div class="info-row-main"><div class="info-row-title" data-en="Email">Email</div></div><div class="info-row-val" id="settings-email">—</div></div>
+          <div class="sp-actions">
+            <!-- Deleting the account moved to Settings › Account. -->
+            <button class="btn-gold btn-gold-sm" id="cloud-auth-btn" onclick="handleTopbarAuth()"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ OPERATORS ══ -->
+    <div class="sub-panel" id="sp-operators">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title" data-en="Operators">Operarios</div></div>
+      <div style="padding:14px;">
+        <div id="operators-list"></div>
+        <button class="btn-add-open" onclick="openAddOperatorSheet()" data-en="+ New Operator">+ Nuevo operario</button>
+      </div>
+    </div>
+
+    <!-- ══ ABOUT ══ -->
+    <div class="sub-panel" id="sp-about">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title" data-en="About">Acerca de</div></div>
+      <div style="padding:14px;">
+        <div class="card">
+          <div class="info-row"><div class="info-row-main"><div class="info-row-title" data-en="Version">Versión</div></div><div class="info-row-val" id="about-version">—</div></div>
+          <div class="info-row"><div class="info-row-main"><div class="info-row-title" data-en="Platform">Plataforma</div></div><div class="info-row-val" id="about-platform">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CYCLE ══ -->
+    <div class="sub-panel" id="sp-cycle">
+      <div class="sp-header"><button class="sp-back" onclick="closeMorePanel()" data-en-prefix="‹ " data-en="More">‹ Más</button><div class="sp-title" data-en="Cycle">Ciclo</div></div>
+      <div style="padding:14px;">
+        <div id="cycle-body"></div>
+        <button class="btn-add-open" onclick="openAddCycleSheet()" data-en="+ New Cycle">+ Nuevo ciclo</button>
+      </div>
+    </div>
+
+    <!-- ══ LOAD THE MIXER ══ -->
+    <div class="tx-sheet-overlay load-sheet-overlay" id="load-sheet-overlay" onclick="if(event.target===this)closeLoadSheet()">
+      <div class="tx-sheet load-sheet">
+        <div class="tx-sheet-header">
+          <div id="load-sheet-head" style="flex:1;"></div>
+          <div class="tx-sheet-close" onclick="closeLoadSheet()">✕</div>
+        </div>
+
+        <div id="load-sheet-big-wrap" style="text-align:center;padding:2px 0 6px;">
+          <div class="load-onmixer" data-en="On the mixer">En el mixer</div>
+          <div class="feed-big" id="load-sheet-big">0</div>
+          <div class="feed-big-unit"><span data-en="of">de</span> <b id="load-sheet-target">0</b> kg</div>
+          <div class="load-remaining" id="load-sheet-remaining"></div>
+          <div class="feed-bar-note" id="load-sheet-note">—</div>
+        </div>
+
+        <div class="tx-sheet-body" id="load-sheet-body"></div>
+
+        <div class="tx-sheet-footer">
+          <button class="feed-btn feed-btn-skip" onclick="feedSkipStep()" data-en="Skip">Saltar</button>
+          <button class="feed-btn feed-btn-ok" id="load-sheet-next" onclick="feedConfirmStep()" data-en="Next">Siguiente</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ UNLOAD CONFIRM ══ -->
+    <div class="tx-sheet-overlay" id="uc-overlay" onclick="if(event.target===this)closeUnloadConfirm()">
+      <div class="tx-sheet">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" id="uc-lot" data-en-skip>Lote</div>
+          <div class="tx-sheet-close" onclick="closeUnloadConfirm()">✕</div>
+        </div>
+        <div class="tx-sheet-body">
+          <div class="uc-summary">
+            <div class="uc-block">
+              <div class="uc-lbl" data-en="Delivered">Descargado</div>
+              <div class="uc-val" id="uc-kg">0 kg</div>
+            </div>
+            <div class="uc-arrow">÷</div>
+            <div class="uc-block">
+              <div class="uc-lbl" data-en="Head">Cabezas</div>
+              <input type="number" inputmode="numeric" id="uc-head" class="uc-input" oninput="_ucRecalc()">
+            </div>
+            <div class="uc-arrow">=</div>
+            <div class="uc-block">
+              <div class="uc-lbl" data-en="Per head">Por cabeza</div>
+              <div class="uc-val uc-strong" id="uc-perhead">—</div>
+            </div>
+          </div>
+
+          <div class="tx-field-group">
+            <label data-en="Average weight per head (kg)">Peso promedio por cabeza (kg)</label>
+            <input type="number" inputmode="decimal" step="1" id="uc-weight" oninput="_ucRecalc()">
+            <div class="uc-hint" id="uc-pctbw"></div>
+          </div>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeUnloadConfirm()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="confirmUnload()" data-en="Confirm">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ BUNK SCORE ══ -->
+    <div class="tx-sheet-overlay" id="bunk-sheet-overlay" onclick="if(event.target===this)closeBunkSheet()">
+      <div class="tx-sheet">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="bunk-sheet-lot">Lote</div>
+            <div class="fi-sub" id="bunk-sheet-sub"></div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeBunkSheet()">✕</div>
+        </div>
+        <div class="tx-sheet-body">
+          <div id="bunk-options"></div>
+          <div id="bunk-result" class="bunk-result"></div>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeBunkSheet()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" id="bunk-confirm" onclick="confirmBunkScore()" data-en="Confirm">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CALIBRATION TOOL ══ -->
+    <div class="tx-sheet-overlay" id="cal-sheet-overlay" onclick="if(event.target===this)closeCalibrationSheet()">
+      <div class="tx-sheet" style="max-height:88vh;">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" id="cal-sheet-title" data-en="Calibration Tool">Herramienta de calibración</div>
+          <div class="tx-sheet-close" onclick="closeCalibrationSheet()">✕</div>
+        </div>
+        <div class="tx-sheet-body">
+          <div class="cal-help" data-en="Put a weight you know on the scale, type both numbers, and the app works out the correction.">Poné un peso conocido en la báscula, escribí los dos números y la app calcula la corrección.</div>
+          <div class="cal-grid">
+            <div class="cal-row">
+              <div class="cal-lbl" id="cal-lbl-certified" data-en="Certified Weight">Peso certificado</div>
+              <input class="cal-input" type="number" inputmode="decimal" id="cal-certified" step="0.1" min="0">
+            </div>
+            <div class="cal-row">
+              <div class="cal-lbl" id="cal-lbl-reading" data-en="Scale Reading">Lectura de la báscula</div>
+              <input class="cal-input" type="number" inputmode="decimal" id="cal-scale-reading" step="0.1" min="0">
+            </div>
+          </div>
+          <button class="cal-calc-btn" id="cal-calc-btn" onclick="calculateCalibration()" data-en="Calculate Calibration Factor">Calcular factor de calibración</button>
+          <div class="cal-result-row">
+            <div style="flex:1;">
+              <div class="sr-label" id="cal-lbl-factor" data-en="Calibration Factor">Factor de calibración</div>
+              <div class="sr-sub" id="cal-result-note" data-en="Edit below to override">Editá abajo para sobrescribir</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="cal-factor-direct-input" step="0.0001" class="cal-factor-input" oninput="onCalFactorInput(this)">
+              <button id="cal-apply-btn" onclick="applyCalFactorDirect()" disabled class="cal-apply" data-en="Apply">Aplicar</button>
+            </div>
+          </div>
+          <div id="cal-factor-display-sheet" style="display:none;">—</div>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeCalibrationSheet()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="saveCalibrationSettings()" data-en="Save Settings">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PEN DETAIL ══ -->
+    <div class="tx-sheet-overlay" id="lot-detail-overlay" onclick="if(event.target===this)closeLotDetail()">
+      <div class="tx-sheet lot-detail-sheet">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="lot-detail-title">Lote</div>
+            <div class="fi-sub" id="lot-detail-sub"></div>
+          </div>
+          <!-- The record editor had no entry point for an existing pen at all:
+               openLotSheet was only ever reached with no id, i.e. for a new one.
+               Pen code, category, entry weight and ration were uneditable. -->
+          <button class="ld-edit-btn" onclick="editLotRecord()" data-en="Edit">Editar</button>
+          <div class="tx-sheet-close" onclick="closeLotDetail()">✕</div>
+        </div>
+
+        <div class="tx-sheet-body">
+          <div class="tx-field-group">
+            <label data-en="Name">Nombre</label>
+            <input type="text" id="ld-name">
+          </div>
+          <div class="ld-two">
+            <div class="tx-field-group">
+              <label data-en="Head count">Cantidad de cabezas</label>
+              <input type="number" inputmode="numeric" id="ld-head" oninput="_paintLotAdjust()">
+            </div>
+            <div class="tx-field-group">
+              <label data-en="Average weight per head (kg)">Peso promedio por cabeza (kg)</label>
+              <input type="number" inputmode="decimal" id="ld-weight">
+            </div>
+          </div>
+          <!-- Sits directly under the head count because that is what it is
+               about: ask the operator to check this number at the pen. -->
+          <div class="tx-field-group es-toggle-row">
+            <div>
+              <label style="margin:0;" data-en="Confirm head count at unload">Confirmar cabezas al descargar</label>
+              <div class="fi-sub" data-en="Ask at the lot before recording the unload">Preguntar en el lote antes de registrar la descarga</div>
+            </div>
+            <label class="es-switch"><input type="checkbox" id="ld-confirm-head"><span class="es-slider"></span></label>
+          </div>
+
+          <div class="tx-field-group">
+            <label data-en="Feed groups">Grupos de alimentación</label>
+            <div class="grp-pens" id="ld-groups-in" style="padding:4px 0 0;"></div>
+          </div>
+
+          <div class="ld-section" data-en="Feed adjustment">Ajuste de alimentación</div>
+          <div class="ld-adjust">
+            <button class="ld-step" onclick="ldStep(-1)">−</button>
+            <div class="ld-pct" id="ld-pct">0%</div>
+            <button class="ld-step" onclick="ldStep(1)">+</button>
+          </div>
+          <input type="range" id="ld-slider" class="ld-slider" min="-20" max="20" step="1" value="0"
+                 oninput="ldSlide(this.value)">
+          <div class="ld-warn" id="ld-warn" style="display:none;"></div>
+
+          <div class="ld-section" data-en="Adjusted total">Total ajustado</div>
+          <div class="ld-rows">
+            <div class="ld-row"><span data-en="Ration as written">Ración según receta</span><b id="ld-base">—</b></div>
+            <div class="ld-row"><span data-en="This lot gets">Este lote recibe</span><b id="ld-adjusted">—</b></div>
+            <div class="ld-row"><span data-en="Lot total per day">Total del lote por día</span><b id="ld-penTotal">—</b></div>
+          </div>
+
+          <div class="ld-section" id="ld-groups-lbl" style="display:none;" data-en="Adjusted rate by group">Tasa ajustada por grupo</div>
+          <div class="ld-rows" id="ld-groups" style="display:none;"></div>
+
+          <div class="ld-section" data-en="Recent fed averages">Promedios recientes</div>
+          <div class="ld-rows" id="ld-averages"></div>
+        </div>
+
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeLotDetail()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="saveLotDetail()" data-en="Save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CREATE / EDIT GROUP ══ -->
+    <div class="tx-sheet-overlay" id="group-sheet-overlay" onclick="if(event.target===this)closeGroupSheet()">
+      <div class="tx-sheet" style="max-height:90vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" id="gs-title">—</div>
+          <div class="tx-sheet-close" onclick="closeGroupSheet()">✕</div>
+        </div>
+        <div class="tx-sheet-body" style="flex:1;overflow-y:auto;">
+          <div class="tx-field-group">
+            <label data-en="Name">Nombre</label>
+            <input type="text" id="gs-name" placeholder="Terminación" data-en-ph="Finishing">
+          </div>
+          <div class="tx-field-group">
+            <label data-en="Ration">Ración</label>
+            <select id="gs-ration" onchange="gsRationChanged()"></select>
+          </div>
+
+          <!-- Only meaningful for a % ration: those say what the mixture IS,
+               not how much of it an animal eats. Hidden for kg rations, where
+               the ration already answers it. -->
+          <div id="gs-intake-wrap" style="display:none;">
+            <div class="ld-section" data-en="Intake per head">Consumo por cabeza</div>
+            <div class="gs-hint" data-en="This ration is written as percentages, so the amount comes from here.">Esta ración está escrita en porcentajes, así que la cantidad se define acá.</div>
+            <div class="mode-row">
+              <button class="mode-btn active" id="gs-intake-kg"  onclick="gsSetIntakeMode('kg')"     data-en="kg per head">kg por cabeza</button>
+              <button class="mode-btn"        id="gs-intake-bw"  onclick="gsSetIntakeMode('bw_pct')" data-en="% of bodyweight">% del peso vivo</button>
+            </div>
+            <div class="tx-field-group" id="gs-intake-kg-wrap">
+              <label data-en="kg per head per day">kg por cabeza por día</label>
+              <input type="number" inputmode="decimal" step="0.1" id="gs-intake-kg-val">
+            </div>
+            <div class="tx-field-group" id="gs-intake-bw-wrap" style="display:none;">
+              <label data-en="% of bodyweight as dry matter">% del peso vivo en materia seca</label>
+              <input type="number" inputmode="decimal" step="0.1" id="gs-intake-bw-val" placeholder="2.4">
+              <div class="fi-sub" data-en="Finishing cattle eat about 2.2–2.5%. Uses each lot’s average weight, so it rises as they grow.">El ganado en terminación come cerca de 2,2–2,5%. Usa el peso promedio de cada lote, así que sube a medida que crecen.</div>
+            </div>
+          </div>
+
+          <div class="ld-section" data-en="Feedings per day">Alimentaciones por día</div>
+          <div class="gs-meals">
+            <button class="ld-step" onclick="gsSetMeals(_gsMeals-1)">−</button>
+            <div class="gs-meals-n" id="gs-meals">2</div>
+            <button class="ld-step" onclick="gsSetMeals(_gsMeals+1)">+</button>
+          </div>
+
+          <div id="gs-split-wrap">
+            <div class="ld-section" data-en="Split of the daily ration">Reparto de la ración diaria</div>
+            <div class="gs-hint" data-en="Cattle eat better when it is cool — a bigger evening load is normal.">El ganado come mejor con fresco — es normal cargar más a la tarde.</div>
+            <div id="gs-splits"></div>
+            <div class="gs-split-foot">
+              <button class="gs-even" onclick="gsEvenSplit()" data-en="Even split">Repartir igual</button>
+              <span class="gs-split-total" id="gs-split-total">100%</span>
+            </div>
+          </div>
+
+          <div class="tx-field-group" style="margin-top:18px;">
+            <label data-en="Load order">Orden de carga</label>
+            <input type="number" inputmode="numeric" id="gs-order">
+          </div>
+
+          <button class="btn-del-sm" id="gs-delete" onclick="gsDelete()" data-en="Delete group">Eliminar grupo</button>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeGroupSheet()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="saveGroupSheet()" data-en="Save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ INGREDIENT SHEET ══
+         Everything about one product: what it is, what is on hand, the two
+         ledger actions with their reasons, and the recent movements that
+         explain what those actions did. -->
+    <div class="tx-sheet-overlay" id="ing-edit-overlay" onclick="if(event.target===this)closeIngredientEditor()">
+      <div class="tx-sheet" style="max-height:84vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="ie-title" data-en-skip>Insumo</div>
+            <div class="fi-sub" id="ie-sub"></div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeIngredientEditor()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="ie-body" style="flex:1;overflow-y:auto;"></div>
+        <div class="tx-sheet-footer ie-footer">
+          <button class="tx-btn-del" onclick="deleteIngredientConfirm()" data-en="Delete">Eliminar</button>
+          <button class="tx-btn-save" onclick="saveIngredientEditor()" data-en="Save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ RATION EDITOR ══
+         One sheet for the whole ration: load order, amounts, and adding a
+         product. Replaces a two-step picker plus a separate per-line sheet. -->
+    <div class="tx-sheet-overlay" id="ration-edit-overlay" onclick="if(event.target===this)closeRationEditor()">
+      <div class="tx-sheet" style="max-height:82vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="re-title" data-en-skip>Ración</div>
+            <div class="fi-sub" id="re-sub"></div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeRationEditor()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="re-body" style="flex:1;overflow-y:auto;"></div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-save" style="flex:1;" onclick="closeRationEditor()" data-en="Done">Listo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ GROUP MEMBERSHIP ══ -->
+    <div class="tx-sheet-overlay" id="group-pens-overlay" onclick="if(event.target===this)closeGroupPens()">
+      <div class="tx-sheet" style="max-height:80vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" id="gp-title">Lotes</div>
+          <div class="tx-sheet-close" onclick="closeGroupPens()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="gp-body" style="flex:1;overflow-y:auto;"></div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-save" style="flex:1;" onclick="closeGroupPens()" data-en="Done">Listo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ RATION BUILDER · step 1: pick products ══ -->
+    <div class="tx-sheet-overlay" id="rb-pick-overlay" onclick="if(event.target===this)closeRbPick()">
+      <div class="tx-sheet" style="max-height:86vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="rb-pick-title">—</div>
+            <div class="fi-sub" data-en="Tick the products this ration uses">Marcá los productos que usa esta ración</div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeRbPick()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="rb-pick-body" style="flex:1;overflow-y:auto;"></div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeRbPick()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" id="rb-next" onclick="rbNext()" data-en="Next">Siguiente</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ RATION BUILDER · step 2: amounts + order ══ -->
+    <div class="tx-sheet-overlay" id="rb-amt-overlay" onclick="if(event.target===this)closeRbAmounts()">
+      <div class="tx-sheet" style="max-height:90vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="rb-amt-title">—</div>
+            <div class="fi-sub" data-en="Set kg per head, drag to set load order">Poné los kg por cabeza, arrastrá para el orden de carga</div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeRbAmounts()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="rb-amt-body" style="flex:1;overflow-y:auto;"></div>
+        <div class="rb-totalbar">
+          <span data-en="Total per head">Total por cabeza</span>
+          <b id="rb-total">0.00</b>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="rbBack()" data-en="Back">Atrás</button>
+          <button class="tx-btn-save" onclick="rbSave()" data-en="Save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ RETURN · pick the pen ══ -->
+    <div class="tx-sheet-overlay" id="ret-pick-overlay" onclick="if(event.target===this)closeReturnPicker()">
+      <div class="tx-sheet" style="max-height:80vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" data-en="Return refused feed">Devolver alimento</div>
+            <div class="fi-sub" data-en="Which lot did it come back from?">¿De qué lote volvió?</div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeReturnPicker()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="ret-body" style="flex:1;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- ══ RETURN · weigh it ══ -->
+    <div class="tx-sheet-overlay" id="ret-weigh-overlay" onclick="if(event.target===this)closeReturnWeigh()">
+      <div class="tx-sheet">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="ret-lot">—</div>
+            <div class="fi-sub" data-en="Tip it into the mixer">Volcalo en el mixer</div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeReturnWeigh()">✕</div>
+        </div>
+        <div class="tx-sheet-body" style="text-align:center;">
+          <div class="feed-big" id="ret-kg">0</div>
+          <div class="feed-big-unit">kg</div>
+          <div class="ret-perhead" id="ret-perhead"></div>
+          <div class="ret-pct" id="ret-pct"></div>
+          <div class="ret-sources" id="ret-sources"></div>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeReturnWeigh()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="confirmReturn()" data-en="Confirm">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MIX STILL RUNNING ══ -->
+    <div class="confirm-overlay" id="mix-warn-overlay">
+      <div class="confirm-box">
+        <div class="confirm-icon">⏱️</div>
+        <div class="confirm-title" data-en="Still mixing">Todavía mezclando</div>
+        <div class="mix-warn-clock" id="mix-warn-left">0:00</div>
+        <div class="confirm-msg" id="mix-warn-sub"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+          <button class="tx-btn-save" onclick="keepMixing()" data-en="Keep mixing">Seguir mezclando</button>
+          <button class="mix-anyway" onclick="unloadAnyway()" data-en="Unload anyway">Descargar igual</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DAILY HEAD COUNT ══ -->
+    <div class="tx-sheet-overlay" id="hc-overlay" onclick="if(event.target===this)closeHeadCount()">
+      <div class="tx-sheet" style="max-height:86vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div style="flex:1;">
+            <div class="tx-sheet-title" id="hc-title">—</div>
+            <div class="fi-sub" data-en="Check the head counts before mixing">Revisá las cabezas antes de mezclar</div>
+          </div>
+          <div class="tx-sheet-close" onclick="closeHeadCount()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="hc-body" style="flex:1;overflow-y:auto;"></div>
+        <div class="hc-totalbar" id="hc-total"></div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeHeadCount()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="confirmHeadCounts()" data-en="Confirm and load">Confirmar y cargar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MIXER NOT EMPTY ══ -->
+    <div class="confirm-overlay" id="res-overlay">
+      <div class="confirm-box">
+        <div class="confirm-icon">⚖️</div>
+        <div class="confirm-title" data-en="Mixer is not empty">El mixer no está vacío</div>
+        <div class="res-kg" id="res-kg">0 kg</div>
+        <div class="confirm-msg" id="res-sub"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+          <button class="res-opt" id="res-carry" onclick="residualIsFeed()">
+            <b data-en="It is leftover feed">Es alimento sobrante</b>
+            <span data-en="Carry it into this load and reduce the targets">Sumarlo a esta carga y bajar los objetivos</span>
+          </button>
+          <button class="res-opt" id="res-zero" onclick="residualIsDrift()">
+            <b data-en="The scale has drifted">La balanza está desviada</b>
+            <span data-en="Re-zero and load the full ration">Poner en cero y cargar la ración completa</span>
+          </button>
+          <button class="mix-anyway" onclick="closeResidual()" data-en="Cancel">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ FEED GROUP PICKER ══ -->
+    <div class="tx-sheet-overlay" id="gpick-overlay" onclick="if(event.target===this)closeGroupPicker()">
+      <div class="tx-sheet" style="max-height:76vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" data-en="Feed group">Grupo</div>
+          <div class="tx-sheet-close" onclick="closeGroupPicker()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="gpick-body" style="flex:1;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- ══ OPERATOR PICKER ══ Same single-select rows as the feed group. -->
+    <div class="tx-sheet-overlay" id="opick-overlay" onclick="if(event.target===this)closeOperatorPicker()">
+      <div class="tx-sheet" style="max-height:76vh;display:flex;flex-direction:column;">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" data-en="Operator">Operario</div>
+          <div class="tx-sheet-close" onclick="closeOperatorPicker()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="opick-body" style="flex:1;overflow-y:auto;"></div>
+        <div class="tx-sheet-footer">
+          <button class="btn-add-open" style="flex:1;margin:0;" onclick="closeOperatorPicker();openMorePanel('sp-operators');openAddOperatorSheet();" data-en="+ New Operator">+ Nuevo operario</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ADD / EDIT MIXER ══ -->
+    <div class="tx-sheet-overlay" id="add-mixer-sheet-overlay" onclick="if(event.target===this)closeAddMixerSheet()">
+      <div class="tx-sheet">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" id="add-mixer-title" data-en="New Mixer">Nuevo mixer</div>
+          <div class="tx-sheet-close" onclick="closeAddMixerSheet()">✕</div>
+        </div>
+        <div class="tx-sheet-body">
+          <input type="hidden" id="ac-edit-id">
+          <div class="tx-field-group">
+            <label data-en="Mixer name *">Nombre del mixer *</label>
+            <input type="text" id="ac-name" placeholder="Mixer 1" data-en-ph="Mixer 1">
+          </div>
+          <div class="tx-field-group">
+            <label id="ac-scale-lbl" data-en="Scale">Báscula</label>
+            <div id="ac-device-status" style="font-size:13px;color:var(--text3);padding:4px 0 8px;"></div>
+            <button class="btn-scan" onclick="scanBluetooth()"><span data-en="Scan for scale">Buscar báscula</span></button>
+            <div class="bt-device-list-inner" id="ac-bt-list"></div>
+          </div>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeAddMixerSheet()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="saveMixer()" data-en="Save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ADD / EDIT OPERATOR ══ -->
+    <div class="tx-sheet-overlay" id="op-sheet-overlay" onclick="if(event.target===this)closeAddOperatorSheet()">
+      <div class="tx-sheet">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" id="op-sheet-title" data-en="New Operator">Nuevo operario</div>
+          <div class="tx-sheet-close" onclick="closeAddOperatorSheet()">✕</div>
+        </div>
+        <div class="tx-sheet-body">
+          <input type="hidden" id="op-edit-id">
+          <div class="tx-field-group">
+            <label id="op-name-label" data-en="Name *">Nombre *</label>
+            <input type="text" id="op-name-input" placeholder="Juan Pérez" data-en-ph="Juan Pérez">
+          </div>
+          <div class="tx-field-group">
+            <label data-en="Role">Rol</label>
+            <input type="text" id="op-role-input" placeholder="Mixero, capataz…" data-en-ph="Mixer driver, foreman…">
+          </div>
+        </div>
+        <div class="tx-sheet-footer">
+          <button class="tx-btn-cancel" onclick="closeAddOperatorSheet()" data-en="Cancel">Cancelar</button>
+          <button class="tx-btn-save" onclick="saveOperatorSheet()" data-en="Save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ WORKER PICKER ══ -->
+    <div class="tx-sheet-overlay" id="worker-picker-overlay" onclick="if(event.target===this)closeWorkerPicker()" style="z-index:700;">
+      <div class="tx-sheet" style="max-height:70vh;">
+        <div class="tx-sheet-header">
+          <div class="tx-sheet-title" data-en="Who is operating?">¿Quién está operando?</div>
+          <div class="tx-sheet-close" onclick="closeWorkerPicker()">✕</div>
+        </div>
+        <div class="tx-sheet-body" id="worker-picker-body" style="padding:8px 0;"></div>
+      </div>
+    </div>
+
+    <!-- Hidden compatibility shims.
+         The ported Harvest subsystems reach for these ids unguarded. Feed has no
+         screen for them, but a missing element throws inside a BLE promise and
+         the whole scale panel dies. Parking them here is cheaper and safer than
+         adding null-guards through 6,400 lines of working code. Each one goes
+         away as its owning subsystem is rewritten for Feed. -->
+    <div style="display:none;" aria-hidden="true">
+      <button id="btn-log"></button>
+      <button id="btn-unload"></button>
+      <input id="api-url-input">
+      <div id="aub-stable-fill"></div>
+      <div id="zero-net"></div>
+      <div id="device-role-sub"></div>
+      <div id="seg-role"></div>
+      <div id="dfu-sub"></div>
+      <input id="au-drop-kg-input">
+      <div id="au-drop-unit-lbl"></div>
+      <div id="f-crop"></div>
+      <div id="tlb-fill"></div>
+      <div id="truck-load-bar"></div>
+            <div id="profile-pic-overlay"></div><button id="profile-remove-btn"></button>
+      <div id="pwd-reset-overlay"></div><input id="app-reset-password"><input id="app-reset-confirm">
+      <div id="in-app-signin-overlay"></div><input id="ias-email"><input id="ias-password">
+      <input id="l-name"><input id="l-pin">
+      <input id="reset-password"><input id="reset-confirm"><div id="reset-form"></div>
+    </div>
+  </div><!-- /.app-inner -->
+
+  <div class="tabbar">
+    <button class="tab-btn active" id="tab-display" onclick="showTab('display')">
+      <div class="tab-icon-svg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="10" rx="1.5"/><rect x="13" y="3" width="8" height="6" rx="1.5"/><rect x="3" y="15" width="8" height="6" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/></svg></div>
+      <div class="tab-label">Principal</div>
+    </button>
+    <button class="tab-btn" id="tab-tx" onclick="showTab('tx')">
+      <div class="tab-icon-svg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/><circle cx="18.5" cy="18" r="2.5"/></svg></div>
+      <div class="tab-label">Descargas</div>
+    </button>
+    <button class="tab-btn" id="tab-stock" onclick="showTab('stock')">
+      <div class="tab-icon-svg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V11l3-4.5L12 4.5l6 2L21 11v9Z"/><path d="M3 11h18"/><path d="M9.5 20v-5h5v5"/></svg></div>
+      <div class="tab-label">Insumos</div>
+    </button>
+    <button class="tab-btn" id="tab-more" onclick="showTab('more')">
+      <div class="tab-icon-svg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/></svg></div>
+      <div class="tab-label">Más</div>
+    </button>
+  </div>
+</div>
+
+<!-- ══ SHARED OVERLAYS ══ -->
+<div class="farm-sel-sheet-overlay" id="farm-sel-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="farm-sel-sheet">
+    <div class="farm-sel-header"><div class="farm-sel-title" data-en="Select lots">Seleccionar lotes</div><div class="farm-sel-close" onclick="document.getElementById('farm-sel-overlay').classList.remove('open')">✕</div></div>
+    <div class="farm-sel-body" id="farm-sel-body"></div>
+  </div>
+</div>
+
+<!-- Receive a delivery: several products off one truck, one invoice. -->
+<div class="tx-sheet-overlay" id="delivery-overlay" onclick="if(event.target===this)closeDeliverySheet()">
+  <div class="tx-sheet" style="max-height:88vh;display:flex;flex-direction:column;">
+    <div class="tx-sheet-header">
+      <div class="tx-sheet-title" data-en="Receive a delivery">Registrar una entrega</div>
+      <div class="tx-sheet-close" onclick="closeDeliverySheet()">✕</div>
+    </div>
+    <div class="tx-sheet-body" style="flex:1;overflow-y:auto;">
+      <div class="tx-field-group"><label data-en="Supplier">Proveedor</label>
+        <input type="text" id="dl-supplier"></div>
+
+      <div class="gp-sec-lbl" data-en="Products">Productos</div>
+      <div id="dl-lines"></div>
+      <button type="button" class="dl-add" onclick="_dlAddLine()" data-en="+ Add product">+ Agregar producto</button>
+      <div class="dl-total" id="dl-total"></div>
+
+      <div class="gp-sec-lbl" data-en="Invoice">Factura</div>
+      <div id="dl-photo"></div>
+
+      <div class="tx-field-group" style="margin-top:14px;"><label data-en="Note">Nota</label>
+        <input type="text" id="dl-note"></div>
+    </div>
+    <div class="tx-sheet-footer">
+      <button class="tx-btn-save" style="flex:1;" onclick="saveDelivery()" data-en="Save delivery">Guardar entrega</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice photo viewer. Full-bleed: the point is to read the numbers on
+     the paper, so the image gets the whole screen. -->
+<div class="inv-view-overlay" id="inv-view-overlay" onclick="closeInvoiceViewer()">
+  <img id="inv-view-img" alt="">
+  <div class="inv-view-close" onclick="closeInvoiceViewer()">✕</div>
+</div>
+
+<!-- Two-drum time picker. Replaces <input type="time">, whose native Android
+     dial is a different visual language and a slower one. -->
+<div class="tw-overlay" id="tw-overlay" onclick="if(event.target===this)closeTimeWheel()">
+  <div class="tw-sheet">
+    <div class="tw-head">
+      <div class="tw-title" id="tw-title" data-en-skip>Hora</div>
+      <div class="tw-value" id="tw-value">06:00</div>
+    </div>
+    <div class="tw-body">
+      <div class="tw-col-wrap"><div class="tw-col" id="tw-col-h"></div></div>
+      <div class="tw-colon">:</div>
+      <div class="tw-col-wrap"><div class="tw-col" id="tw-col-m"></div></div>
+      <div class="tw-band"></div>
+    </div>
+    <div class="tw-foot">
+      <button class="tw-btn" onclick="closeTimeWheel()" data-en="Cancel">Cancelar</button>
+      <button class="tw-btn ok" onclick="_twConfirm()" data-en="Done">Listo</button>
+    </div>
+  </div>
+</div>
+
+<div class="wheel-overlay" id="wheel-overlay" onclick="if(event.target===this)_wheelClose()">
+  <div class="wheel-sheet">
+    <div class="wheel-header"><div class="wheel-title" id="wheel-title">Seleccionar</div></div>
+    <div class="wheel-body" id="wheel-body-single"><div class="wheel-col"><div class="wheel-col-inner" id="wheel-col-main"></div></div></div>
+    <div class="wheel-body" id="wheel-body-dual" style="display:none;">
+      <div class="wheel-col"><div class="wheel-col-inner" id="wheel-col-farm"></div></div>
+      <div class="wheel-divider"></div>
+      <div class="wheel-col"><div class="wheel-col-inner" id="wheel-col-field"></div></div>
+    </div>
+    <button class="wheel-custom-btn" id="wheel-custom-btn" style="display:none;" onclick="_wheelCustom()">Otro</button>
+    <button class="wheel-add-btn" id="wheel-add-btn" style="display:none;" onclick="_wheelAddNew()" data-en="+ New">+ Nuevo</button>
+    <button class="wheel-confirm-btn" onclick="_wheelConfirm()">Confirmar</button>
+  </div>
+</div>
+
+<!-- Generic add/edit sheet, reused by lots, ingredients, rations and cycles -->
+<div class="tx-sheet-overlay" id="entity-sheet-overlay" onclick="if(event.target===this)closeEntitySheet()">
+  <div class="tx-sheet">
+    <div class="tx-sheet-header"><div class="tx-sheet-title" id="entity-sheet-title" data-en="New">Nuevo</div><div class="tx-sheet-close" onclick="closeEntitySheet()">✕</div></div>
+    <div class="tx-sheet-body" id="entity-sheet-body"></div>
+    <div class="tx-sheet-footer">
+      <button class="tx-btn-cancel" onclick="closeEntitySheet()" data-en="Cancel">Cancelar</button>
+      <button class="tx-btn-save" id="entity-sheet-save" data-en="Save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirm-icon">⚠️</div>
+    <div class="confirm-title" id="confirm-title" data-en="Are you sure?">¿Estás seguro?</div>
+    <div class="confirm-msg" id="confirm-msg"></div>
+    <div class="confirm-btns">
+      <button class="confirm-btn-cancel" onclick="confirmResolve(false)" data-en="Cancel">Cancelar</button>
+      <button class="confirm-btn-ok" onclick="confirmResolve(true)" data-en="Delete">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div class="sleep-overlay" id="sleep-overlay">
+  <div class="sleep-box">
+    <div class="sleep-title" id="sleep-title-txt" data-en="Scale in Sleep Mode">Báscula en reposo</div>
+    <div class="sleep-sub" id="sleep-sub-txt" data-en="The scale is conserving battery after a period of inactivity. Tap Wake to resume weighing.">La báscula está ahorrando batería. Tocá Despertar para seguir pesando.</div>
+    <button class="btn-gold" onclick="_psWake()" data-en="Wake">Despertar</button>
+  </div>
+</div>
+
+<div class="sleep-overlay" id="auth-block">
+  <div class="sleep-box">
+    <div class="sleep-title" id="authblock-title" data-en="Unrecognized Scale">Báscula no reconocida</div>
+    <div class="sleep-sub" id="authblock-sub" data-en="This scale could not be verified as genuine Virtus hardware.">No se pudo verificar que sea hardware Virtus auténtico.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="remote-mode-bar" style="display:none;"></div>
+
+<!-- ══ SCRIPTS — load order matters: infra, then model, then UI, then boot ══ -->
+<script src="./js/00-platform.js"></script>
+<script src="./js/19-shims.js"></script>
+<script src="./js/01-i18n.js"></script>
+<script src="./js/18-i18n-feed.js"></script>
+<script src="./js/02-storage.js"></script>
+<script src="./js/08-supabase-auth.js"></script>
+<script src="./js/03-nav-profile.js"></script>
+<script src="./js/05-units.js"></script>
+<script src="./js/15-toast.js"></script>
+<script src="./js/20-model.js"></script>
+<script src="./js/09-sync.js"></script>
+<script src="./js/04-scale-ble.js"></script>
+<script src="./js/06-device-mixer.js"></script>
+<script src="./js/07-operators.js"></script>
+<script src="./js/10-wheel.js"></script>
+<script src="./js/11-profile-pic.js"></script>
+<script src="./js/12-mode-remote.js"></script>
+<script src="./js/13-gps.js"></script>
+<script src="./js/14-queue.js"></script>
+<script src="./js/21-feed-ui.js"></script>
+<script src="./js/22-manage.js"></script>
+<script src="./js/24-bunk.js"></script>
+<script src="./js/25-home.js"></script>
+<script src="./js/27-lot-detail.js"></script>
+<script src="./js/28-groups.js"></script>
+<script src="./js/29-ration-builder.js"></script>
+<script src="./js/30-returns.js"></script>
+<script src="./js/31-mixtimer.js"></script>
+<script src="./js/32-residual.js"></script>
+<script src="./js/33-headcount.js"></script>
+<script src="./js/34-reorder.js"></script>
+<script src="./js/35-timewheel.js"></script>
+<script src="./js/36-invoice.js"></script>
+<script src="./js/37-delivery.js"></script>
+<script src="./js/26-sim.js"></script>
+<script src="./js/23-boot.js"></script>
+</body>
+</html>

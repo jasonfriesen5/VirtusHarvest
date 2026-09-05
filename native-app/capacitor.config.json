@@ -1,0 +1,12 @@
+{
+  "appId": "com.virtusfeed.app",
+  "appName": "Virtus Feed",
+  "webDir": "www",
+  "backgroundColor": "#ffffff",
+  "ios": {
+    "backgroundColor": "#ffffff"
+  },
+  "android": {
+    "backgroundColor": "#ffffff"
+  }
+}

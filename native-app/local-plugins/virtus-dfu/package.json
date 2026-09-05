@@ -1,0 +1,26 @@
+{
+  "name": "virtus-dfu",
+  "version": "1.0.0",
+  "description": "Nordic Secure DFU for Virtus Feed — thin Capacitor wrapper over Nordic's own DFU libraries (IOS-DFU-Library on iOS, Android-DFU-Library on Android).",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "Package.swift"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,2069 @@
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --green:#1F663D;--green-mid:#31995D;--green-light:#E8F5EE;
+  --amber:#A85E00;--amber-light:#FEF0CC;
+  --red:#B03020;--red-light:#FDECEA;
+  --blue-light:rgba(56,100,200,0.12);
+  --bg-top:#F7FDFB;--bg-bot:#5CDB93;
+  --bg2:#E2F9ED;--surface:#FFFFFF;--surface2:#ECFBF3;
+  --border:rgba(26,134,67,0.14);--border2:rgba(26,134,67,0.24);
+  --text:#072313;--text2:rgba(7,35,19,0.62);--text3:rgba(7,35,19,0.38);
+  --accent:#20A44C;--accent-dark:#14662F;
+  --tabbar-h:68px;--topbar-h:56px;
+  --radius:14px;--radius-lg:20px;--radius-xl:28px;
+  --dark-surface:#FFFFFF; --dark-surface2:#ECFBF3; --dark-glass:rgba(255,255,255,0.92);
+}
+/* A portrait tablet has height to spare and is held further away than a phone, so
+   give the tab bar more room. Width gate keeps phones (portrait or not) untouched. */
+@media (orientation:portrait) and (min-width:600px){
+  :root{--tabbar-h:92px;}
+  .tab-icon-svg{width:32px;height:32px;}
+  .tab-label{font-size:11px;}
+}
+html,body{height:100%;overflow:hidden;touch-action:manipulation;}
+body{
+  font-family:'Inter',sans-serif;color:var(--text);font-size:16px;
+  -webkit-tap-highlight-color:transparent;
+  /* No background-attachment:fixed — body never scrolls (overflow:hidden above),
+     so it bought nothing visually, but the fixed-background compositing path is a
+     known cause of large areas failing to paint in Android WebView (topbar/tabbar
+     laid out correctly yet rendering blank on-device). */
+  background:linear-gradient(180deg,#F7FDFA 0%,#EFFAF4 55%,#E5F6EC 100%);
+}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;}
+.screen.active{display:flex;}
+/* Cap the app to a phone/tablet-width column on wide desktop screens and
+   center it. Without this, full-screen-width backdrop-filter surfaces
+   (.card, .info-rows, etc.) can hit a Chromium/macOS compositor limit on
+   very wide windows and render truncated ("cut off") — capping the width
+   keeps every blurred surface well under that threshold, and also just
+   looks better than a mobile UI stretched edge-to-edge on a monitor. */
+#s-app{max-width:760px;margin-left:auto;margin-right:auto;}
+/* Native shell (Android/iOS app): the app IS the whole screen, so the reading-width
+   cap above only produces dead margins on a tablet. Web deploy keeps the cap. */
+.native-shell #s-app,
+.native-shell .sub-panel,
+.native-shell .field-detail-panel{max-width:none;}
+/* Same background as body — the auth screen used to be a saturated yellow
+   gradient of its own, which made signing in feel like a separate product from
+   the app behind it. */
+#s-login{background:linear-gradient(180deg,#F7FDFA 0%,#EFFAF4 55%,#E5F6EC 100%);align-items:center;justify-content:center;padding:32px 24px;overflow-y:auto;position:fixed;inset:0;z-index:1000;}
+.signin-brand{text-align:center;margin-bottom:26px;line-height:1.05;}
+.signin-brand-name{font-size:38px;font-weight:800;letter-spacing:0.16em;color:var(--text);}
+.signin-brand-sub{font-size:14px;font-weight:600;letter-spacing:0.34em;color:#20A44C;margin-top:4px;}
+#s-login::before{content:'';position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(49,153,93,0.1) 0%,transparent 65%);top:-80px;right:-80px;pointer-events:none;}
+.login-card{width:100%;max-width:400px;background:#fff;border-radius:var(--radius-xl);border:1px solid rgba(32,168,98,0.2);padding:40px 32px;position:relative;z-index:1;box-shadow:0 8px 40px rgba(29,151,79,0.15);}
+.login-logo{font-family:'Inter',sans-serif;font-size:26px;font-weight:800;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:10px;}
+.logo-leaf{width:34px;height:34px;background:#5CDB93;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:2px solid rgba(29,151,79,0.3);}
+.logo-leaf::after{content:'';transform:rotate(45deg);font-size:16px;display:block;}
+.login-sub{font-size:14px;color:var(--text3);margin-bottom:28px;margin-top:6px;}
+.fg{margin-bottom:16px;}
+.fg label{font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:7px;}
+.fg input,.fg select{width:100%;padding:13px 15px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:15px;color:var(--text);outline:none;transition:border-color 0.2s;appearance:none;-webkit-appearance:none;}
+.fg input::placeholder{color:var(--text3);}
+.fg input:focus,.fg select:focus{border-color:var(--accent);}
+.btn-login{width:100%;padding:15px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;border:none;border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:16px;font-weight:700;cursor:pointer;margin-top:6px;transition:background 0.2s,transform 0.1s;box-shadow:0 4px 16px rgba(29,151,73,0.25);}
+.btn-login:active{transform:scale(0.98);background:#1B8D44;}
+.login-note{font-size:12px;color:var(--text3);text-align:center;margin-top:12px;}
+/* ── Liquid glass: frosted top bar ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;padding:0 18px;
+  /* box-sizing is border-box globally, so the content area stays --topbar-h. */
+  padding-top:env(safe-area-inset-top,0px);
+  height:calc(var(--topbar-h) + env(safe-area-inset-top,0px));
+  background:linear-gradient(180deg,rgba(255,255,255,0.92) 0%,rgba(248,254,251,0.82) 100%);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);
+  backdrop-filter:blur(22px) saturate(180%);
+  border-bottom:1px solid rgba(255,255,255,0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(70,190,113,0.10),
+    0 4px 16px rgba(33,127,67,0.07);
+  flex-shrink:0;z-index:20;position:relative;
+}
+.topbar-logo{font-family:'Inter',sans-serif;font-size:17px;font-weight:800;color:var(--text);}
+.topbar-right{display:flex;align-items:center;gap:8px;}
+/* Tap feedback for the sync controls: press-in on touch, spin while running. */
+.sync-circle{transition:transform 0.12s ease;}
+.sync-circle:active{transform:scale(0.90);}
+.sync-circle.syncing{animation:vh-sync-spin 0.9s linear infinite;}
+@keyframes vh-sync-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.status-pill{
+  display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;
+  font-size:11px;font-weight:600;letter-spacing:0.03em;
+  border:1px solid rgba(255,255,255,0.7);
+  -webkit-backdrop-filter:blur(12px) saturate(160%);
+  backdrop-filter:blur(12px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.85),0 1px 3px rgba(33,127,67,0.10);
+}
+.pill-offline{background:rgba(192,57,43,0.1);color:#B03020;border-color:rgba(192,57,43,0.2);}
+.pill-online{background:rgba(49,153,93,0.1);color:#1F663D;border-color:rgba(49,153,93,0.2);}
+.pill-bt{background:rgba(56,100,200,0.1);color:#185FA5;border-color:rgba(56,100,200,0.2);}
+.pill-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+/* ── Liquid-glass tab bar: frosted white, layered depth ── */
+.tabbar{
+  /* Grow by the home-indicator inset rather than eating into the bar: with
+     box-sizing:border-box a fixed height minus padding squeezed the buttons and
+     clipped the labels. Content area stays --tabbar-h. */
+  display:flex;align-items:stretch;
+  height:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg,
+    rgba(255,255,255,0.95) 0%,
+    rgba(247,254,249,0.90) 55%,
+    rgba(239,251,243,0.93) 100%);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);
+  backdrop-filter:blur(22px) saturate(180%);
+  border-top:1px solid rgba(255,255,255,0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(70,190,113,0.07),
+    0 -10px 30px rgba(25,105,55,0.10),
+    0 -2px 8px rgba(25,105,55,0.05);
+  flex-shrink:0;z-index:100;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:env(safe-area-inset-left,0px);
+  padding-right:env(safe-area-inset-right,0px);
+  position:relative;
+}
+.tab-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  border:none;background:none;cursor:pointer;
+  color:#1C1710;
+  font-family:'Inter',sans-serif;position:relative;
+  -webkit-tap-highlight-color:transparent;
+  transition:color .18s ease,transform .18s ease;
+}
+.tab-btn:active{transform:scale(0.94);}
+.tab-btn.active{color:#030F08;}
+/* raised glass capsule behind the active tab */
+.tab-btn.active::after{
+  content:'';position:absolute;
+  left:50%;top:50%;transform:translate(-50%,-50%);
+  width:calc(100% - 9px);height:calc(100% - 13px);
+  border-radius:16px;
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255,255,255,0.80),
+    inset 0 -2px 3px rgba(25,120,60,0.22),
+    0 3px 9px rgba(35,135,70,0.30),
+    0 1px 2px rgba(35,135,70,0.22);
+  z-index:0;pointer-events:none;
+}
+.tab-btn > *{position:relative;z-index:1;}
+.tab-icon{font-size:22px;line-height:1;transition:transform 0.15s;}
+.tab-btn.active .tab-icon{transform:scale(1.1);}
+.tab-label{font-size:9px;font-weight:600;letter-spacing:0.02em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.app-inner{flex:1;overflow:hidden;position:relative;}
+.tab-page{position:absolute;inset:0;overflow-y:auto;display:none;padding:14px 14px 10px;}
+.tab-page.active{display:block;}
+/* Display tab: on a tall screen (tablet) the content stacks at natural height and
+   leaves a large dead gap above the tabbar. Laying it out as a flex column lets the
+   scale panel — the element worth enlarging — absorb the leftover height instead.
+   Every child is flex-shrink:0 so that on a short phone screen nothing gets squashed
+   and the page simply scrolls as before. */
+#tp-weigh.active{display:flex;flex-direction:column;}
+#tp-weigh > *{flex-shrink:0;}
+/* Share the leftover height. The scale panel takes only a small share — given most
+   of it, the Tare/Clear/Unload buttons beside it stretch into slabs. The entry form
+   gets the largest share, the picker rows above it the smallest. */
+#tp-weigh > .scale-row-wrap{flex-grow:1;}
+#tp-weigh > .info-rows{flex-grow:1;}
+#tp-weigh > .entry-form-panel{flex-grow:1.4;}
+/* The rows share whatever the container grew by — without this the card grows but
+   the rows don't, leaving dead white space inside it. min-height keeps them safe. */
+#tp-weigh > .info-rows > .info-row{flex:1;}
+/* Same idea for the entry form: pass the growth down to the fields themselves, or
+   the card just gains empty padding. flex-basis stays auto so nothing shrinks when
+   the screen is short and the page needs to scroll instead. */
+#tp-weigh > .entry-form-panel{display:flex;flex-direction:column;justify-content:center;}
+#tp-weigh > .entry-form-panel .ff{display:flex;flex-direction:column;}
+/* Tablet only. Letting the fields absorb the growth directly inflated them to 3x
+   height, so they get a fixed modest bump and the rest becomes row spacing. Gated
+   by width because on a phone the extra height pushed the page into scrolling. */
+@media (min-width:600px){
+  #tp-weigh > .entry-form-panel{gap:14px;}
+  #tp-weigh > .entry-form-panel .ff > input,
+  #tp-weigh > .entry-form-panel .ff > div{min-height:58px;display:flex;align-items:center;}
+}
+/* The panel still grows some, so scale the readout to match — otherwise it is left
+   stranded at the bottom of a half-empty box. Phones never reach this height. */
+@media (min-height:820px){
+  /* Bump the base only — setting font-size here would beat the digit-count
+     shrink (higher specificity) and reintroduce the overflow on long values. */
+  #tp-weigh .scale-main-weight{--wt-base:72px;align-items:center;padding-bottom:0;}
+}
+.tab-page::-webkit-scrollbar{width:3px;}
+.tab-page::-webkit-scrollbar-thumb{background:rgba(29,151,79,0.2);border-radius:2px;}
+/* ── Liquid glass: frosted card surface ── */
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(250,254,251,0.88) 100%);
+  -webkit-backdrop-filter:blur(18px) saturate(170%);
+  backdrop-filter:blur(18px) saturate(170%);
+  border-radius:var(--radius-lg);
+  border:1px solid rgba(255,255,255,0.9);
+  overflow:hidden;margin-bottom:12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(55,175,101,0.07),
+    0 6px 20px rgba(35,135,73,0.11),
+    0 1px 4px rgba(35,135,73,0.07);
+}
+.card:last-child{margin-bottom:0;}
+.card-head{padding:13px 17px 10px;border-bottom:1px solid rgba(32,168,98,0.1);display:flex;align-items:center;justify-content:space-between;}
+.card-title{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;}
+.card-body{padding:14px 17px;}
+.worker-strip{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.w-name{font-family:'Inter',sans-serif;font-size:15px;font-weight:700;}
+.w-farm{font-size:11px;color:var(--text3);margin-top:2px;}
+.session-kg{font-family:'Inter',sans-serif;font-size:20px;font-weight:800;color:#A85E00;}
+.session-lbl{font-size:10px;color:var(--text3);text-align:right;}
+.queue-banner{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#FEF0CC;border-radius:12px;border:1px solid rgba(29,151,73,0.2);margin-bottom:12px;}
+.queue-banner.hidden{display:none;}
+.queue-count{font-family:'Inter',sans-serif;font-size:18px;font-weight:700;color:#A85E00;}
+.queue-text{font-size:12px;color:#7A4500;margin-left:7px;}
+.btn-sync{padding:6px 13px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+.btn-sync:disabled{background:#5AC983;cursor:not-allowed;}
+.scale-display{text-align:center;padding:18px 16px 14px;}
+.scale-unit{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px;}
+.scale-weight{font-family:'Inter',sans-serif;font-size:60px;font-weight:400;color:var(--text);line-height:1;letter-spacing:0;transition:color 0.2s;}
+.scale-weight.reading{color:#A85E00;}
+.stable-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;background:var(--surface2);border-radius:20px;font-size:11px;color:var(--text3);border:1px solid var(--border);}
+.stable-dot{width:9px;height:9px;border-radius:50%;background:var(--text3);}
+.stable-dot.ok{background:var(--green-mid);}
+.scale-hint{font-size:12px;color:var(--text3);margin-top:6px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.form-row.one{grid-template-columns:1fr;}
+.ff label{font-size:10px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:5px;}
+.ff select,.ff input{width:100%;padding:11px 13px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none;appearance:none;-webkit-appearance:none;transition:border-color 0.2s;}
+.ff select:focus,.ff input:focus{border-color:var(--accent);}
+.ff input::placeholder{color:var(--text3);}
+/* ── Liquid glass: primary action button with depth ── */
+.btn-log{
+  width:100%;padding:17px;
+  background:linear-gradient(180deg,#4BD57C 0%,#D4930A 55%,#1F9D4E 100%);
+  color:#fff;border:1px solid rgba(255,255,255,0.42);
+  border-radius:var(--radius-lg);
+  font-family:'Inter',sans-serif;font-size:17px;font-weight:700;cursor:pointer;
+  transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px;
+  text-shadow:0 1px 1px rgba(20,100,46,0.30);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255,255,255,0.55),
+    inset 0 -2px 4px rgba(20,100,46,0.28),
+    0 6px 20px rgba(29,151,73,0.28),
+    0 2px 6px rgba(29,151,73,0.20);
+}
+.btn-log:active{transform:scale(0.98);background:#1B8D44;}
+.btn-log:disabled{background:#80D4A6;color:rgba(255,255,255,0.6);cursor:not-allowed;transform:none;box-shadow:none;}
+.log-list{display:flex;flex-direction:column;gap:8px;padding:10px 14px;}
+.log-item{display:flex;align-items:center;justify-content:space-between;padding:11px 12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);}
+.log-main{font-size:13px;font-weight:600;color:var(--text);}
+.log-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.log-wt{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:#A85E00;}
+.log-time{font-size:10px;color:var(--text3);text-align:right;margin-top:1px;}
+.log-sync{font-size:10px;margin-top:1px;}
+.synced{color:var(--green-mid);}.pending{color:#A85E00;}
+.empty-log{text-align:center;padding:28px;color:var(--text3);font-size:13px;}
+.section-lbl{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin:14px 0 8px 2px;}
+.section-lbl:first-child{margin-top:2px;}
+.farm-list,.field-list{display:flex;flex-direction:column;gap:7px;}
+/* Trucks stay two-up on a tablet — their cards are tall enough that a single
+   column wastes most of the width. Farms, Fields and Destinations are one per
+   row by preference: they read better as a plain list. Phones: all single. */
+@media (min-width:700px){
+  #trucks-list{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start;
+  }
+  /* The truck cards are built in JS with their own bottom margin; the grid gap
+     already spaces them, so the margin would double it. */
+  #trucks-list > .card{margin-bottom:0;}
+  /* Empty-state placeholder is a lone child — span both columns so it stays centred. */
+  #trucks-list > :only-child{grid-column:1/-1;}
+}
+.farm-item,.field-item{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;min-height:82px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 1px 4px rgba(29,151,79,0.05);}
+.farm-item.active,.field-item.active{border-color:#42D37F;background:rgba(66,211,127,0.10);}
+.fi-left{display:flex;align-items:center;gap:10px;}
+.fi-dot{width:9px;height:9px;border-radius:50%;background:var(--surface2);border:2px solid var(--border2);flex-shrink:0;transition:all 0.2s;}
+.farm-item.active .fi-dot,.field-item.active .fi-dot{background:#42D37F;border-color:#42D37F;}
+.fi-name{font-size:15px;font-weight:700;color:var(--text);}
+.farm-item.active .fi-name,.field-item.active .fi-name{color:var(--text);font-weight:700;}
+.fi-sub{font-size:13px;font-weight:600;color:var(--text);margin-top:1px;}
+.field-group-divider{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text3);margin:14px 2px 6px;}
+.field-item.dim{opacity:0.62;}
+.fi-right{display:flex;align-items:center;gap:6px;}
+.btn-sel{display:none;padding:5px 12px;border:1px solid #20A44C;background:transparent;color:#20A44C;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;font-family:'Inter',sans-serif;}
+.btn-sel:active{background:rgba(39,171,80,0.1);}
+.btn-sel.selected{background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;}
+.btn-del-sm{width:28px;height:28px;background:rgba(176,48,32,0.08);border:1px solid rgba(176,48,32,0.18);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;color:#B03020;}
+.add-form{background:#ECFBF3;border:1.5px dashed rgba(39,171,80,0.35);border-radius:var(--radius);padding:13px;margin-top:8px;display:none;}
+.add-form.open{display:block;}
+.add-form-row{display:flex;gap:8px;align-items:stretch;}
+.add-form input{flex:1;padding:10px 13px;background:#fff;border:1.5px solid var(--border);border-radius:10px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none;transition:border-color 0.2s;}
+.add-form input:focus{border-color:var(--accent);}
+.add-form input::placeholder{color:var(--text3);}
+/* Reusable gold button — matches the active tab-bar capsule */
+.btn-gold{
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);
+  color:#09311A;
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255,255,255,0.80),
+    inset 0 -2px 3px rgba(25,120,60,0.22),
+    0 3px 9px rgba(35,135,70,0.30),
+    0 1px 2px rgba(35,135,70,0.22);
+  font-family:'Inter',sans-serif;font-weight:700;cursor:pointer;
+  transition:filter 0.12s,transform 0.12s;
+}
+.btn-gold:active{transform:scale(0.97);filter:brightness(0.96);}
+.btn-gold-sm{border-radius:10px;padding:6px 14px;font-size:13px;}
+.btn-gold-lg{border-radius:var(--radius);padding:14px;font-size:15px;}
+.btn-add-confirm{padding:10px 16px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;border:1px solid rgba(255,255,255,0.55);box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),0 3px 9px rgba(35,135,70,0.30);border-radius:10px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.btn-add-confirm:active{filter:brightness(0.96);}
+/* ── GOLD: add-transaction, add pickers & the login CTA (the + Add pills,
+      Tare/Clear/Unload and tab bar are gold via their own rules). ── */
+.signin-btn,.fdp-fab-btn,.wheel-add-btn,.wheel-confirm-btn{
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%)!important;
+  color:#09311A!important;
+  border:1px solid rgba(255,255,255,0.55)!important;
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),0 3px 9px rgba(35,135,70,0.30)!important;
+  text-shadow:none!important;
+}
+/* ── WHITE GLASSY: every other button ── */
+.btn-scan,.btn-logout,.btn-small-green,.btn-conn,.fdp-tx-edit,.fdp-tx-del,.crop-modal-btn,.confirm-btn-cancel,.wheel-custom-btn,
+.mode-btn:not(.active),
+.log-gps-btn,.fdp-tx-gps,.field-picker-btn,.tlb-empty-btn,.seg-btn.active,
+.fmap-locate-btn,.fmap-draw-btn,.fdp-edit-btn,
+.cal-calc-btn,.btn-sel,.btn-edit-sm,.tx-btn-cancel,.etb-cancel,
+#dev-ota-btn,#tdp-edit-btn,#profile-auth-btn,#lp-skip-btn{
+  background:linear-gradient(180deg,rgba(255,255,255,0.92),rgba(242,251,245,0.80))!important;
+  -webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);
+  color:var(--text)!important;
+  border:1px solid rgba(255,255,255,0.9)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 2px 8px rgba(33,127,67,0.10)!important;
+  text-shadow:none!important;
+}
+.btn-add-open{width:100%;margin-top:8px;padding:11px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);border:1px solid rgba(255,255,255,0.55);box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),0 3px 9px rgba(35,135,70,0.30);border-radius:var(--radius);color:#09311A;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.15s;}
+.btn-add-open:active{filter:brightness(0.96);}
+.profile-block{padding:15px 17px;display:flex;align-items:center;gap:13px;}
+.profile-avatar{width:46px;height:46px;border-radius:50%;background:#D4930A;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:17px;font-weight:800;color:#fff;flex-shrink:0;}
+.profile-name{font-size:15px;font-weight:600;color:var(--text);}
+.profile-farm{font-size:11px;color:var(--text3);margin-top:2px;}
+.btn-logout{margin-left:auto;padding:7px 13px;background:rgba(176,48,32,0.08);border:1px solid rgba(176,48,32,0.2);border-radius:8px;color:#B03020;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+.btn-logout:active{background:rgba(176,48,32,0.15);}
+.bt-device-list-inner{display:flex;flex-direction:column;gap:8px;padding:10px 14px 14px;}
+.bt-device{display:flex;align-items:center;justify-content:space-between;padding:12px 13px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);}
+.bt-device.paired{border-color:rgba(56,100,200,0.3);background:rgba(56,100,200,0.05);}
+.btd-left{display:flex;align-items:center;gap:10px;}
+.btd-icon{font-size:20px;}
+.btd-name{font-size:13px;font-weight:600;color:var(--text);}
+.btd-addr{font-size:10px;color:var(--text3);margin-top:1px;}
+.btd-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:rgba(56,100,200,0.12);color:#185FA5;margin-left:6px;}
+.btn-bt-action{padding:6px 13px;border:1.5px solid rgba(56,100,200,0.35);background:transparent;color:#185FA5;border-radius:8px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;}
+.btn-bt-action:active{background:var(--blue-light);}
+.btn-bt-action.disconnect{border-color:rgba(176,48,32,0.35);color:#B03020;}
+.btn-scan{width:calc(100% - 28px);margin:0 14px 10px;padding:12px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.15s;}
+.btn-scan:active{background:var(--surface);}
+.scan-spinner{display:none;width:14px;height:14px;border:2px solid var(--border2);border-top-color:#20A44C;border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.zero-block{padding:14px 17px;display:flex;flex-direction:column;gap:12px;}
+.zero-readings{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.zero-box{background:var(--surface2);border-radius:12px;padding:12px 14px;text-align:center;border:1px solid var(--border);}
+.zero-box.tared{border-color:rgba(49,153,93,0.3);background:rgba(49,153,93,0.06);}
+.zero-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;}
+.zero-val{font-family:'Inter',sans-serif;font-size:24px;font-weight:600;color:var(--text);}
+.zero-val.tared-val{color:var(--green-mid);}
+.btn-zero{width:100%;padding:14px;background:rgba(39,171,80,0.1);border:1.5px solid rgba(39,171,80,0.35);border-radius:var(--radius);color:var(--amber);font-family:'Inter',sans-serif;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.15s;}
+.btn-zero:active{background:rgba(39,171,80,0.2);}
+.btn-zero:disabled{opacity:0.38;cursor:not-allowed;}
+.btn-clear-zero{width:100%;padding:11px;background:rgba(176,48,32,0.07);border:1px solid rgba(176,48,32,0.18);border-radius:var(--radius);color:#B03020;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.15s;}
+.btn-clear-zero:active{background:rgba(176,48,32,0.13);}
+.zero-note{font-size:11px;color:var(--text3);text-align:center;}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:13px 17px;border-bottom:1px solid var(--border);}
+.setting-row:last-child{border-bottom:none;}
+.sr-label{font-size:14px;font-weight:500;color:var(--text);}
+.sr-sub{font-size:12px;color:var(--text2);margin-top:2px;}
+.btn-conn{padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;}
+.btn-small-green{padding:6px 14px;background:linear-gradient(180deg,#4FB878 0%,#31995D 55%,#28854F 100%);border:1px solid rgba(255,255,255,0.35);box-shadow:inset 0 1px 1px rgba(255,255,255,0.45),inset 0 -1.5px 3px rgba(23,77,46,0.28),0 3px 10px rgba(40,133,79,0.26);text-shadow:0 1px 1px rgba(23,77,46,0.30);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;}
+.btn-small-red{padding:6px 14px;background:rgba(176,48,32,0.08);border:1px solid rgba(176,48,32,0.2);border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#B03020;cursor:pointer;}
+.info-ico{display:inline-block;margin-left:5px;color:#20A44C;font-size:13px;font-weight:700;cursor:pointer;user-select:none;}
+/* ── Liquid glass: toast messages ── */
+.toast{
+  position:fixed;bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 12px);left:50%;
+  transform:translateX(-50%) translateY(10px);
+  background:linear-gradient(180deg,rgba(255,255,255,0.97) 0%,rgba(245,252,247,0.93) 100%);
+  -webkit-backdrop-filter:blur(26px) saturate(180%);
+  backdrop-filter:blur(26px) saturate(180%);
+  color:#072313;
+  padding:12px 22px;border-radius:20px;font-size:13px;font-weight:600;
+  width:max-content;max-width:calc(100vw - 32px);text-align:center;line-height:1.35;
+  border:1px solid rgba(255,255,255,0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    0 12px 36px rgba(16,84,43,0.20),
+    0 2px 8px rgba(16,84,43,0.10);
+  opacity:0;transition:all 0.25s;pointer-events:none;z-index:999;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{background:#1A4A2A;color:#A0FFAA;border-color:rgba(49,153,93,0.4);}
+.toast.error{background:#4A1A1A;color:#FFAAAA;border-color:rgba(176,48,32,0.4);}
+.toast.warn{background:#093118;color:#7AE5A4;border-color:rgba(39,171,80,0.4);}
+
+/* Add crop modal */
+.crop-modal-overlay{position:fixed;inset:0;background:rgba(13,67,31,0.35);display:flex;align-items:flex-end;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.crop-modal-overlay.open{opacity:1;pointer-events:all;}
+.crop-modal{background:#fff;border-radius:var(--radius-xl) var(--radius-xl) 0 0;padding:24px 20px 36px;width:100%;max-width:480px;transform:translateY(20px);transition:transform 0.25s;box-shadow:0 -8px 40px rgba(20,100,49,0.15);}
+.crop-modal-overlay.open .crop-modal{transform:translateY(0);}
+.crop-modal-title{font-family:'Inter',sans-serif;font-size:17px;font-weight:800;color:var(--text);margin-bottom:14px;}
+.crop-modal-row{display:flex;gap:10px;}
+.crop-modal-input{flex:1;padding:12px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:15px;color:var(--text);outline:none;transition:border-color 0.2s;}
+.crop-modal-input:focus{border-color:var(--accent);}
+.crop-modal-input::placeholder{color:var(--text3);}
+.crop-modal-btn{padding:12px 20px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;border:none;border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;}
+.crop-modal-btn:active{background:#1B8D44;}
+.crop-modal-cancel{width:100%;margin-top:10px;padding:10px;background:transparent;border:none;font-family:'Inter',sans-serif;font-size:14px;color:var(--text3);cursor:pointer;}
+
+/* ══ LIBRA-STYLE SCALE DISPLAY ══ */
+/* ── Liquid glass: hero weight panel ── */
+.scale-panel{
+  background:linear-gradient(160deg,#FFFFFF 0%,#F9FDFB 45%,#ECF6F0 100%);
+  border-radius:18px;
+  padding:14px 18px 16px;
+  margin-bottom:10px;
+  min-height:160px;
+  display:flex;flex-direction:column;
+  border:1px solid rgba(7,35,19,0.08);
+  box-shadow:
+    inset 0 1.5px 2px rgba(255,255,255,0.9),
+    inset 0 -3px 10px rgba(7,35,19,0.05),
+    0 8px 26px rgba(7,35,19,0.10),
+    0 2px 6px rgba(7,35,19,0.06);
+  position:relative;
+  overflow:hidden;
+}
+/* soft specular sheen across the top of the panel */
+.scale-panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:45%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.38) 0%,rgba(255,255,255,0) 100%);
+  pointer-events:none;border-radius:18px 18px 40% 40%;
+}
+/* Stable fill sweep — dark green overlay from left */
+.scale-panel-fill{
+  display:none;   /* green auto-unload sweep removed per user preference */
+}
+.scale-panel > *:not(.scale-panel-fill){ position:relative; z-index:1; }
+.scale-panel-toprow{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+/* Hidden: the amber live-data dot duplicated information already given by the
+   Stable/Waiting pill and the moving weight itself. Element kept so the code
+   that toggles its .live class stays valid. */
+.scale-status-dot{display:none!important;width:10px;height:10px;border-radius:50%;background:rgba(7,35,19,0.18);border:2px solid rgba(7,35,19,0.10);}
+.scale-status-dot.live{background:#51D681;border-color:rgba(81,214,129,0.4);box-shadow:0 0 8px rgba(81,214,129,0.6);}
+.scale-mode-lbl{font-size:14px;font-weight:500;color:rgba(20,20,20,0.5);margin-left:4px;}
+.scale-mode-lbl.active-mode{color:rgba(20,20,20,0.9);font-weight:700;}
+.scale-main-weight{
+  font-family:'Inter',sans-serif;
+  /* Sized from two vars so the digit-count shrink below composes with the
+     taller-screen bump, instead of one silently overriding the other. */
+  --wt-base:60px; --wt-scale:1;
+  font-size:calc(var(--wt-base) * var(--wt-scale));
+  font-weight:400;
+  /* Fixed-width digits: without this a live readout jitters horizontally as
+     values change, because 1 is narrower than 8 in Inter's default figures. */
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:'tnum' 1;
+  color:#141414;
+  line-height:1;letter-spacing:0;
+  text-align:right;
+  flex:1;
+  display:flex;align-items:flex-end;justify-content:flex-end;
+  padding-bottom:4px;
+  text-shadow:0 1px 0 rgba(255,255,255,0.3);
+}
+/* --wt-base is the LARGEST the readout may be; _setMainWeight() measures the
+   rendered string and sets an inline font-size at or below it so long values
+   fit the panel. Sizing is measured rather than stepped by digit count because
+   the panel width varies a lot (phone/tablet, portrait/landscape, with and
+   without the action column) — a fixed per-length ladder fits one width and
+   overflows the rest.
+   Note the overflow here is invisible without measuring: the box is a
+   right-aligned flex container, so an oversized number spills off the LEFT edge
+   and scrollWidth stays equal to clientWidth. */
+.scale-sub-row{display:flex;align-items:flex-end;margin-top:6px;}
+.scale-sub-item{display:flex;flex-direction:column;}
+.scale-sub-lbl{font-size:11px;color:rgba(20,20,20,0.55);font-weight:500;letter-spacing:0.04em;}
+.scale-sub-val{font-family:'Inter',sans-serif;font-size:20px;font-weight:400;color:rgba(20,20,20,0.78);line-height:1.1;}
+.scale-unit-row{display:flex;align-items:center;justify-content:space-between;margin-top:8px;}
+/* No reading yet. Muted and light so two dashes read as an absent value
+   rather than a redaction bar; _setMainWeight() drops the size to match. */
+/* Unlit segments: same weight and size as a live reading -- only the colour
+   differs -- so the number appears to light up in place when the scale
+   connects, the way an old scale head does. */
+/* The readout's raised-text shadow is 30% opaque -- louder than the ghost
+   glyph itself -- so it has to go, or the placeholder reads as a lit number
+   wearing a halo. */
+#scale-weight-val.wt-blank{color:rgba(20,20,20,0.11);text-shadow:none;}
+[data-theme="dark"] #scale-weight-val.wt-blank{color:rgba(236,236,236,0.14)!important;}
+.scale-unit-lbl{font-family:'Inter',sans-serif;font-size:16px;font-weight:400;color:rgba(20,20,20,0.62);}
+.stable-pill-inline{display:inline-flex;align-items:center;gap:7px;padding:6px 14px;background:rgba(20,20,20,0.05);border-radius:20px;font-size:14px;font-weight:600;color:rgba(20,20,20,0.82);border:1px solid rgba(20,20,20,0.08);}
+
+/* ══ ACTION BUTTONS ══ */
+.action-btns{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
+.abtn{padding:16px 8px;border:none;border-radius:14px;font-family:'Inter',sans-serif;font-size:16px;font-weight:700;cursor:pointer;transition:all 0.12s;letter-spacing:0.01em;}
+.abtn:active{transform:scale(0.96);}
+/* ── White glassy action buttons ── */
+.abtn-dark,.abtn-mid,.abtn-light{
+  background:linear-gradient(180deg,rgba(255,255,255,0.62) 0%,rgba(255,255,255,0.40) 100%);
+  -webkit-backdrop-filter:blur(16px) saturate(170%);
+  backdrop-filter:blur(16px) saturate(170%);
+  color:var(--text);
+  border:1px solid rgba(255,255,255,0.75);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.9),
+    0 3px 10px rgba(20,80,46,0.12);
+}
+.abtn-dark:active,.abtn-mid:active,.abtn-light:active{
+  background:linear-gradient(180deg,rgba(255,255,255,0.78) 0%,rgba(255,255,255,0.55) 100%);
+}
+.abtn-dark:disabled,.abtn-mid:disabled,.abtn-light:disabled{
+  background:linear-gradient(180deg,rgba(255,255,255,0.34) 0%,rgba(255,255,255,0.20) 100%);
+  color:rgba(7,35,19,0.40);cursor:not-allowed;
+  box-shadow:inset 0 1px 1px rgba(255,255,255,0.55);
+}
+/* Unload acting as STOP while a manual unload is running */
+.abtn-stop{
+  background:linear-gradient(180deg,rgba(255,214,214,0.80) 0%,rgba(255,186,186,0.62) 100%)!important;
+  border:1px solid rgba(255,255,255,0.80)!important;
+  color:#7A1B10!important;
+  box-shadow:inset 0 1px 1px rgba(255,255,255,0.9),0 3px 12px rgba(160,40,25,0.22)!important;
+}
+
+/* ══ INFO ROWS (Libra style) ══ */
+.info-rows{display:flex;flex-direction:column;gap:0;background:#fff;border-radius:16px;overflow:hidden;border:1px solid rgba(32,168,98,0.12);box-shadow:0 2px 10px rgba(29,151,79,0.07);}
+/* Destination rows run bigger than the Display tab's picker rows, which share the
+   same classes — hence the #id scope. The tablet block repeats these selectors at
+   matching specificity so it can still raise them further. */
+#destinations-list > .info-row{min-height:76px;}
+#destinations-list .info-row-title{font-size:15px;}
+#destinations-list .info-row-sub{font-size:13px;}
+.info-row{display:flex;align-items:center;padding:13px 14px;border-bottom:1px solid rgba(32,168,98,0.1);cursor:pointer;transition:background 0.12s;gap:10px;min-height:58px;}
+.info-row:last-child{border-bottom:none;}
+.info-row:active{background:#E5FAF0;}
+/* Split row (Operator | Device): each half taps & highlights independently */
+.info-row-split{padding:0;gap:0;cursor:default;}
+.info-row-split:active{background:transparent;}
+.ir-tap{display:flex;align-items:center;gap:10px;cursor:pointer;transition:background 0.12s;padding:13px 14px;min-height:58px;box-sizing:border-box;}
+.ir-tap-left{flex:1;min-width:0;}
+.ir-tap:active{background:#E5FAF0;}
+.info-row-icon{width:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.info-row-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+.info-row-title{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.info-row-sub{font-size:13px;font-weight:600;color:var(--text);}
+/* Display tab: all text full black for field legibility */
+#tp-weigh .tlb-kg,
+#tp-weigh .tlb-pct,
+#tp-weigh .tlb-sub,
+#tp-weigh .truck-load-bar div,
+#tp-weigh .info-row-title,
+#tp-weigh .info-row-sub,
+#tp-weigh .info-row-val,
+#tp-weigh .info-row-right div,
+#tp-weigh .ff label,
+#tp-weigh select,
+#tp-weigh input,
+#tp-weigh .scale-unit-lbl,
+#tp-weigh .scale-mode-lbl{color:var(--text);}
+.info-row-right{text-align:right;flex-shrink:0;}
+.info-row-val{font-size:14px;font-weight:600;color:var(--text);}
+.info-row-chevron{font-size:20px;color:rgba(7,35,19,0.35);font-weight:300;flex-shrink:0;margin-left:2px;}
+
+/* ══ ENTRY FORM PANEL ══ */
+.entry-form-panel{background:#fff;border-radius:16px;border:1px solid rgba(32,168,98,0.15);padding:14px 14px 8px;margin-top:10px;box-shadow:0 2px 10px rgba(29,151,79,0.07);}
+.efp-row{display:flex;gap:10px;margin-bottom:10px;}
+/* These two were inline font-size:14px, which no stylesheet rule could override —
+   moved here so the tablet type scale can raise them. */
+#f-crop-display,#f-season-display,#f-moisture-display{font-size:14px;}
+.efp-row:last-child{margin-bottom:4px;}
+
+/* ══ UNLOAD PICKER SHEET ══ */
+.sheet-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.3);display:flex;align-items:flex-end;justify-content:center;z-index:400;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.sheet-overlay.open{opacity:1;pointer-events:all;}
+.sheet{background:#fff;border-radius:24px 24px 0 0;padding:20px 16px 36px;width:100%;max-width:500px;transform:translateY(20px);transition:transform 0.25s;box-shadow:0 -8px 40px rgba(20,100,49,0.12);}
+.sheet-overlay.open .sheet{transform:translateY(0);}
+.sheet-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px;padding:0 4px;}
+.sheet-option{padding:14px 16px;border-radius:12px;font-size:15px;color:var(--text);cursor:pointer;transition:background 0.12s;border-bottom:1px solid var(--border);}
+.sheet-option:last-child{border-bottom:none;}
+.sheet-option:active{background:#E5FAF0;}
+.sheet-option.selected{color:#20A44C;font-weight:600;}
+
+
+/* ══ TAB BAR ICON SVG ══ */
+.tab-icon-svg{width:26px;height:26px;display:flex;align-items:center;justify-content:center;transition:transform 0.18s ease,filter 0.18s ease;}
+.tab-btn.active .tab-icon-svg{transform:scale(1.08);filter:drop-shadow(0 1px 1.5px rgba(35,135,70,0.28));}
+.tab-icon-svg svg{display:block;}
+
+/* ══ MORE TAB ══ */
+.more-profile{display:flex;align-items:center;gap:13px;background:#fff;border-radius:16px;border:1px solid rgba(32,168,98,0.15);padding:15px 16px;margin-bottom:4px;box-shadow:0 2px 10px rgba(29,151,79,0.07);}
+.more-section-lbl{font-size:16px;font-weight:600;color:var(--text);padding:14px 4px 8px;letter-spacing:0;}
+.more-list{background:#fff;border-radius:16px;border:1px solid rgba(32,168,98,0.12);overflow:hidden;box-shadow:0 2px 10px rgba(29,151,79,0.07);}
+.more-row{display:flex;align-items:center;padding:16px 16px;border-bottom:1px solid rgba(32,168,98,0.1);cursor:pointer;gap:14px;transition:background 0.12s;}
+.more-row:last-child{border-bottom:none;}
+.more-row:active{background:#E5FAF0;}
+.more-row-icon{width:36px;height:36px;background:rgba(42,122,226,0.08);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.more-row-label{flex:1;font-size:16px;color:var(--text);font-weight:400;}
+.more-row-chevron{font-size:22px;color:rgba(0,0,0,0.2);font-weight:300;}
+
+/* ══ SUB-PANELS ══ */
+.sub-panel{
+  /* absolute, not fixed. These live inside .app-inner (position:relative,
+     spanning the area between topbar and tabbar) — the same container as
+     .tab-page, which renders correctly on-device. position:fixed +
+     overflow-y:auto is the combination that painted only partially in the
+     Android WebView, so this makes sub-panels structurally identical to the
+     tab pages that work. NOTE: inset is relative to .app-inner, so bottom is
+     0 here (the tabbar is already outside that box) — not var(--tabbar-h),
+     which would subtract the tabbar height a second time. */
+  position:absolute;
+  top:0;left:0;right:0;
+  max-width:760px;margin-left:auto;margin-right:auto;
+  bottom:0;
+  /* Flat colour, NOT a gradient. On an overflow-y:auto container the background
+     is painted across the whole scrollable content height and tiled; the Android
+     WebView was only painting the upper tiles, so the tab page underneath bled
+     through the bottom of the panel. A flat colour can't tile-fail. (.tab-page,
+     which never breaks, has no background at all.) */
+  background:#EFFAF4;
+  overflow-y:auto;
+  z-index:50;
+  /* Closed panels are display:none, NOT translated off-screen. A transformed
+     full-screen fixed element keeps its own GPU compositing layer even while
+     off-screen — with 8 sub-panels + 4 detail panels that was ~12 full-screen
+     layers (~13MB each at dpr3) held permanently, which exhausted the Android
+     WebView's layer memory and made the whole view stop painting as soon as a
+     panel opened. display:none costs nothing to keep around. Trade-off: no
+     slide-in animation, which is fine — panels just appear. */
+  display:none;
+  -webkit-overflow-scrolling:touch;
+}
+.sub-panel.open{display:block;}
+/* Every More sub-panel: the cards stack at natural height and leave the lower part
+   of a tablet screen empty. Column layout lets the body, its cards, and the setting
+   rows inside them share that space. flex-basis stays auto throughout so a short
+   screen still scrolls rather than squashing anything.
+   The body is "the child that isn't the header" — panels don't share a body class. */
+.sub-panel.open{display:flex;flex-direction:column;}
+.sub-panel > .sp-header{flex:0 0 auto;}
+.sub-panel > div:not(.sp-header){flex:1 0 auto;display:flex;flex-direction:column;}
+.sub-panel > div:not(.sp-header) > .card{flex:1 0 auto;display:flex;flex-direction:column;}
+/* Capped: on a sparse panel (About has two rows) uncapped growth stretched each row
+   to ~800px with the text floating in the middle. Rows grow to a sane size and any
+   remainder simply stays inside the card. */
+.sub-panel > div:not(.sp-header) > .card > .setting-row{flex:1 0 auto;max-height:104px;}
+/* Season nests its body one level deeper, inside the list-view wrapper. */
+#season-list-view{flex:1 0 auto;display:flex;flex-direction:column;}
+#season-list-view > div:not(.sp-header){flex:1 0 auto;}
+/* Field Map opts out — Google Maps needs its container sized by .fmap-body's own
+   rules, and it renders grey if the box changes out from under it. */
+#sp-fieldmap.open{display:block;}
+/* About opts out too: two rows cannot fill a tablet screen, and forcing it turned
+   the single card into a large empty box. Natural layout reads better there. */
+#sp-about.open{display:block;}
+/* Operators: the Active Operator card is fixed content, so only the list card below
+   should absorb the slack. */
+#sp-operators > div:not(.sp-header) > .card:first-child{flex:0 0 auto;}
+#operators-list{flex:1 0 auto;}
+/* Diagnostics: give the extra height to the terminal, which benefits from it. */
+#diag-terminal{flex:1 0 auto;}
+
+/* More tab: same treatment — the menu list stops partway down the screen, so let
+   it and its rows take the remaining height. */
+#tp-more.active{display:flex;flex-direction:column;}
+#tp-more > *{flex-shrink:0;}
+#tp-more > .more-list{flex:1 0 auto;display:flex;flex-direction:column;}
+#tp-more > .more-list > .more-row{flex:1 0 auto;}
+
+.sp-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;
+  height:52px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.92) 0%,rgba(248,254,251,0.82) 100%);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);
+  backdrop-filter:blur(22px) saturate(180%);
+  border-bottom:1px solid rgba(255,255,255,0.85);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 3px 14px rgba(33,127,67,0.06);
+  position:sticky;top:0;z-index:10;
+}
+
+.sp-back{background:none;border:none;font-size:17px;color:#2A7AE2;cursor:pointer;padding:8px 8px 8px 0;font-family:'Inter',sans-serif;font-weight:500;display:flex;align-items:center;gap:2px;}
+.sp-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:var(--text);margin-left:8px;}
+
+/* ══ TRUCKS TAB ══ */
+.truck-item{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid rgba(32,168,98,0.1);}
+.truck-item:last-child{border-bottom:none;}
+.truck-name{font-size:14px;font-weight:500;color:#2A7AE2;}
+.truck-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+
+
+/* ══ SCALE + BUTTONS SIDE BY SIDE ══ */
+.scale-row-wrap{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+  align-items:stretch;
+}
+.scale-row-wrap .scale-panel{
+  flex:1;
+  margin-bottom:0;
+  min-width:0;
+}
+.action-col{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  flex-shrink:0;
+  width:72px;
+}
+.abtn-col{
+  flex:1;
+  border:none;
+  border-radius:12px;
+  font-family:'Inter',sans-serif;
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+  transition:all 0.12s;
+  letter-spacing:0.01em;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:0;
+  padding:0;
+}
+.abtn-col:active{transform:scale(0.95);}
+/* ── Gold action buttons (Tare / Clear / Unload) ── */
+.abtn-col.abtn-dark,.abtn-col.abtn-mid,.abtn-col.abtn-light{
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);
+  color:#09311A;
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255,255,255,0.80),
+    inset 0 -2px 3px rgba(25,120,60,0.22),
+    0 3px 9px rgba(35,135,70,0.30),
+    0 1px 2px rgba(35,135,70,0.22);
+}
+.abtn-col.abtn-dark:active,.abtn-col.abtn-mid:active,.abtn-col.abtn-light:active{
+  background:linear-gradient(180deg,rgba(255,255,255,0.80) 0%,rgba(255,255,255,0.56) 100%);
+}
+.abtn-col.abtn-dark:disabled,.abtn-col.abtn-mid:disabled,.abtn-col.abtn-light:disabled{
+  background:linear-gradient(180deg,rgba(255,255,255,0.32) 0%,rgba(255,255,255,0.18) 100%);
+  color:rgba(7,35,19,0.38);cursor:not-allowed;
+  box-shadow:inset 0 1px 1px rgba(255,255,255,0.55);
+}
+/* Unload acting as STOP during a manual unload */
+.abtn-col.abtn-stop{
+  background:linear-gradient(180deg,rgba(255,205,205,0.82) 0%,rgba(255,172,172,0.62) 100%);
+  border:1px solid rgba(255,255,255,0.82);
+  color:#7A1B10;
+  box-shadow:inset 0 1px 1px rgba(255,255,255,0.92),0 3px 12px rgba(160,40,25,0.22);
+}
+
+
+/* ══ CUSTOM CONFIRM DIALOG ══ */
+.confirm-overlay{
+  position:fixed;inset:0;
+  background:rgba(10,50,25,0.30);
+  -webkit-backdrop-filter:blur(12px) saturate(140%);
+  backdrop-filter:blur(12px) saturate(140%);
+  display:flex;align-items:center;justify-content:center;
+  z-index:900;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.18s;
+  padding:24px;
+}
+.confirm-overlay.open{opacity:1;pointer-events:all;}
+.confirm-box{
+  background:linear-gradient(180deg,rgba(255,255,255,0.98) 0%,rgba(246,252,248,0.94) 100%);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);
+  backdrop-filter:blur(30px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.95);
+  border-radius:22px;
+  padding:28px 24px 20px;
+  width:100%;max-width:320px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    0 20px 56px rgba(13,67,31,0.26),
+    0 4px 14px rgba(13,67,31,0.14);
+  transform:scale(0.94);
+  transition:transform 0.18s;
+}
+.confirm-overlay.open .confirm-box{transform:scale(1);}
+.confirm-icon{display:none;}
+.confirm-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:600;color:var(--text);text-align:center;margin-bottom:6px;}
+.confirm-msg{font-size:13px;color:var(--text2);text-align:center;line-height:1.5;margin-bottom:20px;}
+.confirm-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.confirm-btn-cancel{
+  padding:13px;border:1.5px solid var(--border2);background:transparent;
+  border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
+  color:var(--text2);cursor:pointer;transition:all 0.12s;
+}
+.confirm-btn-cancel:active{background:var(--surface2);}
+.confirm-btn-ok{
+  padding:13px;border:none;background:#B03020;
+  border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
+  color:#fff;cursor:pointer;transition:all 0.12s;
+}
+.confirm-btn-ok:active{background:#8A2010;}
+
+
+/* ══ ENHANCED LOG ITEMS ══ */
+.log-item{display:flex;flex-direction:column;gap:6px;padding:13px 14px;background:#fff;border-radius:12px;border:1px solid rgba(32,168,98,0.12);box-shadow:0 1px 4px rgba(29,151,79,0.06);}
+.log-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.log-item-body{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;}
+.log-item-title{font-size:14px;font-weight:700;color:var(--text);}
+.log-item-meta{font-size:12px;color:var(--text2);}
+.log-item-right{text-align:right;flex-shrink:0;}
+.log-wt{font-family:'Inter',sans-serif;font-size:18px;font-weight:700;color:#A85E00;}
+.log-time{font-size:11px;color:var(--text3);margin-top:1px;}
+.log-date{font-size:10px;color:var(--text3);}
+.log-item-bottom{display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(32,168,98,0.1);padding-top:8px;}
+.log-gps-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;
+  background:rgba(42,122,226,0.08);
+  border:1px solid rgba(42,122,226,0.2);
+  border-radius:8px;
+  font-size:11px;font-weight:600;color:#2A7AE2;
+  cursor:pointer;text-decoration:none;
+  transition:background 0.12s;
+}
+.log-gps-btn:active{background:rgba(42,122,226,0.15);}
+.log-gps-coords{font-size:11px;color:var(--text3);}
+.log-gps-pending{font-size:11px;color:var(--amber);display:flex;align-items:center;gap:4px;}
+.log-gps-none{font-size:11px;color:var(--text3);}
+.log-sync-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;}
+.log-sync-pill.synced{background:var(--green-light);color:var(--green);}
+.log-sync-pill.pending{background:var(--amber-light);color:var(--amber);}
+
+/* GPS status indicator in topbar */
+.gps-pill{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid transparent;cursor:pointer;}
+.gps-off{background:rgba(26,134,73,0.1);color:var(--text3);border-color:var(--border);}
+.gps-searching{background:rgba(42,122,226,0.1);color:#2A7AE2;border-color:rgba(42,122,226,0.2);}
+.gps-on{background:rgba(49,153,93,0.1);color:#1F663D;border-color:rgba(49,153,93,0.2);}
+.gps-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+
+/* ══ FIELD DETAIL PANEL ══ */
+.field-detail-panel{
+  position:fixed;
+  top:0;left:0;right:0;
+  max-width:760px;margin-left:auto;margin-right:auto;
+  bottom:var(--tabbar-h);
+  /* Flat colour for the same reason as .sub-panel — a gradient on a tall
+     scrolling panel only painted its upper tiles in the Android WebView. */
+  background:#EFFAF4;
+  z-index:80;
+  flex-direction:column;
+  /* Same reason as .sub-panel: closed = display:none, not translated off-screen,
+     so these 4 full-screen panels don't each hold a permanent GPU layer.
+     will-change:transform removed for the same reason. */
+  display:none;
+}
+.field-detail-panel.open{display:flex;}
+.fdp-header{
+  display:flex;align-items:center;gap:10px;
+  /* Grow by the inset and pad down — padding alone would shrink the content box
+     (global border-box) and squash the header. Same pattern as .topbar. */
+  padding:0 16px;padding-top:env(safe-area-inset-top,0px);
+  height:calc(56px + env(safe-area-inset-top,0px));
+  background:rgba(247,253,251,0.96);
+  border-bottom:1px solid rgba(29,151,79,0.12);
+  flex-shrink:0;
+}
+.fdp-back{background:none;border:none;font-size:17px;color:#2A7AE2;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;padding:8px 8px 8px 0;display:flex;align-items:center;gap:3px;}
+.fdp-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:800;color:var(--text);flex:1;}
+.fdp-farm{font-size:12px;color:var(--text2);font-family:'Inter',sans-serif;font-weight:600;}
+.fdp-body{flex:1;overflow-y:auto;padding:14px 14px 24px;}
+.fdp-body::-webkit-scrollbar{width:3px;}
+.fdp-body::-webkit-scrollbar-thumb{background:rgba(29,151,79,0.2);border-radius:2px;}
+
+/* Summary stat cards */
+.fdp-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.fdp-stat{background:#fff;border-radius:14px;padding:14px 16px;border:1px solid rgba(32,168,98,0.14);box-shadow:0 2px 8px rgba(29,151,79,0.07);}
+.fdp-stat-lbl{font-size:11px;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;color:var(--text2);margin-bottom:5px;}
+.fdp-stat-val{font-family:'Inter',sans-serif;font-size:22px;font-weight:700;color:var(--text);line-height:1;}
+.fdp-stat-sub{font-size:12px;font-weight:600;color:var(--text2);margin-top:3px;}
+.fdp-stat.accent{background:linear-gradient(180deg,rgba(255,255,255,0.95),rgba(242,251,245,0.85));-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);border-color:rgba(32,168,98,0.20);}
+.fdp-stat.accent .fdp-stat-lbl{color:var(--text2);}
+.fdp-stat.accent .fdp-stat-val{color:var(--text);}
+.fdp-stat.accent .fdp-stat-sub{color:var(--text2);}
+
+/* Section header in detail */
+.fdp-section-lbl{font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--text2);margin:16px 0 8px 2px;}
+.fdp-empty{text-align:center;padding:32px 20px;color:var(--text2);font-size:14px;font-weight:600;}
+
+/* Transaction card in detail */
+.fdp-tx{background:#fff;border-radius:12px;border:1px solid rgba(32,168,98,0.12);padding:13px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(29,151,79,0.06);}
+.fdp-tx-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.fdp-tx-left{flex:1;min-width:0;}
+.fdp-tx-crop{font-size:14px;font-weight:700;color:var(--text);}
+.fdp-tx-meta{font-size:12px;color:var(--text2);margin-top:2px;}
+.fdp-tx-right{text-align:right;flex-shrink:0;}
+.fdp-tx-weight{font-family:'Inter',sans-serif;font-size:17px;font-weight:700;color:var(--text);}
+.fdp-tx-time{font-size:11px;color:var(--text3);}
+.fdp-tx-date{font-size:10px;color:var(--text3);}
+.fdp-tx-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid rgba(32,168,98,0.1);}
+/* Base sizing only — the white-glass surface comes from the shared button group
+   near the top of this stylesheet, which .fdp-tx-gps is now a member of. */
+.fdp-tx-gps{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:9px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;}
+.fdp-tx-gps:active{filter:brightness(0.97);}
+.fdp-tx-nogps{font-size:11px;color:var(--text3);}
+.fdp-tx-worker{font-size:11px;color:var(--text3);}
+
+/* Info button on field rows */
+.btn-info{
+  width:30px;height:30px;
+  background:rgba(42,122,226,0.08);
+  border:1px solid rgba(42,122,226,0.18);
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;flex-shrink:0;
+  transition:background 0.12s;
+  color:#2A7AE2;
+  font-size:15px;
+}
+.btn-info:active{background:rgba(42,122,226,0.16);}
+
+
+/* ══ TRANSACTION EDIT / ADD SHEET ══ */
+/* padding-bottom is set from JS to the keyboard height — see the
+   keyboard-aware bottom sheets block. Transitioned so the lift matches the
+   keyboard's own animation instead of snapping. */
+.tx-sheet-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.26);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);display:flex;align-items:flex-end;justify-content:center;z-index:600;opacity:0;pointer-events:none;transition:opacity 0.2s, padding-bottom 0.22s ease-out;}
+.tx-sheet-overlay.open{opacity:1;pointer-events:all;}
+/* ── Liquid glass: frosted bottom sheet ── */
+.tx-sheet{
+  background:linear-gradient(180deg,rgba(255,255,255,0.97) 0%,rgba(246,252,248,0.93) 100%);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);
+  backdrop-filter:blur(30px) saturate(180%);
+  border-radius:24px 24px 0 0;padding:0;width:100%;max-width:520px;
+  border-top:1px solid rgba(255,255,255,0.95);
+  transform:translateY(20px);transition:transform 0.25s;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    0 -12px 48px rgba(13,67,31,0.20),
+    0 -2px 10px rgba(13,67,31,0.10);
+  max-height:90vh;display:flex;flex-direction:column;
+}
+.tx-sheet-overlay.open .tx-sheet{transform:translateY(0);}
+.tx-sheet-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tx-sheet-title{font-family:'Inter',sans-serif;font-size:19px;font-weight:800;color:var(--text);}
+.tx-sheet-close{background:none;border:none;font-size:26px;color:var(--text3);cursor:pointer;line-height:1;padding:4px;}
+.tx-sheet-body{flex:1;overflow-y:auto;padding:16px 20px;}
+.tx-field-group{margin-bottom:14px;}
+.tx-field-group label{font-size:12px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text2);display:block;margin-bottom:6px;}
+.tx-field-group input,.tx-field-group select,.tx-field-group textarea{width:100%;padding:14px 16px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:16px;font-weight:600;color:var(--text);outline:none;transition:border-color 0.2s;appearance:none;-webkit-appearance:none;}
+.tx-field-group input:focus,.tx-field-group select:focus,.tx-field-group textarea:focus{border-color:var(--accent);}
+.tx-field-group input::placeholder,.tx-field-group textarea::placeholder{color:var(--text3);}
+.tx-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.tx-sheet-footer{padding:14px 20px 28px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0;}
+.tx-btn-save{flex:1;padding:16px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;border:1px solid rgba(255,255,255,0.55);box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),inset 0 -2px 3px rgba(25,120,60,0.22),0 3px 9px rgba(35,135,70,0.30),0 1px 2px rgba(35,135,70,0.22);border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:16px;font-weight:800;cursor:pointer;transition:filter 0.15s;}
+.tx-btn-save:active{filter:brightness(0.96);}
+.tx-btn-cancel{padding:16px 22px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);border:1px solid rgba(255,255,255,0.55);box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),0 3px 9px rgba(35,135,70,0.30);color:#09311A;border-radius:var(--radius);font-family:'Inter',sans-serif;font-size:16px;font-weight:800;cursor:pointer;}
+
+/* Add transaction FAB */
+.fdp-fab{
+  position:sticky;bottom:20px;
+  display:flex;justify-content:center;
+  margin-top:16px;
+}
+.fdp-fab-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:14px 28px;
+  background:#D4930A;color:#fff;
+  border:none;border-radius:40px;
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:700;
+  cursor:pointer;
+  box-shadow:0 4px 20px rgba(29,151,73,0.3);
+  transition:all 0.15s;
+}
+.fdp-fab-btn:active{background:#1B8D44;transform:scale(0.97);}
+
+/* Edit/delete actions on each transaction */
+.fdp-tx-actions{display:flex;gap:6px;}
+.fdp-tx-edit,.fdp-tx-del{padding:6px 13px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
+
+
+/* ══ FARM / FIELD PICKER SHEET ══ */
+.ffp-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.26);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);display:flex;align-items:flex-end;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.ffp-overlay.open{opacity:1;pointer-events:all;}
+.ffp-sheet{background:linear-gradient(180deg,rgba(255,255,255,0.97) 0%,rgba(246,252,248,0.93) 100%);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);border-top:1px solid rgba(255,255,255,0.95);border-radius:24px 24px 0 0;width:100%;max-width:520px;transform:translateY(24px);transition:transform 0.25s;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 -12px 48px rgba(13,67,31,0.20),0 -2px 10px rgba(13,67,31,0.10);max-height:82vh;display:flex;flex-direction:column;}
+.ffp-overlay.open .ffp-sheet{transform:translateY(0);}
+.ffp-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;flex-shrink:0;}
+.ffp-title{font-family:'Inter',sans-serif;font-size:17px;font-weight:800;color:var(--text);}
+.ffp-close{background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;line-height:1;padding:4px;}
+.ffp-body{flex:1;overflow-y:auto;padding:0 14px 20px;}
+.ffp-body::-webkit-scrollbar{width:3px;}
+.ffp-body::-webkit-scrollbar-thumb{background:rgba(29,151,79,0.2);border-radius:2px;}
+
+/* Farm group */
+.ffp-farm-group{margin-bottom:14px;}
+.ffp-farm-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;
+  background:rgba(49,153,93,0.1);
+  border-radius:12px 12px 0 0;
+  border:1px solid rgba(49,153,93,0.18);
+  border-bottom:none;
+  cursor:pointer;
+}
+.ffp-farm-name{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#1F663D;}
+.ffp-farm-count{font-size:11px;color:var(--text3);}
+.ffp-farm-fields{
+  background:#fff;
+  border-radius:0 0 12px 12px;
+  border:1px solid rgba(49,153,93,0.18);
+  border-top:none;
+  overflow:hidden;
+}
+.ffp-field-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px;
+  border-bottom:1px solid var(--border);
+  cursor:pointer;
+  transition:background 0.12s;
+}
+.ffp-field-row:last-child{border-bottom:none;}
+.ffp-field-row:active{background:#E5FAF0;}
+.ffp-field-row.active{background:rgba(49,153,93,0.06);}
+.ffp-field-name{font-size:14px;font-weight:500;color:var(--text);}
+.ffp-field-kg{font-size:12px;color:var(--text3);margin-top:1px;}
+.ffp-check{font-size:16px;color:#31995D;font-weight:700;}
+
+/* Add farm row */
+.ffp-add-farm{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 16px;
+  background:#fff;
+  border-radius:12px;
+  border:1.5px dashed rgba(39,171,80,0.3);
+  cursor:pointer;
+  margin-top:6px;
+  transition:background 0.12s;
+}
+.ffp-add-farm:active{background:#E5FAF0;}
+.ffp-add-farm-lbl{font-size:14px;font-weight:600;color:#A85E00;}
+
+/* Inline add farm form inside the sheet */
+.ffp-add-form{
+  background:#ECFBF3;
+  border-radius:12px;
+  border:1.5px solid rgba(39,171,80,0.25);
+  padding:14px;
+  margin-top:6px;
+  display:none;
+}
+.ffp-add-form.open{display:block;}
+.ffp-add-form-row{display:flex;gap:8px;}
+.ffp-add-form input{flex:1;padding:11px 13px;background:#fff;border:1.5px solid var(--border);border-radius:10px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none;transition:border-color 0.2s;}
+.ffp-add-form input:focus{border-color:var(--accent);}
+.ffp-add-form input::placeholder{color:var(--text3);}
+.ffp-confirm-btn{padding:11px 16px;background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);color:#09311A;border:none;border-radius:10px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.ffp-confirm-btn:active{background:#1A863E;}
+
+/* Add field inline */
+.ffp-add-field-row{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;
+  border-top:1px dashed rgba(39,171,80,0.2);
+  background:#F7FDFB;
+  cursor:pointer;
+  transition:background 0.12s;
+}
+.ffp-add-field-row:active{background:#E5FAF0;}
+.ffp-add-field-lbl{font-size:13px;color:#A85E00;font-weight:600;}
+
+
+/* ══ FIELD PICKER BUTTON ══ */
+.field-picker-btn{
+  width:100%;
+  padding:11px 13px;
+  background:#ECFBF3;
+  border:1.5px solid rgba(26,134,67,0.22);
+  border-radius:14px;
+  font-family:'Inter',sans-serif;
+  font-size:14px;
+  color:#072313;
+  text-align:left;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  min-height:44px;
+  transition:border-color 0.2s, background 0.15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.field-picker-btn:active{background:#D1F6E0;border-color:rgba(26,134,67,0.4);}
+.field-picker-btn #f-zone-display{
+  flex:1;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:rgba(7,35,19,0.4);
+  font-size:14px;
+}
+.field-picker-btn #f-zone-display.selected{color:var(--text);font-weight:600;}
+.field-picker-arrow{
+  font-size:18px;
+  color:rgba(29,151,79,0.35);
+  flex-shrink:0;
+  line-height:1;
+}
+
+
+/* ══ FARM SELECTOR CARD (Fields tab top) ══ */
+.farm-selector-card{
+  background:#fff;
+  border-radius:14px;
+  border:1.5px solid rgba(49,153,93,0.25);
+  padding:14px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  cursor:pointer;
+  box-shadow:0 2px 10px rgba(29,151,79,0.07);
+  transition:background 0.12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.farm-selector-card:active{background:#E5FAF0;}
+.farm-selector-card.has-farm{border-color:rgba(49,153,93,0.45);background:rgba(49,153,93,0.04);}
+.fsc-left{flex:1;min-width:0;}
+.fsc-label{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;}
+.fsc-value{font-size:15px;font-weight:600;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fsc-value.selected{color:#1F663D;font-size:16px;}
+.fsc-arrow{font-size:22px;color:rgba(29,151,79,0.3);flex-shrink:0;margin-left:8px;}
+
+/* Farm selector sheet */
+.farm-sel-sheet-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.26);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);display:flex;align-items:flex-end;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.farm-sel-sheet-overlay.open{opacity:1;pointer-events:all;}
+.farm-sel-sheet{background:linear-gradient(180deg,rgba(255,255,255,0.97) 0%,rgba(246,252,248,0.93) 100%);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);border-top:1px solid rgba(255,255,255,0.95);border-radius:24px 24px 0 0;width:100%;max-width:520px;transform:translateY(20px);transition:transform 0.25s;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 -12px 48px rgba(13,67,31,0.20),0 -2px 10px rgba(13,67,31,0.10);max-height:70vh;display:flex;flex-direction:column;}
+.farm-sel-sheet-overlay.open .farm-sel-sheet{transform:translateY(0);}
+.farm-sel-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;flex-shrink:0;border-bottom:1px solid var(--border);}
+.farm-sel-title{font-family:'Inter',sans-serif;font-size:17px;font-weight:800;color:var(--text);}
+.farm-sel-close{background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;padding:4px;}
+.farm-sel-body{flex:1;overflow-y:auto;padding:8px 14px 24px;}
+.farm-sel-row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;cursor:pointer;transition:all 0.12s;-webkit-tap-highlight-color:transparent;}
+.farm-sel-row:active{background:#E5FAF0;}
+.farm-sel-row.active{border-color:#31995D;background:rgba(49,153,93,0.05);}
+.farm-sel-name{font-size:15px;font-weight:600;color:var(--text);}
+.farm-sel-count{font-size:12px;color:var(--text3);margin-top:2px;}
+.farm-sel-check{font-size:18px;color:#31995D;font-weight:700;}
+
+/* Field only picker sheet (Display tab) */
+.field-only-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.26);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);display:flex;align-items:flex-end;justify-content:center;z-index:700;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.field-only-overlay.open{opacity:1;pointer-events:all;}
+.field-only-sheet{background:linear-gradient(180deg,rgba(255,255,255,0.97) 0%,rgba(246,252,248,0.93) 100%);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);border-top:1px solid rgba(255,255,255,0.95);border-radius:24px 24px 0 0;width:100%;max-width:520px;transform:translateY(20px);transition:transform 0.25s;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 -12px 48px rgba(13,67,31,0.20),0 -2px 10px rgba(13,67,31,0.10);max-height:75vh;display:flex;flex-direction:column;}
+.field-only-overlay.open .field-only-sheet{transform:translateY(0);}
+.field-only-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;flex-shrink:0;border-bottom:1px solid var(--border);}
+.field-only-title{font-family:'Inter',sans-serif;font-size:17px;font-weight:800;color:var(--text);}
+.field-only-farm{font-size:12px;color:var(--text3);font-weight:400;}
+.field-only-close{background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;padding:4px;}
+.field-only-body{flex:1;overflow-y:auto;padding:8px 14px 24px;}
+.field-only-row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;cursor:pointer;transition:all 0.12s;-webkit-tap-highlight-color:transparent;}
+.field-only-row:active{background:#E5FAF0;}
+.field-only-row.active{border-color:#31995D;background:rgba(49,153,93,0.05);}
+.field-only-name{font-size:15px;font-weight:600;color:var(--text);}
+.field-only-kg{font-size:12px;color:var(--text3);margin-top:2px;}
+.field-only-check{font-size:18px;color:#31995D;font-weight:700;}
+.field-only-empty{text-align:center;padding:32px 20px;color:var(--text3);font-size:13px;}
+
+
+/* ══ TRUCK PICKER SHEET (Display tab) ══ */
+.truck-picker-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.26);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);display:flex;align-items:flex-end;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.truck-picker-overlay.open{opacity:1;pointer-events:all;}
+.truck-picker-sheet{background:linear-gradient(180deg,rgba(255,255,255,0.97) 0%,rgba(246,252,248,0.93) 100%);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);border-top:1px solid rgba(255,255,255,0.95);border-radius:24px 24px 0 0;width:100%;max-width:520px;transform:translateY(20px);transition:transform 0.25s;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 -12px 48px rgba(13,67,31,0.20),0 -2px 10px rgba(13,67,31,0.10);max-height:72vh;display:flex;flex-direction:column;}
+.truck-picker-overlay.open .truck-picker-sheet{transform:translateY(0);}
+.truck-picker-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;flex-shrink:0;border-bottom:1px solid var(--border);}
+.truck-picker-title{font-family:'Inter',sans-serif;font-size:17px;font-weight:800;color:var(--text);}
+.truck-picker-close{background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;padding:4px;}
+.truck-picker-body{flex:1;overflow-y:auto;padding:10px 14px 28px;}
+.truck-picker-row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;cursor:pointer;transition:all 0.12s;-webkit-tap-highlight-color:transparent;}
+.truck-picker-row:active{background:#E5FAF0;}
+.truck-picker-row.active{border-color:#31995D;background:rgba(49,153,93,0.05);}
+.tp-truck-name{font-size:15px;font-weight:600;color:var(--text);}
+.tp-truck-loads{font-size:12px;color:var(--text3);margin-top:2px;}
+.tp-truck-check{font-size:18px;color:#31995D;font-weight:700;}
+.tp-truck-arrow{font-size:20px;color:rgba(29,151,79,0.3);}
+.truck-picker-empty{text-align:center;padding:32px 20px;color:var(--text3);font-size:13px;line-height:1.6;}
+.tp-none-row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#ECFBF3;border-radius:12px;border:1.5px dashed rgba(39,171,80,0.3);margin-bottom:8px;cursor:pointer;transition:all 0.12s;}
+.tp-none-row:active{background:#CAF5DD;}
+.tp-none-label{font-size:14px;font-weight:600;color:#A85E00;}
+
+
+/* ══ TRUCK LOAD PROGRESS ══ */
+.truck-load-bar-wrap{
+  background:#fff;
+  border-radius:16px;
+  border:1px solid rgba(32,168,98,0.15);
+  padding:14px 16px 12px;
+  margin-bottom:12px;
+  box-shadow:0 2px 10px rgba(29,151,79,0.07);
+  display:none;
+}
+.truck-load-bar-wrap.visible{display:block;}
+.tlb-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.tlb-name{font-family:'Inter',sans-serif;font-size:15px;font-weight:800;color:var(--text);}
+.tlb-kg{font-family:'Inter',sans-serif;font-size:15px;font-weight:600;color:var(--text);}
+.tlb-track{height:18px;background:#E6F0EA;border-radius:9px;overflow:hidden;margin-bottom:6px;position:relative;}
+.tlb-fill{height:100%;border-radius:9px;background:linear-gradient(90deg,#3A8A20,#7DC050);transition:width 0.4s cubic-bezier(0.4,0,0.2,1);}
+
+.tlb-fill.warn{background:linear-gradient(90deg,#20A44C,#42D672);}
+.tlb-fill.full{background:linear-gradient(90deg,#B03020,#E05030);}
+.tlb-labels{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text3);}
+.tlb-pct{font-weight:700;font-size:13px;}
+.tlb-pct.warn{color:#A85E00;}
+.tlb-pct.full{color:#B03020;}
+
+/* Capacity input on truck rows in Trucks tab */
+.truck-capacity-row{display:flex;align-items:center;gap:8px;padding:8px 14px 12px;border-top:1px solid var(--border);}
+.truck-capacity-lbl{font-size:12px;color:var(--text2);white-space:nowrap;}
+/* Sized to its content rather than stretching across the row: wide enough for 5
+   digits, and _sizeCapInput() widens it from there as more are typed. */
+.truck-capacity-input{flex:0 0 auto;width:calc(5ch + 26px);min-width:calc(5ch + 26px);padding:7px 11px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color 0.2s,width 0.12s;text-align:right;}
+.truck-capacity-input:focus{border-color:var(--accent);}
+/* Spinner arrows would eat into the tight width. */
+.truck-capacity-input::-webkit-outer-spin-button,
+.truck-capacity-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.truck-capacity-unit{font-size:12px;color:var(--text2);}
+
+/* Unload confirmation overlay */
+.unload-confirm-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.4);display:flex;align-items:center;justify-content:center;z-index:700;opacity:0;pointer-events:none;transition:opacity 0.18s;padding:24px;}
+.unload-confirm-overlay.open{opacity:1;pointer-events:all;}
+.unload-confirm-box{background:#fff;border-radius:20px;padding:24px 20px 20px;width:100%;max-width:340px;box-shadow:0 16px 48px rgba(13,67,31,0.2);transform:scale(0.94);transition:transform 0.18s;}
+.unload-confirm-overlay.open .unload-confirm-box{transform:scale(1);}
+.ucb-icon{display:none;}
+.ucb-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:600;color:var(--text);text-align:center;margin-bottom:4px;}
+.ucb-weight{font-family:'Inter',sans-serif;font-size:36px;font-weight:400;color:var(--text);text-align:center;margin-bottom:4px;}
+.ucb-truck{font-family:'Inter',sans-serif;font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px;}
+.ucb-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ucb-cancel{padding:13px;border:1.5px solid var(--border2);background:transparent;border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--text2);cursor:pointer;}
+.ucb-confirm{padding:13px;border:none;background:#3A8A20;border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;}
+.ucb-confirm:active{background:#2A6A10;}
+
+
+/* Empty truck button */
+.tlb-empty-btn{
+  width:100%;
+  margin-top:10px;
+  padding:12px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.62) 0%,rgba(255,255,255,0.38) 100%);
+  -webkit-backdrop-filter:blur(16px) saturate(170%);
+  backdrop-filter:blur(16px) saturate(170%);
+  border:1px solid rgba(255,255,255,0.78);
+  border-radius:12px;
+  font-family:'Inter',sans-serif;
+  font-size:13px;
+  font-weight:700;
+  color:var(--text);
+  cursor:pointer;
+  transition:all 0.15s;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.9),
+    inset 0 -2px 4px rgba(23,77,43,0.08),
+    0 3px 10px rgba(23,77,43,0.12);
+}
+.tlb-empty-btn:active{background:linear-gradient(180deg,rgba(255,255,255,0.8) 0%,rgba(255,255,255,0.56) 100%);}
+
+/* Empty truck confirm overlay */
+.empty-truck-overlay{position:fixed;inset:0;background:rgba(10,50,25,0.4);display:flex;align-items:center;justify-content:center;z-index:700;opacity:0;pointer-events:none;transition:opacity 0.18s;padding:24px;}
+.empty-truck-overlay.open{opacity:1;pointer-events:all;}
+.empty-truck-box{background:#fff;border-radius:20px;padding:24px 20px 20px;width:100%;max-width:360px;box-shadow:0 16px 48px rgba(13,67,31,0.2);transform:scale(0.94);transition:transform 0.18s;}
+.empty-truck-overlay.open .empty-truck-box{transform:scale(1);}
+.etb-icon{display:none;}
+.etb-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:600;color:var(--text);text-align:center;margin-bottom:4px;}
+.etb-truck{font-family:'Inter',sans-serif;font-size:28px;font-weight:400;color:var(--text);text-align:center;margin-bottom:2px;}
+.etb-weight{font-family:'Inter',sans-serif;font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px;}
+.etb-field-group{margin-bottom:14px;}
+.etb-field-group label{font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px;}
+.etb-field-group select{width:100%;padding:12px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none;appearance:none;-webkit-appearance:none;}
+.etb-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;}
+.etb-cancel{padding:13px;border:1px solid rgba(255,255,255,0.55);background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),0 3px 9px rgba(35,135,70,0.30);border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#09311A;cursor:pointer;}
+.etb-confirm{padding:13px;border:none;background:#B03020;border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;}
+.etb-confirm:active{background:#8A1A10;}
+
+
+/* ══ SETTINGS — SEGMENTED CONTROLS ══ */
+.sp-section-lbl{
+  font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--text3);padding:12px 17px 6px;
+}
+.seg-ctrl{
+  display:flex;
+  background:var(--surface2);
+  border-radius:10px;
+  padding:3px;
+  gap:2px;
+  border:1px solid var(--border);
+}
+.seg-btn{
+  padding:6px 13px;
+  border:none;background:transparent;
+  border-radius:8px;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  color:var(--text3);
+  cursor:pointer;
+  transition:all 0.15s;
+  white-space:nowrap;
+}
+.seg-btn.active{
+  background:#fff;
+  color:#1F663D;
+  box-shadow:0 1px 4px rgba(29,151,79,0.12);
+}
+.seg-btn:active{opacity:0.8;}
+
+
+.ff-readonly{padding:11px 13px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);font-size:14px;color:#1F663D;font-weight:600;min-height:44px;display:flex;align-items:center;}
+
+/* ══ AUTO-UNLOAD DETECTOR BANNER ══ */
+.auto-unload-banner{
+  display:none;
+  background:linear-gradient(135deg,#1F663D,#31995D);
+  border-radius:14px;
+  padding:12px 16px;
+  margin-bottom:10px;
+  box-shadow:0 4px 16px rgba(31,102,61,0.25);
+}
+.auto-unload-banner.visible{display:none;} /* banner disabled — weight shown in main display */
+.aub-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.aub-title{font-family:'Inter',sans-serif;font-size:13px;font-weight:800;color:#fff;display:flex;align-items:center;gap:6px;}
+.aub-dot{width:8px;height:8px;border-radius:50%;background:#92EAA8;animation:aub-pulse 1s infinite;}
+@keyframes aub-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.3);}}
+.aub-cancel{background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;}
+.aub-cancel:active{background:rgba(255,255,255,0.25);}
+.aub-weights{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.aub-cell{text-align:center;}
+.aub-lbl{font-size:10px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;}
+.aub-val{font-family:'Inter',sans-serif;font-size:17px;font-weight:700;color:#fff;}
+.aub-val.highlight{color:#92EAA8;font-size:20px;}
+.aub-stable-bar{height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin-top:8px;overflow:hidden;}
+.aub-stable-fill{height:100%;background:#92EAA8;border-radius:2px;width:0%;transition:width 0.5s linear;}
+
+
+/* ══ FIELD MAP PANEL ══ */
+#sp-fieldmap{overflow:hidden;} /* prevent double scrollbar with map */
+.fmap-body{
+  position:absolute;
+  top:52px; /* below sp-header */
+  left:0;right:0;bottom:0;
+  display:flex;flex-direction:column;
+}
+#fmap-container{
+  flex:1;
+  width:100%;
+  min-height:0;
+}
+.fmap-toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 14px;
+  background:rgba(247,253,251,0.97);
+  border-bottom:1px solid rgba(29,151,79,0.12);
+  flex-shrink:0;
+  flex-wrap:wrap;
+}
+/* Was inline padding/font-size on the two buttons, which no stylesheet rule could
+   override — moved here so the tablet type scale can raise them. */
+/* Primary/Remote is a mode selector, so only the current mode is gold — the
+   unselected one falls through to the shared neutral-button look (light glassy
+   / dark glassy) via .mode-btn:not(.active) in those groups. */
+.mode-btn{
+  padding:7px 14px;font-size:12px;font-weight:700;
+  border-radius:20px;border:1px solid rgba(255,255,255,0.9);
+  font-family:'Inter',sans-serif;cursor:pointer;
+  transition:background 0.15s,color 0.15s,box-shadow 0.15s;
+}
+.mode-btn.active{
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);
+  color:#09311A;
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),0 3px 9px rgba(35,135,70,0.30);
+}
+.mode-btn:active{filter:brightness(0.96);}
+/* UNLOADING badge: 42px only fits the wide tablet panel — see the tablet block. */
+.unloading-badge{font-size:22px;}
+/* Login prompt sheet. Sizes live here rather than inline because the tablet type
+   scale has to be able to raise them. NOTE: the translation sweep used to find the
+   title/sub via [style*="font-size:15px"]; it now uses #lp-title / #lp-sub, so these
+   sizes are safe to change. */
+.lp-title{font-size:15px;}
+.lp-sub{font-size:12px;}
+.lp-close{font-size:18px;}
+/* Settings two-up: pairs of related settings share a card in two columns where
+   the width allows, and stack automatically below ~440px of card width. */
+.settings-2col{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;padding:14px 16px 16px;}
+.settings-col{min-width:0;}
+.settings-col .sp-section-lbl{padding:0 0 8px 0;}
+/* Drop Trigger value box — sized to its content rather than spanning the row. */
+.au-drop-input{
+  width:110px;padding:11px 14px;background:var(--surface2);
+  border:1.5px solid var(--border);border-radius:12px;
+  font-family:'Inter',sans-serif;font-size:16px;font-weight:600;
+  color:var(--text);outline:none;text-align:center;
+}
+/* These two rows stack their label above their control, but .setting-row's
+   space-between then pushed the control to the bottom of the (now taller) row,
+   leaving a gap. Keep the control tucked under its label. */
+#sp-settings .setting-row[style*="flex-direction:column"]{justify-content:flex-start;}
+.fmap-filter-btn{
+  padding:9px 18px;
+  border-radius:20px;
+  /* Same gold as the tab bar's active pill and .btn-gold. */
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255,255,255,0.80),
+    inset 0 -2px 3px rgba(25,120,60,0.22),
+    0 3px 9px rgba(35,135,70,0.30),
+    0 1px 2px rgba(35,135,70,0.22);
+  font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
+  color:#09311A;cursor:pointer;transition:all 0.15s;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+/* Both filter buttons stay gold — each one just commits its own action when
+   pressed, so there is no selected/unselected look to convey. */
+.fmap-filter-btn:active{opacity:0.8;}
+.fmap-locate-btn{
+  margin-left:auto;
+  padding:9px 18px;
+  border-radius:20px;
+  border:1px solid rgba(42,122,226,0.3);
+  background:rgba(42,122,226,0.07);
+  font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
+  color:#2A7AE2;cursor:pointer;
+  display:flex;align-items:center;gap:5px;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+.fmap-empty{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;color:var(--text3);font-size:13px;
+  pointer-events:none;z-index:500;
+}
+/* Leaflet popup override */
+.leaflet-popup-content-wrapper{border-radius:12px!important;box-shadow:0 4px 20px rgba(0,0,0,0.15)!important;}
+.leaflet-popup-content{margin:12px 16px!important;font-family:'Inter',sans-serif!important;}
+.fmap-popup-title{font-family:'Inter',sans-serif;font-size:15px;font-weight:700;color:#1A1A1A;margin-bottom:6px;}
+.fmap-popup-row{font-size:12px;color:#555;margin-bottom:3px;}
+.fmap-popup-row strong{color:#1A1A1A;}
+.fmap-popup-gps{font-size:11px;color:#2A7AE2;margin-top:6px;cursor:pointer;text-decoration:underline;}
+
+
+/* ══ BOUNDARY DRAWING ══ */
+.fmap-draw-bar{
+  display:none;
+  align-items:center;gap:8px;padding:8px 14px;
+  background:#1F663D;flex-shrink:0;flex-wrap:wrap;
+}
+.fmap-draw-bar.active{display:flex;}
+.fmap-draw-pts{font-size:11px;color:rgba(255,255,255,0.7);}
+.fmap-draw-btn{
+  padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.3);
+  background:rgba(255,255,255,0.15);color:#fff;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:'Inter',sans-serif;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+.fmap-draw-btn.save{background:#fff;color:#1F663D;}
+.fmap-draw-btn:active{opacity:0.7;}
+
+/* Field selector for boundary drawing */
+.fmap-field-select{
+  width:100%;padding:6px 12px;
+  background:rgba(255,255,255,0.15);
+  border:1px solid rgba(255,255,255,0.3);
+  border-radius:20px;
+  color:#fff;font-size:12px;font-weight:600;
+  font-family:'Inter',sans-serif;
+  outline:none;
+  appearance:none;-webkit-appearance:none;
+  cursor:pointer;
+  flex:1;max-width:160px;
+}
+.fmap-field-select option{color:#1A1A1A;background:#fff;}
+
+/* Geofence switch dialog */
+.geofence-overlay{
+  position:fixed;inset:0;
+  background:rgba(10,50,25,0.42);
+  display:flex;align-items:center;justify-content:center;
+  z-index:800;padding:24px;
+  opacity:0;pointer-events:none;transition:opacity 0.18s;
+}
+.geofence-overlay.open{opacity:1;pointer-events:all;}
+.geofence-box{
+  background:#fff;border-radius:20px;
+  padding:24px 22px 20px;width:100%;max-width:340px;
+  box-shadow:0 16px 48px rgba(13,67,31,0.18);
+  transform:scale(0.94);transition:transform 0.18s;
+}
+.geofence-overlay.open .geofence-box{transform:scale(1);}
+.geofence-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.geofence-field{font-family:'Inter',sans-serif;font-size:18px;font-weight:600;color:#1F663D;margin-bottom:4px;}
+.geofence-farm{font-size:13px;color:var(--text3);margin-bottom:18px;}
+.geofence-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.geofence-cancel{padding:13px;border:1.5px solid var(--border2);background:transparent;border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--text2);cursor:pointer;}
+.geofence-confirm{padding:13px;border:none;background:#1F663D;border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;}
+.geofence-confirm:active{background:#134529;}
+
+/* Boundary polygons on map - handled by Leaflet inline styles */
+
+
+/* Field detail edit button */
+.fdp-edit-btn{
+  padding:7px 16px;
+  background:rgba(39,171,80,0.1);
+  border:1px solid rgba(39,171,80,0.25);
+  border-radius:20px;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  color:#A85E00;cursor:pointer;flex-shrink:0;
+  transition:background 0.12s;
+}
+.fdp-edit-btn:active{background:rgba(39,171,80,0.2);}
+
+/* kg/ha display in field detail stats */
+.fdp-kgha{
+  font-family:'Inter',sans-serif;font-size:13px;color:var(--text2);
+  margin-top:4px;
+}
+
+
+/* Awaiting delivery indicator */
+.fdp-tx-awaiting{font-size:11px;color:#A85E00;font-style:italic;}
+
+.sr-val{font-size:14px;color:var(--text);font-weight:600;text-align:right;flex-shrink:0;margin-left:8px;}
+
+/* Terminal scroll */
+#diag-terminal::-webkit-scrollbar{width:3px;}
+#diag-terminal::-webkit-scrollbar-thumb{background:rgba(126,231,135,0.3);border-radius:2px;}
+
+/* ── Calibration tool ── */
+.cal-grid{padding:8px 14px 0;}
+.cal-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.cal-lbl{font-size:13px;font-weight:600;color:var(--text2);min-width:130px;flex-shrink:0;}
+.cal-input{
+  flex:1;padding:9px 12px;
+  background:var(--surface2);
+  border:1.5px solid var(--border);
+  border-radius:10px;
+  font-family:'Inter',sans-serif;font-size:14px;
+  color:var(--text);outline:none;
+  -webkit-appearance:none;
+  text-align:right;
+}
+.cal-input:focus{border-color:#20A44C;}
+.cal-copy-btn{
+  padding:9px 12px;border-radius:10px;
+  background:rgba(42,122,226,0.08);
+  border:1.5px solid rgba(42,122,226,0.25);
+  color:#2A7AE2;font-size:12px;font-weight:600;
+  cursor:pointer;white-space:nowrap;flex-shrink:0;
+}
+.cal-copy-btn:active{background:rgba(42,122,226,0.18);}
+.cal-calc-btn{
+  width:100%;padding:13px;
+  background:linear-gradient(135deg,#20A44C,#A85E00);
+  border:none;border-radius:12px;
+  color:#fff;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
+  cursor:pointer;transition:opacity 0.15s;
+}
+.cal-calc-btn:active{opacity:0.8;}
+.cal-result-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  margin-bottom:2px;
+}
+.cal-factor-display{
+  font-family:'Inter',sans-serif;font-size:24px;font-weight:600;
+  color:#1F663D;min-width:80px;text-align:right;
+}
+.cal-action-btn{
+  padding:12px;border-radius:12px;
+  border:1.5px solid rgba(39,171,80,0.35);
+  background:rgba(39,171,80,0.08);
+  color:#A85E00;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  cursor:pointer;
+}
+.cal-action-btn.green{
+  border-color:rgba(49,153,93,0.35);
+  background:rgba(49,153,93,0.08);
+  color:#1F663D;
+}
+.cal-action-btn:disabled{opacity:0.38;cursor:not-allowed;}
+
+
+/* Calibration panel */
+.cal-field-group{display:flex;flex-direction:column;gap:4px;}
+.cal-lbl{font-size:11px;font-weight:600;color:var(--text2);letter-spacing:0.03em;}
+.cal-input{padding:10px 12px;background:linear-gradient(180deg,rgba(255,255,255,0.95),rgba(243,252,246,0.88));border:1px solid rgba(255,255,255,0.9);box-shadow:inset 0 1px 3px rgba(33,127,67,0.09),0 1px 0 rgba(255,255,255,0.9);border-radius:10px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none;width:100%;box-sizing:border-box;}
+.cal-input:focus{border-color:#31995D;}
+.cal-link-btn{flex:1;background:none;border:none;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:#2A7AE2;cursor:pointer;padding:8px 4px;text-align:center;}
+.cal-link-btn:active{opacity:0.6;}
+
+
+/* ══ SIGN IN SCREEN ══ */
+/* Second #s-login block — this one wins, being later in the file. The earlier
+   rule near the top sets the same background; both were changed together so
+   they can't drift back apart. */
+#s-login{
+  background:linear-gradient(180deg,#F7FDFA 0%,#EFFAF4 55%,#E5F6EC 100%);
+  align-items:center;justify-content:center;padding:32px 24px;overflow-y:auto;
+  display:none;
+}
+#s-login.active{display:flex;z-index:1000;}
+.signin-close{
+  position:absolute;
+  top:calc(14px + env(safe-area-inset-top));
+  right:calc(14px + env(safe-area-inset-right));
+  width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:26px;line-height:1;font-weight:400;
+  background:rgba(255,255,255,0.55);
+  border:1px solid rgba(20,100,55,0.18);
+  color:#0F4B29;cursor:pointer;z-index:2;
+  -webkit-tap-highlight-color:transparent;
+}
+.signin-close:active{background:rgba(255,255,255,0.85);}
+[data-theme="dark"] .signin-close{
+  background:rgba(255,255,255,0.10);
+  border-color:rgba(255,255,255,0.18);
+  color:#DAE8E0;
+}
+.signin-logo{
+  font-family:'Inter',sans-serif;font-size:28px;font-weight:900;
+  color:#1A1A1A;margin-bottom:4px;display:flex;align-items:center;gap:10px;
+}
+.signin-logo-combine{flex-shrink:0;margin-right:6px;display:flex;align-items:center;}
+.signin-sub{font-size:13px;color:var(--text3);margin-bottom:28px;text-align:center;}
+.signin-card{
+  width:100%;max-width:380px;
+  background:#fff;border-radius:24px;
+  border:1px solid rgba(32,168,98,0.2);
+  padding:32px 28px 28px;
+  box-shadow:0 12px 48px rgba(29,151,79,0.15);
+}
+.signin-tab-row{
+  display:grid;grid-template-columns:1fr 1fr;
+  background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:24px;gap:0;
+}
+.signin-tab{
+  padding:9px;text-align:center;
+  border:none;background:none;cursor:pointer;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  color:var(--text3);border-radius:10px;transition:all 0.15s;
+}
+.signin-tab.active{background:#fff;color:var(--text);box-shadow:0 2px 8px rgba(29,151,79,0.1);}
+/* Reveal toggle on every password box. The button is placed inside a wrapper
+   the script adds around the input, so it centres on the FIELD rather than on
+   the label+input group. */
+.pw-wrap{position:relative;display:block;}
+.pw-eye{
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  background:none;border:none;padding:8px;cursor:pointer;
+  font-size:15px;line-height:1;opacity:0.45;
+}
+.pw-eye.on{opacity:0.95;}
+.pw-wrap input{padding-right:42px!important;}
+.signin-field{margin-bottom:16px;}
+.signin-field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;letter-spacing:0.03em;}
+.signin-field input{
+  width:100%;box-sizing:border-box;
+  padding:13px 15px;
+  background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;
+  font-family:'Inter',sans-serif;font-size:15px;color:var(--text);outline:none;
+  transition:border-color 0.15s;
+}
+.signin-field input:focus{border-color:#D4930A;}
+.signin-btn{
+  width:100%;padding:15px;
+  background:#D4930A;color:#fff;border:none;border-radius:12px;
+  font-family:'Inter',sans-serif;font-size:16px;font-weight:700;
+  cursor:pointer;margin-top:4px;
+  box-shadow:0 4px 16px rgba(29,151,73,0.3);
+  transition:background 0.15s,transform 0.1s;
+}
+.signin-btn:active{transform:scale(0.98);background:#1B8D44;}
+.signin-btn:disabled{opacity:0.55;cursor:not-allowed;transform:none;}
+.signin-forgot{
+  display:block;text-align:center;margin-top:14px;
+  font-size:13px;color:#2A7AE2;cursor:pointer;background:none;border:none;
+  font-family:'Inter',sans-serif;text-decoration:underline;
+}
+.signin-error{
+  background:rgba(176,48,32,0.08);border:1px solid rgba(176,48,32,0.2);
+  border-radius:10px;padding:10px 14px;
+  font-size:13px;color:#B03020;margin-bottom:14px;display:none;
+}
+.signin-success{
+  background:rgba(49,153,93,0.08);border:1px solid rgba(49,153,93,0.25);
+  border-radius:10px;padding:10px 14px;
+  font-size:13px;color:#1F663D;margin-bottom:14px;display:none;
+}
+.signin-divider{text-align:center;font-size:12px;color:var(--text3);margin:16px 0;}
+
+
+/* ══ SYNC CIRCLE INDICATOR ══ */
+.sync-circle{
+  width:32px;height:32px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  position:relative;
+  flex-shrink:0;
+  transition:all 0.3s ease;
+  /* default = loads pending → orange/gold */
+  background:linear-gradient(180deg,#7DE3AA 0%,#5CDB93 55%,#42D37F 100%);
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.80),0 2px 8px rgba(35,135,70,0.35);
+  color:#09311A;
+}
+.sync-circle:active{transform:scale(0.94);}
+/* All data synced → glowing glassy green */
+.sync-circle.synced{
+  background:linear-gradient(180deg,rgba(132,218,160,0.60),rgba(64,190,110,0.46));
+  border:1px solid rgba(138,222,167,0.75);
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,0.75),0 0 13px rgba(53,177,97,0.65),0 2px 8px rgba(41,134,79,0.35);
+  color:#15512E;
+}
+/* Uploading → arrows spin */
+.sync-circle.syncing .sync-icon{
+  animation:spin 0.9s linear infinite;
+  will-change:transform;
+}
+.sync-circle.error{
+  background:linear-gradient(180deg,rgba(255,205,200,0.75),rgba(255,180,172,0.55));
+  border:1px solid rgba(255,190,182,0.8);
+  color:#8A1A10;
+}
+.sync-badge{
+  position:absolute;top:-4px;right:-4px;
+  width:14px;height:14px;
+  background:#D4930A;color:#fff;
+  border-radius:50%;border:1.5px solid #fff;
+  font-size:8px;font-weight:700;font-family:'Inter',sans-serif;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;
+}
+.sync-badge.hidden{display:none;}
+.unsynced-pill{display:flex;align-items:center;gap:4px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.01em;cursor:pointer;background:rgba(212,147,10,0.14);color:#16743A;border:1px solid rgba(212,147,10,0.30);white-space:nowrap;}
+.unsynced-pill.hidden{display:none;}
+/* Scale sleep-mode overlay */
+.sleep-overlay{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:28px;background:rgba(8,28,17,0.55);-webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);opacity:0;pointer-events:none;transition:opacity 0.25s;}
+.sleep-overlay.open{opacity:1;pointer-events:all;}
+.sleep-box{width:100%;max-width:340px;background:linear-gradient(180deg,rgba(255,255,255,0.96),rgba(242,251,245,0.90));border:1px solid rgba(255,255,255,0.9);border-radius:22px;box-shadow:0 18px 50px rgba(10,50,25,0.35);padding:30px 26px 26px;text-align:center;}
+.sleep-icon{font-size:42px;line-height:1;margin-bottom:12px;}
+.sleep-title{font-family:'Inter',sans-serif;font-size:20px;font-weight:800;color:var(--text);margin-bottom:8px;}
+.sleep-sub{font-size:14px;line-height:1.5;color:var(--text2);margin-bottom:22px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+
+/* ══ WHEEL PICKER ══ */
+/* The scrim is a pseudo-element, NOT the overlay's own opacity. When opacity
+   lived on the overlay the sheet inherited it, so the white sheet rendered
+   translucent while sliding — you could read the tab bar through it. Worse,
+   the scrim hit full darkness at 200ms while the sheet needed 300ms to arrive,
+   leaving a window of near-black screen with no sheet in place: the "black
+   flicker" on opening a picker. Scrim and sheet now share one 0.3s curve. */
+.wheel-overlay{
+  position:fixed;inset:0;
+  display:flex;align-items:flex-end;justify-content:center;
+  z-index:800;pointer-events:none;
+}
+.wheel-overlay::before{
+  content:'';position:absolute;inset:0;background:rgba(5,25,12,0.45);
+  opacity:0;transition:opacity 0.3s;pointer-events:none;
+}
+.wheel-overlay.open{pointer-events:all;}
+.wheel-overlay.open::before{opacity:1;}
+.wheel-sheet{
+  width:100%;max-width:520px;
+  /* Positioned so it paints ABOVE the absolutely-positioned scrim. */
+  position:relative;z-index:1;
+  background:#fff;border-radius:24px 24px 0 0;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.32,0.72,0,1);
+}
+.wheel-overlay.open .wheel-sheet{transform:translateY(0);}
+.wheel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px 10px;border-bottom:1px solid var(--border);
+}
+.wheel-title{font-size:15px;font-weight:700;color:var(--text);}
+.wheel-add-btn{
+  font-size:13px;font-weight:700;color:#2A7AE2;
+  background:rgba(42,122,226,0.08);border:none;
+  border-radius:10px;padding:6px 13px;cursor:pointer;
+}
+.wheel-custom-btn{
+  font-size:13px;font-weight:800;
+  border-radius:10px;padding:6px 13px;cursor:pointer;
+}
+.wheel-confirm-btn{
+  font-size:13px;font-weight:700;color:#D4930A;
+  background:rgba(212,147,10,0.1);border:none;
+  border-radius:10px;padding:6px 13px;cursor:pointer;
+}
+.wheel-body{
+  display:flex;gap:0;position:relative;height:220px;overflow:hidden;
+}
+.wheel-col{flex:1;position:relative;overflow:hidden;}
+.wheel-col-inner{
+  overflow-y:scroll;height:100%;
+  scroll-snap-type:y mandatory;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+.wheel-col-inner::-webkit-scrollbar{display:none;}
+.wheel-item{
+  height:44px;display:flex;align-items:center;justify-content:center;
+  font-size:15px;color:var(--text2);
+  scroll-snap-align:center;
+  transition:color 0.15s, font-size 0.15s, font-weight 0.15s;
+  padding:0 10px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  cursor:pointer;
+}
+.wheel-item.active{color:var(--text);font-size:17px;font-weight:700;}
+.wheel-col-inner .wheel-item:first-child,.wheel-col-inner .wheel-item:last-child{height:88px;}
+/* Fade mask */
+.wheel-col::before,.wheel-col::after{
+  content:'';position:absolute;left:0;right:0;height:88px;z-index:2;pointer-events:none;
+}
+.wheel-col::before{top:0;background:linear-gradient(to bottom,rgba(255,255,255,0.95),rgba(255,255,255,0));}
+.wheel-col::after{bottom:0;background:linear-gradient(to top,rgba(255,255,255,0.95),rgba(255,255,255,0));}
+/* Selection indicator line */
+.wheel-body::before,.wheel-body::after{
+  content:'';position:absolute;left:12px;right:12px;height:1.5px;background:rgba(29,151,79,0.25);z-index:3;pointer-events:none;
+}
+.wheel-body::before{top:88px;}
+.wheel-body::after{top:132px;}
+/* Divider between two columns */
+.wheel-divider{width:1px;background:var(--border);flex-shrink:0;margin:12px 0;}
+
+
+.pw-wrap{position:relative;display:flex;align-items:center;}
+.pw-wrap input{flex:1;padding-right:42px;}
+.pw-eye{position:absolute;right:12px;background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;display:flex;align-items:center;}
+.pw-eye:hover{color:var(--text2);}
+
+/* ══ DARK MODE — resolved by JS (auto-follows the OS by default, or forced
+   by the user's Settings choice) and applied via [data-theme] on <html>.
+   Neutral dark-GRAY surfaces throughout (cards, tab bar, sheets); the gold
+   accent (buttons, active-tab capsule) is intentionally left untouched.
+   Placed LAST in the stylesheet so its !important rules win every same-
+   specificity tie against earlier unconditional rules. ══ */
+:root[data-theme="dark"]{
+  --bg-top:#19191A;--bg-bot:#101011;
+  --bg2:#19191A;--surface:#2E2E31;--surface2:#353538;
+  --border:rgba(255,255,255,0.12);--border2:rgba(255,255,255,0.18);
+  --text:#ECECEC;--text2:rgba(236,236,236,0.68);--text3:rgba(236,236,236,0.42);
+  --green-light:rgba(49,153,93,0.16);--amber-light:rgba(168,94,0,0.22);--red-light:rgba(176,48,32,0.20);
+}
+[data-theme="dark"] body{ background:linear-gradient(180deg,#19191A 0%,#141415 55%,#101011 100%)!important; }
+/* Match body exactly in dark mode too. */
+[data-theme="dark"] #s-login{ background:linear-gradient(180deg,#19191A 0%,#141415 55%,#101011 100%)!important; }
+[data-theme="dark"] .topbar,[data-theme="dark"] .sp-header,[data-theme="dark"] .tabbar,[data-theme="dark"] .fdp-header,[data-theme="dark"] .fmap-toolbar{
+  background:linear-gradient(180deg,rgba(46,46,49,0.94) 0%,rgba(38,38,41,0.90) 100%)!important;
+  border-color:rgba(255,255,255,0.09)!important;
+}
+/* The light-mode bars draw a pure-white 1px inset highlight along their top edge
+   (a bevel that reads as glass on a light background). The rule above only
+   overrode background and border-color, so that highlight survived into dark
+   mode as a hard white hairline — most obvious on .topbar, whose top edge sits
+   at y=0 directly under the status bar. Toned to a faint highlight; the outer
+   shadow is re-aimed per bar since .tabbar casts upward. */
+[data-theme="dark"] .topbar,[data-theme="dark"] .sp-header{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 4px 16px rgba(0,0,0,0.35)!important;
+}
+[data-theme="dark"] .tabbar{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 -4px 16px rgba(0,0,0,0.35)!important;
+}
+/* Flat, not a gradient — see the .sub-panel rule for why (gradient on a tall
+   scroll container only painted its upper tiles in the Android WebView). */
+[data-theme="dark"] .sub-panel{ background:#151517!important; }
+/* Detail panels pick up the card gradient from the rule above; flatten it here
+   for the same tiling reason (they're full-screen scrolling panels, not cards). */
+[data-theme="dark"] .field-detail-panel{ background:#151517!important; }
+/* Cards lighter than the near-black page background so they visibly stand out */
+[data-theme="dark"] .card,[data-theme="dark"] .info-rows,[data-theme="dark"] .tx-sheet,[data-theme="dark"] .wheel-sheet,[data-theme="dark"] .field-detail-panel,[data-theme="dark"] .sleep-box,[data-theme="dark"] .field-only-sheet,
+[data-theme="dark"] .add-form,[data-theme="dark"] .login-card,[data-theme="dark"] .entry-form-panel,[data-theme="dark"] .confirm-box,
+[data-theme="dark"] .cal-sheet,[data-theme="dark"] .truck-load-bar-wrap,
+[data-theme="dark"] .farm-item,[data-theme="dark"] .field-item,
+[data-theme="dark"] .more-list,[data-theme="dark"] .more-profile,
+[data-theme="dark"] .crop-modal,[data-theme="dark"] .sheet,[data-theme="dark"] .log-item,
+[data-theme="dark"] .fdp-stat,[data-theme="dark"] .fdp-tx,
+[data-theme="dark"] .scale-panel,
+[data-theme="dark"] .farm-sel-row,[data-theme="dark"] .field-only-row,[data-theme="dark"] .truck-picker-row,
+[data-theme="dark"] .unload-confirm-box,[data-theme="dark"] .empty-truck-box{
+  background:linear-gradient(180deg,rgba(58,58,61,0.97) 0%,rgba(48,48,51,0.94) 100%)!important;
+  border-color:rgba(255,255,255,0.12)!important;
+}
+/* The scale panel now takes its dark background from the shared card rule above,
+   so it matches the picker cards below it exactly. Two light-mode treatments have
+   to be switched off for that to hold, and both were what made the digits hard to
+   read: the ::before specular sheen lays 38% white over the top 45% of the panel,
+   which on a dark background becomes a bright band straight across the numbers,
+   and the white inset highlight draws a hard bright line along the top edge. */
+[data-theme="dark"] .scale-panel::before{ display:none; }
+[data-theme="dark"] .scale-panel{
+  box-shadow:0 2px 10px rgba(0,0,0,0.30)!important;
+}
+/* Tab bar: inactive icons/labels turn light gray; the active tab keeps its
+   dark text (it sits on the gold capsule, which is untouched in dark mode) */
+[data-theme="dark"] .tab-btn:not(.active){ color:#D8D8DA!important; }
+[data-theme="dark"] .scale-main-weight{ color:#ECECEC!important; }
+[data-theme="dark"] .scale-mode-lbl,[data-theme="dark"] .scale-sub-lbl,[data-theme="dark"] .scale-sub-val,[data-theme="dark"] .scale-unit-lbl,[data-theme="dark"] .stable-pill-inline{ color:var(--text2)!important; }
+[data-theme="dark"] .stable-pill-inline{ background:rgba(255,255,255,0.07)!important; border-color:rgba(255,255,255,0.10)!important; }
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea,
+[data-theme="dark"] .tx-field-group input,[data-theme="dark"] .tx-field-group select,[data-theme="dark"] .tx-field-group textarea,
+[data-theme="dark"] .add-form input,[data-theme="dark"] .fg input,[data-theme="dark"] .fg select{
+  background:var(--surface2)!important; color:var(--text)!important; border-color:var(--border)!important;
+}
+/* Login prompt sheet. Its surface and text colours are inline (and so need
+   !important to reach), and it had no dark rule at all — the sheet stayed cream
+   over a dark app, which is most obvious now that Skip is correctly dark-glass. */
+[data-theme="dark"] .lp-sheet{
+  background:linear-gradient(180deg,rgba(58,58,61,0.98) 0%,rgba(48,48,51,0.96) 100%)!important;
+  border-top-color:rgba(255,255,255,0.12)!important;
+  box-shadow:0 -12px 48px rgba(0,0,0,0.55)!important;
+}
+[data-theme="dark"] #lp-title{ color:var(--text)!important; }
+[data-theme="dark"] #lp-sub{ color:var(--text2)!important; }
+[data-theme="dark"] .lp-close{ color:var(--text3)!important; }
+
+/* "white glassy" buttons → dark glassy, text still tracks var(--text). Note:
+   the GOLD buttons (Tare/Clear/Unload, +Add pills, sync circle, etc.) are
+   deliberately NOT in this list so their gold/orange/green stays intact. */
+[data-theme="dark"] .btn-scan,[data-theme="dark"] .btn-logout,[data-theme="dark"] .btn-small-green,[data-theme="dark"] .crop-modal-btn,[data-theme="dark"] .confirm-btn-cancel,
+[data-theme="dark"] .btn-conn,[data-theme="dark"] .fdp-tx-edit,[data-theme="dark"] .fdp-tx-del,[data-theme="dark"] .wheel-custom-btn,[data-theme="dark"] .mode-btn:not(.active),
+[data-theme="dark"] .log-gps-btn,[data-theme="dark"] .fdp-tx-gps,[data-theme="dark"] .field-picker-btn,[data-theme="dark"] .tlb-empty-btn,[data-theme="dark"] .seg-btn.active,
+[data-theme="dark"] .fmap-locate-btn,[data-theme="dark"] .fmap-draw-btn,[data-theme="dark"] .fdp-edit-btn,
+[data-theme="dark"] .cal-calc-btn,[data-theme="dark"] .btn-sel,[data-theme="dark"] .btn-edit-sm,[data-theme="dark"] .tx-btn-cancel,[data-theme="dark"] .etb-cancel,
+[data-theme="dark"] #dev-ota-btn,[data-theme="dark"] #tdp-edit-btn,[data-theme="dark"] #profile-auth-btn,[data-theme="dark"] #lp-skip-btn{
+  background:linear-gradient(180deg,rgba(58,58,61,0.92),rgba(48,48,51,0.85))!important;
+  border-color:rgba(255,255,255,0.16)!important;
+}
+[data-theme="dark"] .seg-btn.active{ color:#ECECEC!important; }
+[data-theme="dark"] .info-row:active{ background:rgba(255,255,255,0.08)!important; }
+[data-theme="dark"] .seg-ctrl{ background:var(--surface2)!important; }
+/* Wheel picker's top/bottom fade mask is hardcoded white to blend into the
+   (light) sheet behind it — in dark mode that shows up as a bright white
+   glare instead of fading invisibly, so re-tint it to match the dark card. */
+[data-theme="dark"] .wheel-col::before{ background:linear-gradient(to bottom,rgba(58,58,61,0.97),rgba(58,58,61,0))!important; }
+[data-theme="dark"] .wheel-col::after{ background:linear-gradient(to top,rgba(58,58,61,0.97),rgba(58,58,61,0))!important; }
+/* Tab bar's gold active-tab capsule + all gold/green accent buttons stay exactly as-is (not overridden) */
+
+/* ══ ANDROID WEBVIEW: NO BACKDROP BLUR ══
+   Set by the <head> script on Android only. The WebView composites
+   backdrop-filter surfaces unreliably — segmented controls (kg/lb/bu, ha/ac)
+   and buttons rendered half-drawn or not at all. Each of those rules already
+   paints a near-opaque background of its own, so removing only the blur keeps
+   them looking essentially the same while making them plain, reliably-painted
+   boxes. Desktop and iPad are untouched and keep the frosted glass. */
+.no-blur *,
+.no-blur *::before,
+.no-blur *::after{
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+/* NOTE: this block must stay LAST in the stylesheet. Several of the rules it
+   overrides (.truck-capacity-*, .sr-val) are defined further down the file, and
+   at equal specificity the later rule wins — placed earlier, these silently did
+   nothing. */
+/* ══ TABLET TYPOGRAPHY ══
+   The cards and rows above grow a lot on a tablet, which left phone-sized text
+   looking lost inside them. Scale the type up to match. Width-gated so phones are
+   untouched. */
+@media (min-width:600px){
+  .info-row-title{font-size:17px;}
+  .info-row-sub{font-size:15px;}
+  .info-row-val{font-size:17px;}
+  .fi-name{font-size:17px;}
+  .fi-sub{font-size:15px;}
+  .more-row-label{font-size:19px;}
+  .more-section-lbl{font-size:19px;}
+  .sr-label{font-size:17px;}
+  .sr-sub{font-size:14px;}
+  .sr-val{font-size:17px;}
+  .section-lbl{font-size:12px;}
+  .card-title{font-size:14px;}
+  /* Sub-panel chrome and controls, so Settings/Operators/Season/Cloud/Diagnostics
+     scale with the rows inside them. */
+  .sp-title{font-size:20px;}
+  .sp-back{font-size:19px;}
+  .sp-section-lbl{font-size:12px;}
+  .seg-btn{font-size:15px;padding:8px 16px;}
+  .profile-name{font-size:19px;}
+  .profile-farm{font-size:14px;}
+  .unloading-badge{font-size:42px;}
+  .fdp-title{font-size:22px;}
+  .fdp-farm{font-size:14px;}
+  .fdp-section-lbl{font-size:14px;}
+  .fdp-empty{font-size:17px;}
+  .fdp-fab-btn{font-size:18px;}
+  .fdp-stat-lbl{font-size:13px;}
+  .fdp-stat-val{font-size:28px;}
+  .fdp-stat-sub{font-size:14px;}
+  /* Connection Mode buttons */
+  .mode-btn{font-size:15px;padding:10px 22px;}
+  /* Per-card action buttons. The type around these scaled up but the buttons kept
+     their phone size, which left them small and hard to hit on a wide tablet card.
+     The icon svg is sized in the markup, so it needs raising here too. */
+  .btn-info{width:40px;height:40px;font-size:18px;}
+  .btn-info svg{width:18px;height:18px;}
+  .btn-del-sm{width:40px;height:40px;font-size:16px;}
+  /* Add / Edit sheets (Add Farm, Add Field, Add Truck, operators, transactions...)
+     — sized up for reading on a moving cart. */
+  .tx-sheet{max-width:680px;}
+  .tx-sheet-title{font-size:26px;}
+  .tx-sheet-close{font-size:32px;}
+  .tx-sheet-header{padding:22px 26px 18px;}
+  .tx-sheet-body{padding:20px 26px;}
+  .tx-field-group{margin-bottom:20px;}
+  .tx-field-group label{font-size:15px;}
+  .tx-field-group input,.tx-field-group select,.tx-field-group textarea{
+    font-size:20px;padding:17px 18px;}
+  .tx-sheet-footer{padding:18px 26px 32px;}
+  .tx-btn-save,.tx-btn-cancel{font-size:20px;padding:20px;}
+  /* Login prompt — the sheet reads tiny on a tablet at phone metrics. */
+  /* max-width and padding are inline on the sheet, hence !important. */
+  .lp-sheet{max-width:620px !important;padding:26px 30px 30px !important;}
+  .lp-title{font-size:22px;}
+  .lp-sub{font-size:16px;}
+  .lp-close{font-size:26px;}
+  .lp-btn{padding:16px !important;font-size:17px !important;border-radius:14px !important;}
+  .btn-gold-sm,
+  /* Zero (Device tab) and Sync / Clear / Clear (Cloud Sync) — same metrics as
+     + Add Cart so the action buttons all read at one size. */
+  .btn-small-green,.btn-small-red,.btn-conn{padding:10px 20px;font-size:15px;border-radius:12px;}
+  /* Field Map controls — toolbar, draw bar and its field picker. */
+  .fmap-filter-btn,.fmap-locate-btn,.fmap-draw-btn,
+  .fmap-field-select{font-size:18px;padding:14px 26px;}
+  .fmap-draw-pts{font-size:13px;}
+  .fmap-field-select{max-width:220px;}
+  .truck-capacity-lbl{font-size:15px;}
+  .truck-capacity-input{font-size:16px;}
+  .truck-capacity-unit{font-size:14px;}
+  /* Entry form (Crop / Moisture / Season) matched to the picker rows above it. */
+  #tp-weigh > .entry-form-panel .ff label{font-size:13px;}
+  #tp-weigh > .entry-form-panel .ff > input,
+  #tp-weigh > .entry-form-panel .ff > div{font-size:17px;}
+  /* Field/farm cards a third taller, per request — the extra padding does it
+     without stretching them past their content. */
+  .farm-item,.field-item{padding:16px 20px;min-height:96px;}
+  /* Destination and truck cards sized to match. Title/sub repeat the #id scope used
+     in the base rules above, or those would out-specify these. */
+  #destinations-list > .info-row{min-height:88px;padding:16px 18px;}
+  #destinations-list .info-row-title{font-size:17px;}
+  #destinations-list .info-row-sub{font-size:15px;}
+  #trucks-list > .card > .info-row{min-height:80px;padding:16px 18px;}
+}
+
