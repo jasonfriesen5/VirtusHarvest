@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../state/AuthProvider';
 import { useData } from '../state/DataProvider';
@@ -6,13 +6,26 @@ import { buildFenexRequest, routeKeyFor } from '../lib/fenexMapping';
 import { isFenexRequest, normalise, validate } from '../lib/fenexPayload';
 import type { MappingContext } from '../lib/fenexMapping';
 import type { FenexRequest } from '../lib/fenexPayload';
-import { createRemission, fetchRemissionPdf } from '../lib/fenexClient';
+import {
+  canSendApproval,
+  fetchRemissionPdf,
+  sendDraftForApproval,
+  syncFenexRemissions,
+} from '../lib/fenexClient';
+import { truckloadCropError } from '../lib/truckloadCrop';
 import { useIssuers } from '../state/useIssuers';
 import RemisionForm from './RemisionForm';
 import type { Truckload } from '../lib/truckloads';
 import type { Remision } from '../lib/types';
-import { Button, cx } from './ui';
-import { formatDateTime } from '../lib/format';
+import { Button, Modal } from './ui';
+import { remisionState, remisionLabels, remisionLocked } from '../lib/remisionWorkflow';
+import {
+  refreshDraftSources,
+  requestFromStored,
+  sourceFromStored,
+  sourcesChanged,
+  storeDraft,
+} from '../lib/draftSources';
 
 /**
  * Issuing a Nota de Remisión for one truckload. The document is created by an
@@ -22,9 +35,11 @@ import { formatDateTime } from '../lib/format';
 export default function RemisionPanel({ load }: { load: Truckload }) {
   const { user } = useAuth();
   const data = useData();
+  const [confirmation, setConfirmation] = useState<FenexRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [refreshedDraft, setRefreshedDraft] = useState<FenexRequest | null>(null);
   const { issuers, defaultIssuer } = useIssuers();
   // Which issuer this document goes out under. Null until the list arrives,
   // then the one already recorded on the draft, else the account default.
@@ -40,7 +55,7 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
     : undefined;
 
   const issuerId = pickedIssuerId ?? remision?.issuer_id ?? defaultIssuer?.id ?? null;
-  const issuer = issuers.find((i) => i.id === issuerId) ?? defaultIssuer;
+  const issuer = issuers.find((i) => i.id === issuerId && i.connection_status === 'APPROVED') ?? null;
 
   const ctx: MappingContext = useMemo(
     () => ({
@@ -65,29 +80,14 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
    */
   const savedPayload = remision?.request_payload;
   const legacyDraft = savedPayload != null && !isFenexRequest(savedPayload);
-  /**
-   * The buyer chosen last time this destination was shipped under this issuer.
-   * Recalled rather than configured: the same port is a different customer
-   * record in each Fenex account, so there is nothing a destination could
-   * store — but the pairing repeats on every load, so re-picking it every time
-   * would be pure friction.
-   */
-  const rememberedCustomerId = useMemo(() => {
-    if (!destination || !issuerId) return null;
-    return (
-      data.destinationCustomers.find(
-        (d) => d.destination_id === destination.id && d.issuer_id === issuerId,
-      )?.fenex_customer_id ?? null
-    );
-  }, [data.destinationCustomers, destination, issuerId]);
-
-  const currentDraft = useMemo<FenexRequest>(() => {
-    if (isFenexRequest(savedPayload)) return savedPayload;
-    const draft = buildFenexRequest(load, ctx);
-    return rememberedCustomerId
-      ? { ...draft, remission: { ...draft.remission, customerId: rememberedCustomerId } }
-      : draft;
-  }, [savedPayload, load, ctx, rememberedCustomerId]);
+  const sourceDraft = useMemo<FenexRequest>(
+    () => buildFenexRequest(load, ctx),
+    [load, ctx],
+  );
+  const savedRequest = requestFromStored(savedPayload);
+  const oldSource = sourceFromStored(savedPayload);
+  const sourceChanged = sourcesChanged(savedPayload, sourceDraft);
+  const currentDraft = refreshedDraft ?? savedRequest ?? sourceDraft;
 
   // The same rules Fenex enforces, applied here first. With no sandbox and no
   // cancellation, a payload that fails here is a document that never existed.
@@ -96,6 +96,31 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
     [currentDraft],
   );
   const savedDraft = isFenexRequest(savedPayload);
+
+  useEffect(() => {
+    if (!user || !remision?.fenex_remission_id
+        || ['APPROVED', 'REJECTED', 'CANCELLED'].includes(remision.fenex_status ?? '')) return;
+    let active = true;
+    let syncing = false;
+    const pull = async () => {
+      if (syncing) return;
+      syncing = true;
+      try {
+        await syncFenexRemissions();
+        if (active) await data.refresh();
+      } catch {
+        // A temporary poll failure does not undo a successfully delivered draft.
+      } finally {
+        syncing = false;
+      }
+    };
+    void pull();
+    const timer = window.setInterval(() => void pull(), 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [user, remision?.fenex_remission_id, remision?.fenex_status, data.refresh]);
 
   // Off means invisible: a farm that doesn't issue remisiones should never see
   // a button, a warning, or a mention of the feature.
@@ -125,29 +150,9 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
     );
   }
 
-  /**
-   * Records which Fenex customer this destination is under this issuer, so the
-   * next load down the same route starts with the buyer already chosen.
-   */
-  async function rememberCustomer(draft: FenexRequest) {
-    if (!user || !destination || !issuerId) return;
-    const customerId = draft.remission.customerId;
-    if (!customerId) return;
-    await supabase.from('ht_destination_customers').upsert(
-      {
-        user_id: user.id,
-        destination_id: destination.id,
-        issuer_id: issuerId,
-        fenex_customer_id: customerId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,destination_id,issuer_id' },
-    );
-  }
-
   /** Writes the draft without sending, so typed corrections survive a reload. */
   async function saveDraft(draft: FenexRequest) {
-    if (!user || !closingId) return;
+    if (!user || !closingId || (remision && remisionLocked(remision))) return;
     setBusy(true);
     setError(null);
     const { error: err } = await supabase.from('ht_remisiones').upsert(
@@ -155,7 +160,10 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
         closing_weighing_id: closingId,
         user_id: user.id,
         status: 'draft',
-        request_payload: draft,
+        request_payload: storeDraft(
+          draft,
+          sourceChanged && !refreshedDraft && oldSource ? oldSource : sourceDraft,
+        ),
         issuer_id: issuerId,
         issuer_name: issuer?.label ?? issuer?.razon_social ?? null,
         error_message: null,
@@ -169,101 +177,51 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
       return;
     }
     await rememberRoute(draft);
-    await rememberCustomer(draft);
+    setRefreshedDraft(null);
     setFormOpen(false);
     await data.refresh();
   }
 
   async function createRemision(draft: FenexRequest) {
-    if (!user || !closingId) return;
-    setBusy(true);
-    setError(null);
-
+    if (!user || !closingId || busy || sourceChanged || !canSendApproval() || (remision && remisionLocked(remision))) return;
     const payload = normalise(draft);
-
-    // Claim the row as `sending` first. If the tab closes or the network dies
-    // mid-flight the truckload shows as in-progress rather than untouched,
-    // which is the state that tempts someone into pressing the button again.
-    const { error: claimError } = await supabase.from('ht_remisiones').upsert(
-      {
-        closing_weighing_id: closingId,
-        user_id: user.id,
-        status: 'sending',
-        request_payload: payload,
-        // Recorded before the send, not after: if the response is lost, the
-        // row must still say which account the document was filed under.
-        issuer_id: issuerId,
-        issuer_name: issuer?.label ?? issuer?.razon_social ?? null,
-        error_message: null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'closing_weighing_id' },
-    );
-    if (claimError) {
-      setBusy(false);
-      setError(claimError.message);
-      return;
-    }
-
-    await rememberRoute(payload);
-    await rememberCustomer(payload);
-
+    if (validate(payload).length || !issuer || truckloadCropError(load.loads)) return;
+    setBusy(true); setError(null); setConfirmation(null); setFormOpen(false);
     try {
-      const result = await createRemission(payload, issuerId);
-
-      // The KuDE lives behind Fenex's token, so a copy is pulled into our own
-      // storage — that is what makes a link the driver can actually open.
-      let pdfUrl: string | null = null;
-      let pdfPath: string | null = null;
-      try {
-        const pdf = await fetchRemissionPdf(result.id, issuerId);
-        pdfUrl = pdf.url;
-        pdfPath = pdf.path;
-      } catch {
-        // The document exists either way; the PDF can be fetched again later.
-      }
-
-      await supabase.from('ht_remisiones').upsert(
+      const { error: saveError } = await supabase.from('ht_remisiones').upsert(
         {
           closing_weighing_id: closingId,
           user_id: user.id,
-          // READY means Fenex created it but SET has not accepted it yet —
-          // retrying the same key is safe and is what resolves it.
-          status: result.status === 'APPROVED' || result.status === 'SUBMITTED' ? 'issued' : 'sending',
-          fenex_remission_id: result.id,
-          fenex_status: result.status,
-          numero: result.remissionNumber,
-          cdc: result.cdc,
-          pdf_url: pdfUrl,
-          pdf_path: pdfPath,
-          issued_at: result.issuedAt ?? new Date().toISOString(),
-          response_payload: result as never,
+          status: 'sending',
+          request_payload: payload,
+          response_payload: null,
+          issuer_id: issuerId,
+          issuer_name: issuer.label ?? issuer.razon_social ?? null,
+          fenex_status: null,
           error_message: null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'closing_weighing_id' },
       );
-      setFormOpen(false);
+      if (saveError) throw new Error(saveError.message);
+      await data.refresh();
+      const result = await sendDraftForApproval(payload, issuerId);
+      const { error: resultError } = await supabase.from('ht_remisiones').update({
+        fenex_remission_id: result.id,
+        fenex_status: result.status,
+        response_payload: result,
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      }).eq('closing_weighing_id', closingId).eq('user_id', user.id);
+      if (resultError) throw new Error(resultError.message);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      // Back to `draft`, not `failed`: the typed data is intact and no document
-      // was issued, so this is unsent work rather than a broken record.
-      await supabase.from('ht_remisiones').upsert(
-        {
-          closing_weighing_id: closingId,
-          user_id: user.id,
-          status: 'draft',
-          request_payload: payload,
-          error_message: message,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'closing_weighing_id' },
-      );
+      await supabase.from('ht_remisiones').update({
+        error_message: message,
+        updated_at: new Date().toISOString(),
+      }).eq('closing_weighing_id', closingId).eq('user_id', user.id);
       setError(message);
-    } finally {
-      setBusy(false);
-      await data.refresh();
-    }
+    } finally { setBusy(false); await data.refresh(); }
   }
 
   async function share() {
@@ -284,155 +242,53 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
     setError(null);
   }
 
-  const status = remision?.status ?? 'draft';
-
+  const status = remisionState(remision);
+  const frozen = !!remision && remisionLocked(remision);
   return (
     <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-          Nota de Remisión
-        </span>
-        <StatusChip status={status} />
-
-        {status === 'issued' && remision?.numero && (
-          <span className="font-mono text-xs text-slate-700 dark:text-slate-200">
-            {remision.numero}
-          </span>
-        )}
-
-        <span className="ml-auto flex flex-wrap gap-2">
-          {status === 'issued' ? (
-            <>
-              {remision?.pdf_url ? (
-                <>
-                  <a
-                    href={remision.pdf_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-600"
-                  >
-                    View PDF
-                  </a>
-                  <Button onClick={() => void share()}>Share</Button>
-                </>
-              ) : (
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Issued, but the provider returned no PDF link.
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              {/* Always available: this is where missing details get typed in,
-                  so it must never be blocked by the details being missing. */}
-              <Button
-                disabled={busy || status === 'sending'}
-                onClick={() => {
-                  setError(null);
-                  setFormOpen(true);
-                }}
-              >
-                {savedDraft ? 'Edit details' : 'Fill in details'}
-              </Button>
-              <Button
-                variant="primary"
-                disabled={busy || status === 'sending' || missing.length > 0}
-                title={
-                  missing.length > 0
-                    ? `${missing.length} field${missing.length === 1 ? '' : 's'} still needed`
-                    : undefined
-                }
-                onClick={() => {
-                  setError(null);
-                  void createRemision(currentDraft);
-                }}
-              >
-                {busy || status === 'sending' ? 'Sending…' : 'Create remisión'}
-              </Button>
-            </>
-          )}
-        </span>
+        <span className="text-sm font-medium">Nota de Remisión · {remisionLabels[status]}</span>
+        {!frozen && <>
+          <Button disabled={busy} onClick={() => setFormOpen(true)}>{savedDraft ? 'Edit details' : 'Fill in details'}</Button>
+          <Button variant="primary" disabled={busy || sourceChanged || !canSendApproval() || missing.length > 0 || !issuer}
+            onClick={() => setConfirmation(currentDraft)}>Send for approval</Button>
+        </>}
+        {status === 'approved' && remision?.pdf_url && <>
+          <a href={remision.pdf_url} target="_blank" rel="noopener noreferrer">View PDF</a>
+          <Button onClick={() => void share()}>Share</Button>
+        </>}
+        {status === 'approved' && !remision?.pdf_url && remision?.fenex_remission_id &&
+          <Button onClick={async () => {
+            try {
+              const pdf = await fetchRemissionPdf(remision.fenex_remission_id!, remision.issuer_id);
+              if (pdf.url) window.open(pdf.url, '_blank', 'noopener,noreferrer');
+            } catch (e) { setError(String(e)); }
+          }}>Get PDF</Button>}
       </div>
-
-      {status === 'issued' && remision?.cdc && (
-        <p className="mt-1.5 font-mono text-[11px] break-all text-slate-500 dark:text-slate-400">
-          CDC {remision.cdc}
-          {remision.issued_at && (
-            <span className="font-sans"> · issued {formatDateTime(remision.issued_at)}</span>
-          )}
-        </p>
-      )}
-
-      {status === 'sending' && (
-        <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-300">
-          Waiting for the provider. Don&rsquo;t press again — if a document was created, retrying
-          with the same key returns it rather than issuing a second one.
-        </p>
-      )}
-
-      {(error || remision?.error_message) && status !== 'issued' && (
-        <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">
-          {error ?? remision?.error_message}
-        </p>
-      )}
-
-      {formOpen && (
-        <RemisionForm
-          initial={currentDraft}
-          busy={busy}
-          issuers={issuers}
-          issuerId={issuerId}
-          onIssuerChange={setPickedIssuerId}
-          onClose={() => setFormOpen(false)}
-          onSaveDraft={(d) => void saveDraft(d)}
-          onSend={(d) => void createRemision(d)}
-        />
-      )}
-
-      {legacyDraft && !formOpen && (
-        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-          A draft saved under the old format was found and rebuilt from this truckload. Open the
-          details to check it, then save again.
-        </p>
-      )}
-
-      {status === 'draft' && savedDraft && !formOpen && (
-        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-          A filled draft is saved for this truckload. Nothing has been issued yet.
-        </p>
-      )}
-
-      {missing.length > 0 && status !== 'issued' && (
-        <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950">
-          <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
-            {missing.length} field{missing.length === 1 ? '' : 's'} still needed
-            {savedDraft ? '' : ' — press “Fill in details” to complete them'}:
+      {sourceChanged && !frozen && oldSource && savedRequest && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+          <p className="flex-1 text-xs text-amber-900 dark:text-amber-100">
+            Destination, truck, field, crop or weight details changed after this draft was saved.
           </p>
-          <ul className="mt-1 space-y-0.5">
-            {missing.map((m) => (
-              <li key={m} className="text-xs text-amber-800 dark:text-amber-200">
-                {m}
-              </li>
-            ))}
-          </ul>
+          <Button onClick={() => {
+            setRefreshedDraft(refreshDraftSources(savedRequest, oldSource, sourceDraft));
+            setFormOpen(true);
+          }}>Refresh draft</Button>
         </div>
       )}
-
+      {frozen && status !== 'approved' && <p className="mt-2 text-xs text-slate-500">This truckload is locked to keep its transactions consistent with the details sent to Fenex.</p>}
+      {(error || remision?.error_message) && <p role="alert" className="mt-2 text-sm text-red-600">{error || remision?.error_message}</p>}
+      {legacyDraft && !frozen && <p className="text-xs">Open and check the details rebuilt from this truckload before saving.</p>}
+      {!frozen && missing.length > 0 && <p className="mt-2 text-xs text-amber-700">{missing.length} fields still needed — open Fill in details.</p>}
+      {formOpen && !frozen && <RemisionForm initial={currentDraft} busy={busy} issuers={issuers.filter(i => i.connection_status === 'APPROVED')}
+        issuerId={issuerId} onIssuerChange={setPickedIssuerId} onClose={() => setFormOpen(false)}
+        onSaveDraft={d => void saveDraft(d)} onSend={d => { setFormOpen(false); setConfirmation(d); }} />}
+      {confirmation && <Modal title="Send for approval?" onClose={() => setConfirmation(null)}>
+        <p>Send this draft to {issuer?.label || issuer?.razon_social} (RUC {issuer?.ruc}{issuer?.ruc_dv ? '-' + issuer.ruc_dv : ''}) for review in Fenex? They will review it and create the remisión there.</p>
+        <p className="mt-3">{confirmation.remission.receiverName} · {confirmation.remission.vehiclePlate} · {confirmation.remission.cargoWeight?.toLocaleString()} kg wet weight</p>
+        <div className="mt-4 flex gap-2"><Button onClick={() => setConfirmation(null)}>Back</Button>
+          <Button variant="primary" disabled={busy || !canSendApproval()} onClick={() => void createRemision(confirmation)}>Send for approval</Button></div>
+      </Modal>}
     </div>
-  );
-}
-
-function StatusChip({ status }: { status: string }) {
-  const style = {
-    draft: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
-    sending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
-    issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
-    failed: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
-  }[status] ?? 'bg-slate-100 text-slate-600';
-
-  const label = { draft: 'not issued', sending: 'sending', issued: 'issued', failed: 'failed' }[status] ?? status;
-
-  return (
-    <span className={cx('rounded-full px-2 py-0.5 text-[10px] font-semibold', style)}>{label}</span>
   );
 }

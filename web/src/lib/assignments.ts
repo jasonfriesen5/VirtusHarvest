@@ -1,5 +1,40 @@
 import { supabase } from './supabase';
-import type { Weighing } from './types';
+import type { Weighing, LoadAssignment } from './types';
+import { buildTruckloads } from './truckloads';
+import { truckloadCropError } from './truckloadCrop';
+
+/** Fresh, paginated read before writing; UI checks alone may use old data.
+ * This is a web guard, not a transaction lock across other devices. */
+async function checkCrops(userId: string, ids: string[], closingId?: string): Promise<void> {
+  if (!ids.length) throw new Error('Choose at least one transaction.');
+  async function readAll(table: string) {
+    const rows = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.from(table).select('*').eq('user_id', userId)
+        .order(table === 'ht_load_assignments' ? 'weighing_id' : table === 'ht_truckloads' ? 'closing_weighing_id' : 'id')
+        .range(offset, offset + 999);
+      if (error) throw new Error('Could not verify truckload crops. Refresh and try again.');
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) return rows;
+    }
+  }
+  const rows = await readAll('weighings') as Weighing[];
+  const wanted = new Set(ids);
+  const selected = rows.filter(w => wanted.has(w.id) && !w.is_truck_empty);
+  if (selected.length !== wanted.size) throw new Error('Some transactions are no longer available. Refresh and try again.');
+  let members: Weighing[] = [];
+  if (closingId) {
+    if (!rows.some(w => w.id === closingId && w.is_truck_empty)) throw new Error('Truckload no longer exists.');
+    const [assignments, tickets] = await Promise.all([readAll('ht_load_assignments'), readAll('ht_truckloads')]);
+    const groups = buildTruckloads(rows, {
+      assignments: assignments as LoadAssignment[],
+      manualClosingIds: new Set(tickets.filter(t => t.manual).map(t => t.closing_weighing_id as string)),
+    });
+    members = groups.completed.find(t => t.closedBy?.id === closingId)?.loads ?? [];
+  }
+  const error = truckloadCropError([...members, ...selected]);
+  if (error) throw new Error(error);
+}
 
 /**
  * Mutations behind the manual truckload controls.
@@ -40,6 +75,7 @@ export async function assignLoads(
   closingWeighingId: string,
 ): Promise<void> {
   if (weighingIds.length === 0) return;
+  await checkCrops(userId, weighingIds, closingWeighingId);
   const now = new Date().toISOString();
   const { error } = await supabase.from('ht_load_assignments').upsert(
     weighingIds.map((id) => ({
@@ -73,6 +109,7 @@ export interface NewTruckload {
   emptiedAt: string;
   seasonId: string | null;
   loadIds: string[];
+  reason?: 'assembled' | 'finished-loading';
 }
 
 /**
@@ -85,6 +122,7 @@ export interface NewTruckload {
  * carry a remisión, which is most of the reason for creating one.
  */
 export async function createTruckload(userId: string, input: NewTruckload): Promise<string> {
+  await checkCrops(userId, input.loadIds);
   const closingId = newWeighingId();
 
   const { error: insertError } = await supabase.from('weighings').insert({
@@ -100,7 +138,9 @@ export async function createTruckload(userId: string, input: NewTruckload): Prom
     weight: null,
     unit: 'kg',
     synced: true,
-    notes: 'Truckload assembled in the web console.',
+    notes: input.reason === 'finished-loading'
+      ? 'Loading completed in the web console.'
+      : 'Truckload assembled in the web console.',
   });
   if (insertError) throw new Error(insertError.message);
 

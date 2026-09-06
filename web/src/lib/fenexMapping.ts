@@ -2,8 +2,10 @@ import type { Crop, Destination, Farm, Field, Route, Truck } from './types';
 import type { Issuer } from './fenexClient';
 import type { Truckload } from './truckloads';
 import type { FenexItem, FenexRemission, FenexRequest } from './fenexPayload';
-import { REASONS, EMISSION_RESPONSIBILITIES, TRANSPORT_TYPES, splitRuc } from './sifen';
+import { REASONS, EMISSION_RESPONSIBILITIES, TRANSPORT_TYPES, splitRuc, storedRucParts } from './sifen';
 import { wetKg } from './selectors';
+import { cropDocumentName, cropInternalCode } from './cropCodes';
+import { cropKey, truckloadCropGroups } from './truckloadCrop';
 
 /**
  * Turns one truckload into the document Fenex expects.
@@ -73,30 +75,41 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
 
   const issueDate = day(load.emptiedAt);
   const receiver = splitRuc(s(dest?.ruc));
-  const issuerRuc = splitRuc(s(ctx.issuer?.ruc));
+  const issuerRuc = storedRucParts(s(ctx.issuer?.ruc), s(ctx.issuer?.ruc_dv));
 
   // A hauler on the truck means a third party; otherwise the farm hauls its own
   // grain, which is what "Propio" means, and the issuer is the transportista.
   const hasHauler = Boolean(s(truck?.transportista_name));
-  const haulerRuc = splitRuc(s(truck?.transportista_ruc));
+  const haulerRuc = storedRucParts(
+    s(truck?.transportista_ruc),
+    s(truck?.transportista_ruc_dv),
+  );
   const docType = (s(truck?.transportista_document_type) || 'RUC') === 'CI' ? 'CI' : 'RUC';
 
-  // One line per crop — a truck carrying two crops is two items, not a lump.
-  const byCrop = new Map<string, number>();
-  for (const w of load.loads) {
-    const name = s(w.crop) || 'Sin especificar';
-    // The document declares what is being transported, so this is the scale
-    // reading rather than the moisture-adjusted figure.
-    byCrop.set(name, (byCrop.get(name) ?? 0) + wetKg(w));
-  }
+  // The truckload guard permits one canonical crop, so this normally yields a
+  // single line. Grouping still happens here so an older mixed load remains
+  // inspectable while submission stays blocked — but it groups by cropKey, the
+  // same rule the guard applies, so alias spellings of one grain cannot split
+  // into two lines. The weights are the scale readings rather than the
+  // moisture-adjusted figures: the document declares what is being transported.
+  const groups = truckloadCropGroups(load.loads, wetKg);
 
-  const items: FenexItem[] = [...byCrop.entries()].map(([name, kg]) => {
-    const crop = ctx.crops.find((c) => c.name === name);
+  const items: FenexItem[] = groups.map(({ key, name, kg }) => {
+    // Matched on the canonical key, not the exact name. An exact-name lookup
+    // missed the crop record whenever the load was spelled differently from the
+    // crop list, and silently fell back to the raw name as the product code.
+    const crop = ctx.crops.find((c) => cropKey(c.name) === key);
     return {
-      productCode: s(crop?.product_code) || name.slice(0, 60),
-      productName: s(crop?.fiscal_description) || name,
-      unitCode: s(crop?.fiscal_unit_code) || '83',
-      unitDescription: s(crop?.fiscal_unit_description) || 'kg',
+      // This is Fenex/SIFEN dCodInt: the issuer's own internal product code,
+      // not a national crop-species code. A future catalogue selection can
+      // additionally send productId so Fenex resolves this snapshot itself.
+      productId: null,
+      productCode: crop ? cropInternalCode(crop) : name.slice(0, 20),
+      productName: crop ? cropDocumentName(crop) : name,
+      // Virtus stores and sends physical truckload weight in kilograms. Crop
+      // configuration cannot relabel those numbers as tonnes without conversion.
+      unitCode: '83',
+      unitDescription: 'kg',
       // SIFEN wants whole kilos on a transport document; the buyer's scale is
       // what settles the fine detail later.
       quantity: Math.round(kg),
@@ -174,7 +187,7 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     transporterDocumentType: docType,
     transporterRuc: docType === 'RUC' ? (hasHauler ? haulerRuc.ruc : issuerRuc.ruc) : '',
     transporterDv: docType === 'RUC'
-      ? (hasHauler ? haulerRuc.dv : s(ctx.issuer?.ruc_dv) || issuerRuc.dv)
+      ? (hasHauler ? haulerRuc.dv : issuerRuc.dv)
       : '',
     transporterCi: docType === 'CI' ? s(truck?.transportista_ci) : '',
     transporterName: s(truck?.transportista_name) || s(ctx.issuer?.razon_social),
@@ -187,7 +200,10 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     cargoWeight: totalKg > 0 ? totalKg : null,
     cargoWeightUnitCode: '83',
     cargoWeightUnitDescription: 'kg',
-    cargoDescription: [...byCrop.keys()].join(', ').slice(0, 200),
+    // Names the document's own lines, so it comes from the same grouping the
+    // lines do — listing a raw spelling that no line carries would not describe
+    // this cargo.
+    cargoDescription: items.map((i) => i.productName).join(', ').slice(0, 200),
     notes: '',
   };
 

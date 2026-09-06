@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { fenexCustomers } from '../lib/fenexClient';
-import type { FenexCustomer, Issuer } from '../lib/fenexClient';
+import { useMemo, useState } from 'react';
+import { canSendApproval } from '../lib/fenexClient';
+import type { Issuer } from '../lib/fenexClient';
 import { normalise, validate } from '../lib/fenexPayload';
 import type { FenexRemission, FenexRequest } from '../lib/fenexPayload';
 import {
@@ -8,13 +8,12 @@ import {
   FREIGHT_RESPONSIBILITIES,
   REASONS,
   TRANSPORT_TYPES,
-  splitRuc,
 } from '../lib/sifen';
 import GeographyPicker from './GeographyPicker';
 import type { GeoValue } from './GeographyPicker';
 import { Button, Input, Label, Modal, Select } from './ui';
-// DEMO — remove with the trial toggle before launch.
-import { isDemo } from '../lib/fenexDemo';
+import { useData } from '../state/DataProvider';
+import { cropDocumentName, cropInternalCode } from '../lib/cropCodes';
 
 /**
  * The Nota de Remisión before it is sent.
@@ -47,51 +46,12 @@ export default function RemisionForm({
   onSend: (req: FenexRequest) => void;
 }) {
   const [req, setReq] = useState<FenexRequest>(initial);
-  const [confirming, setConfirming] = useState(false);
-  const [customers, setCustomers] = useState<FenexCustomer[] | null>(null);
-  const [customerError, setCustomerError] = useState<string | null>(null);
+  const { crops } = useData();
 
   const r = req.remission;
   const set = (patch: Partial<FenexRemission>) =>
     setReq((prev) => ({ ...prev, remission: { ...prev.remission, ...patch } }));
   const field = (k: Field, v: string) => set({ [k]: v } as Partial<FenexRemission>);
-
-  // Reloaded whenever the issuer changes. The same buyer is a different
-  // customer record in each Fenex account, so a list fetched under one issuer
-  // is meaningless under another.
-  useEffect(() => {
-    let cancelled = false;
-    setCustomers(null);
-    setCustomerError(null);
-    fenexCustomers(issuerId)
-      .then((rows) => {
-        if (!cancelled) setCustomers(rows);
-      })
-      .catch((e) => {
-        if (!cancelled) setCustomerError(e instanceof Error ? e.message : String(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [issuerId]);
-
-  /** Picking a buyer fills the receptor block from Fenex's own record. */
-  function chooseCustomer(id: string) {
-    const c = customers?.find((x) => String(x.id) === id);
-    if (!c) {
-      set({ customerId: null });
-      return;
-    }
-    const raw = String(c.ruc ?? '');
-    const split = c.dv ? { ruc: raw, dv: String(c.dv) } : splitRuc(raw);
-    set({
-      customerId: String(c.id),
-      receiverRuc: split.ruc,
-      receiverDv: split.dv,
-      receiverName: String(c.legalName ?? c.name ?? ''),
-      receiverAddress: String(c.address ?? r.receiverAddress),
-    });
-  }
 
   const issues = useMemo(() => validate(normalise(req)), [req]);
   const ready = issues.length === 0;
@@ -134,13 +94,6 @@ export default function RemisionForm({
 
   return (
     <Modal title="Nota de Remisión Electrónica" onClose={onClose} wide>
-      {isDemo() && (
-        <p className="mb-4 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm text-violet-900 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-100">
-          <strong>Trial mode.</strong> Buyers and geography are simulated, and sending produces a
-          document marked <em>NO VALIDO</em>. Nothing reaches Fenex or SET.
-        </p>
-      )}
-
       <div className="space-y-6">
         <Section
           title="Emisor"
@@ -150,12 +103,17 @@ export default function RemisionForm({
             <Label>Se emite a nombre de</Label>
             <Select
               value={issuerId ?? ''}
-              onChange={(e) => onIssuerChange(e.target.value)}
+              onChange={(e) => {
+                // Old saved drafts may still contain a Fenex customer ID.
+                // Clear it because receiver details now stand on their own.
+                set({ customerId: null });
+                onIssuerChange(e.target.value);
+              }}
             >
               {issuers.length === 0 && <option value="">— no linked issuer —</option>}
               {issuers.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.label ?? i.fenex_email ?? i.id}
+                  {i.label ?? i.razon_social ?? i.ruc ?? i.id}
                   {i.razon_social ? ` · ${i.razon_social}` : ''}
                 </option>
               ))}
@@ -171,32 +129,8 @@ export default function RemisionForm({
 
         <Section
           title="Datos del receptor"
-          note="Pick the buyer from this issuer's Fenex records. The fields below fill in from it; corrections apply to this document only."
+          note="Review the receiver details prefilled from the selected destination."
         >
-          <div>
-            <Label>Cliente en Fenex</Label>
-            <Select
-              value={r.customerId ?? ''}
-              onChange={(e) => chooseCustomer(e.target.value)}
-              disabled={customers == null && customerError == null}
-            >
-              <option value="">
-                {customers == null && customerError == null ? 'Loading buyers…' : '— sin vincular —'}
-              </option>
-              {(customers ?? []).map((c) => (
-                <option key={String(c.id)} value={String(c.id)}>
-                  {String(c.legalName ?? c.name ?? c.id)}
-                  {c.ruc ? ` · ${c.ruc}` : ''}
-                </option>
-              ))}
-            </Select>
-            {customerError && (
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                Could not load buyers: {customerError}. The fields below still stand on their own.
-              </p>
-            )}
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-2">
             <T k="receiverName" label="Razón social" wide />
             <div className="grid grid-cols-3 gap-2 sm:col-span-2">
@@ -237,6 +171,8 @@ export default function RemisionForm({
                   set({
                     reasonCode: codeNum,
                     reasonDescription: codeNum === 99 ? '' : REASONS[codeNum],
+                    futureInvoiceIssueDate:
+                      codeNum === 1 ? (r.futureInvoiceIssueDate || r.issueDate) : null,
                   });
                 }}
               >
@@ -389,51 +325,71 @@ export default function RemisionForm({
         <Section title="Carga" note="One line per crop, weighed by your own scale, in whole kilos.">
           {req.items.map((item, i) => (
             <div key={i} className="grid gap-2 sm:grid-cols-12">
-              <div className="sm:col-span-3">
-                <Label>Código</Label>
-                <Input
-                  value={item.productCode}
-                  onChange={(e) =>
-                    setReq((p) => ({
-                      ...p,
-                      items: p.items.map((it, j) =>
-                        j === i ? { ...it, productCode: e.target.value } : it,
-                      ),
-                    }))
-                  }
-                />
-              </div>
               <div className="sm:col-span-5">
-                <Label>Descripción</Label>
-                <Input
-                  value={item.productName}
-                  onChange={(e) =>
+                <Label>Crop</Label>
+                <Select
+                  value={crops.find((crop) =>
+                    cropInternalCode(crop) === item.productCode &&
+                    cropDocumentName(crop) === item.productName,
+                  )?.id ?? crops.find((crop) => cropInternalCode(crop) === item.productCode)?.id ?? '__saved__'}
+                  onChange={(e) => {
+                    const crop = crops.find((candidate) => candidate.id === e.target.value);
+                    if (!crop) return;
+                    const productName = cropDocumentName(crop);
                     setReq((p) => ({
                       ...p,
                       items: p.items.map((it, j) =>
-                        j === i ? { ...it, productName: e.target.value } : it,
+                        j === i ? {
+                          ...it,
+                          productId: null,
+                          productCode: cropInternalCode(crop),
+                          productName,
+                        } : it,
                       ),
-                    }))
-                  }
-                />
+                      remission: { ...p.remission, cargoDescription: productName },
+                    }));
+                  }}
+                >
+                  {!crops.some((crop) => cropInternalCode(crop) === item.productCode) && (
+                    <option value="__saved__">{item.productName} (as saved)</option>
+                  )}
+                  {crops.map((crop) => (
+                    <option key={crop.id} value={crop.id}>{crop.name}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="sm:col-span-3">
+                <Label>Internal code</Label>
+                <Input value={item.productCode} disabled />
               </div>
               <div className="sm:col-span-2">
                 <Label>Unidad</Label>
-                <Input value={`${item.unitCode} · ${item.unitDescription}`} disabled />
+                {/* Keep SIFEN's numeric code in the payload, but operators only
+                    need the human-readable unit in the sheet. */}
+                <Input value={item.unitDescription} disabled />
               </div>
               <div className="sm:col-span-2">
                 <Label>Cantidad</Label>
                 <Input
                   type="number"
+                  min="1"
+                  step="1"
                   value={String(item.quantity)}
-                  onChange={(e) =>
-                    setReq((p) => ({
+                  onChange={(e) => setReq((p) => {
+                    const items = p.items.map((it, j) =>
+                      j === i ? { ...it, quantity: Math.round(Number(e.target.value) || 0) } : it,
+                    );
+                    return {
                       ...p,
-                      items: p.items.map((it, j) =>
-                        j === i ? { ...it, quantity: Math.round(Number(e.target.value) || 0) } : it,
-                      ),
-                    }))
-                  }
+                      items,
+                      remission: {
+                        ...p.remission,
+                        cargoWeight: items.reduce((sum, it) => sum + it.quantity, 0),
+                        cargoWeightUnitCode: '83',
+                        cargoWeightUnitDescription: 'kg',
+                      },
+                    };
+                  })}
                 />
               </div>
             </div>
@@ -462,8 +418,7 @@ export default function RemisionForm({
         </div>
       ) : (
         <p className="mt-5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
-          Every rule Fenex checks passes. The department/district/city combination is verified by
-          SIFEN itself — choosing all three from the lists is what makes that safe.
+          The saved details pass the local checks. The issuer will review them in Fenex before creating the document.
         </p>
       )}
 
@@ -472,44 +427,12 @@ export default function RemisionForm({
         <Button variant={ready ? 'secondary' : 'primary'} disabled={busy} onClick={() => onSaveDraft(req)}>
           Save
         </Button>
-        <Button variant="primary" disabled={busy || !ready} onClick={() => setConfirming(true)}>
-          {busy ? 'Sending…' : 'Create remisión'}
+        <Button variant="primary" disabled={busy || !ready || !canSendApproval()} onClick={() => onSend(normalise(req))}>
+          {busy ? 'Sending…' : 'Send for approval'}
         </Button>
       </div>
 
-      {confirming && (
-        <Modal title="Send this to SET?" onClose={() => setConfirming(false)}>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            <strong>{r.receiverName}</strong> · {req.items.reduce((s, i) => s + i.quantity, 0).toLocaleString()} kg
-            · chapa {r.vehiclePlate}
-          </p>
-          {isDemo() ? (
-            <p className="mt-2 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm text-violet-900 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-100">
-              Trial mode — this produces a simulated document. Nothing is sent and no timbrado
-              number is used.
-            </p>
-          ) : (
-            <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-              This creates a real legal document and consumes a number from your timbrado. Fenex has
-              no cancellation endpoint yet — undoing it means calling Jonathan. Check the buyer, the
-              plate and the weight before sending.
-            </p>
-          )}
-          <div className="mt-4 flex justify-end gap-2">
-            <Button onClick={() => setConfirming(false)}>Back</Button>
-            <Button
-              variant="primary"
-              disabled={busy}
-              onClick={() => {
-                setConfirming(false);
-                onSend(normalise(req));
-              }}
-            >
-              Send to SET
-            </Button>
-          </div>
-        </Modal>
-      )}
+
     </Modal>
   );
 }

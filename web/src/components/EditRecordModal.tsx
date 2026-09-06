@@ -5,6 +5,7 @@ import type { Weighing } from '../lib/types';
 import { Button, Input, Label, Modal, Select } from './ui';
 import { calcDryWeight } from '../lib/moisture';
 import { fieldLabels } from '../lib/fields';
+import { editedTruckloadCropError } from '../lib/truckloadCrop';
 
 /**
  * Editing one weighing. Used from the records table and from inside a
@@ -20,7 +21,7 @@ export default function EditRecordModal({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
-  const { crops, fields, farms, operators, trucks, destinations, seasons } = useData();
+  const { crops, fields, farms, operators, trucks, destinations, seasons, weighings, assignments, tickets } = useData();
 
   /**
    * Sentinel for "the field this record already points at". Records can carry a
@@ -103,6 +104,11 @@ export default function EditRecordModal({
       notes: form.notes || null,
     };
 
+    const cropError = editedTruckloadCropError(weighings, { ...record, ...patch }, {
+      assignments,
+      manualClosingIds: new Set(tickets.filter(t => t.manual).map(t => t.closing_weighing_id)),
+    });
+    if (cropError) { setLocalError(cropError); return; }
     setBusy(true);
     const { error } = await supabase.from('weighings').update(patch).eq('id', record.id);
     setBusy(false);

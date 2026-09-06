@@ -4,6 +4,7 @@ import {
   REASONS,
   TRANSPORT_TYPES,
   FREIGHT_RESPONSIBILITIES,
+  UNIT_CODES,
   checkLocation,
   checkPlate,
   digits,
@@ -20,6 +21,9 @@ import {
  */
 
 export interface FenexItem {
+  /** Optional Fenex catalogue identity. Fenex resolves it inside the selected
+   * issuer account and snapshots that product's internal code and name. */
+  productId?: string | null;
   productCode: string;
   productName: string;
   description?: string;
@@ -115,6 +119,13 @@ const loc = (r: FenexRemission, p: 'receiver' | 'departure' | 'delivery'): Locat
   cityName: r[`${p}CityName`],
 });
 
+function validDate(value: string | null): boolean {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
+}
+
 /**
  * Everything the Fenex validator would reject, found before sending.
  *
@@ -145,17 +156,22 @@ export function validate(req: FenexRequest): Issue[] {
   // Traslado por ventas is the normal case here, and it is the one that needs
   // a future invoice date — easy to miss, and rejected server-side.
   if (r.reasonCode === 1) {
-    if (!r.futureInvoiceIssueDate) {
+    if (!validDate(r.futureInvoiceIssueDate)) {
       out.push({
         field: 'futureInvoiceIssueDate',
         message: 'La fecha futura de la factura es obligatoria para traslado por ventas.',
       });
-    } else if (r.issueDate && r.futureInvoiceIssueDate < r.issueDate) {
+    } else if (r.issueDate && r.futureInvoiceIssueDate! < r.issueDate) {
       out.push({
         field: 'futureInvoiceIssueDate',
         message: 'La fecha de la factura no puede ser anterior a la fecha de la remisión.',
       });
     }
+  } else if (r.futureInvoiceIssueDate) {
+    out.push({
+      field: 'futureInvoiceIssueDate',
+      message: 'La fecha futura de la factura solo corresponde al traslado por ventas.',
+    });
   }
 
   if (!(r.emissionResponsibilityCode in EMISSION_RESPONSIBILITIES)) {
@@ -171,17 +187,45 @@ export function validate(req: FenexRequest): Issue[] {
 
   if (!(r.transportType in TRANSPORT_TYPES)) {
     out.push({ field: 'transportType', message: 'Tipo de transporte no soportado.' });
+  } else if (TRANSPORT_TYPES[r.transportType] !== r.transportTypeDescription.trim()) {
+    out.push({
+      field: 'transportTypeDescription',
+      message: `La descripción debe ser exactamente «${TRANSPORT_TYPES[r.transportType]}».`,
+    });
   }
   if (!(r.freightResponsibility in FREIGHT_RESPONSIBILITIES)) {
     out.push({ field: 'freightResponsibility', message: 'Responsable del flete no soportado.' });
   }
 
-  if (!r.issueDate) out.push({ field: 'issueDate', message: 'La fecha de emisión es obligatoria.' });
-  if (!r.transportStartDate) {
+  if (!validDate(r.issueDate)) {
+    out.push({ field: 'issueDate', message: 'La fecha de emisión es obligatoria y debe ser válida.' });
+  }
+  if (!validDate(r.transportStartDate)) {
     out.push({ field: 'transportStartDate', message: 'La fecha de inicio del traslado es obligatoria.' });
   }
+  if (!validDate(r.transportEndDate)) {
+    out.push({ field: 'transportEndDate', message: 'La fecha estimada de finalización es obligatoria.' });
+  }
+  if (validDate(r.issueDate) && validDate(r.transportStartDate) && r.transportStartDate < r.issueDate) {
+    out.push({
+      field: 'transportStartDate',
+      message: 'La fecha inicial del traslado no puede ser anterior a la fecha de emisión.',
+    });
+  }
+  if (
+    validDate(r.transportStartDate) && validDate(r.transportEndDate) &&
+    r.transportEndDate! < r.transportStartDate
+  ) {
+    out.push({
+      field: 'transportEndDate',
+      message: 'La fecha final no puede ser anterior a la fecha inicial.',
+    });
+  }
 
-  if (r.estimatedDistanceKm == null || r.estimatedDistanceKm < 1 || r.estimatedDistanceKm > 99999) {
+  if (
+    r.estimatedDistanceKm == null || !Number.isInteger(r.estimatedDistanceKm) ||
+    r.estimatedDistanceKm < 1 || r.estimatedDistanceKm > 99999
+  ) {
     out.push({ field: 'estimatedDistanceKm', message: 'La distancia debe estar entre 1 y 99999 km.' });
   }
 
@@ -233,6 +277,8 @@ export function validate(req: FenexRequest): Issue[] {
       out.push({ field: 'cargoWeight', message: 'El peso total debe ser un número entero.' });
     }
     push(digits(r.cargoWeightUnitCode, 'cargoWeightUnitCode', 1, 4, 'Falta el código de unidad del peso.'));
+    push(text(r.cargoWeightUnitDescription, 'cargoWeightUnitDescription', 1, 30,
+      'La descripción de unidad del peso es obligatoria.'));
   }
 
   // ── Items ────────────────────────────────────────────────────────────────
@@ -244,11 +290,16 @@ export function validate(req: FenexRequest): Issue[] {
   }
   req.items.forEach((item, i) => {
     const p = `items[${i}]`;
-    push(text(item.productCode, `${p}.productCode`, 1, 60, 'El código del producto es obligatorio.'));
-    push(text(item.productName, `${p}.productName`, 1, 200, 'La descripción del producto es obligatoria.'));
+    // Fenex currently allows 60, while SIFEN field E701 permits 20. Enforce
+    // the tighter government limit before the draft reaches XML generation.
+    push(text(item.productCode, `${p}.productCode`, 1, 20, 'El código del producto debe tener hasta 20 caracteres.'));
+    push(text(item.productName, `${p}.productName`, 1, 120, 'La descripción del producto debe tener hasta 120 caracteres.'));
     push(digits(item.unitCode, `${p}.unitCode`, 1, 4, 'El código de unidad SIFEN es obligatorio.'));
+    if (!(item.unitCode.trim() in UNIT_CODES)) {
+      out.push({ field: `${p}.unitCode`, message: 'Código de unidad de medida SIFEN no válido.' });
+    }
     push(text(item.unitDescription, `${p}.unitDescription`, 1, 50, 'La descripción de unidad es obligatoria.'));
-    if (!(item.quantity > 0)) {
+    if (!Number.isFinite(item.quantity) || !(item.quantity > 0)) {
       out.push({ field: `${p}.quantity`, message: 'La cantidad debe ser mayor que cero.' });
     }
   });
@@ -276,10 +327,26 @@ export function isFenexRequest(value: unknown): value is FenexRequest {
 
 /** Normalisations the server applies anyway — done here so what you see is sent. */
 export function normalise(req: FenexRequest): FenexRequest {
+  const items = req.items.map((item) => ({
+    ...item,
+    // Harvest truckloads are mapped as wet kilograms throughout.
+    unitCode: '83',
+    unitDescription: 'kg',
+    quantity: Math.round(item.quantity),
+  }));
+  const cargoWeight = items.reduce((sum, item) => sum + item.quantity, 0);
   return {
-    ...req,
+    // Construct the public contract explicitly. Local Supabase draft metadata
+    // must never be forwarded to Fenex.
+    idempotencyKey: req.idempotencyKey,
+    items,
     remission: {
       ...req.remission,
+      futureInvoiceIssueDate:
+        req.remission.reasonCode === 1 ? req.remission.futureInvoiceIssueDate : null,
+      cargoWeight: cargoWeight > 0 ? cargoWeight : null,
+      cargoWeightUnitCode: '83',
+      cargoWeightUnitDescription: 'kg',
       vehiclePlate: normalisePlate(req.remission.vehiclePlate),
       // Blank rather than absent: the server checks the unused one is empty.
       transporterCi: req.remission.transporterDocumentType === 'RUC' ? '' : req.remission.transporterCi,
