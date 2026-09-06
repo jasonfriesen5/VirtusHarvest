@@ -41,9 +41,10 @@ export const FREIGHT_RESPONSIBILITIES: Record<number, string> = {
 
 /** SIFEN unit codes. 83 is kilogrammes, which is what grain ships in. */
 export const UNIT_CODES: Record<string, string> = {
-  '83': 'Kilogramos (kg)',
-  '99': 'Tonelada (TN)',
-  '77': 'Unidad (UNI)',
+  '77': 'UNI', '83': 'kg', '86': 'g', '87': 'm', '88': 'ML', '89': 'LT',
+  '90': 'MG', '91': 'CM', '94': 'PUL', '95': 'MM', '97': 'AA', '98': 'ME',
+  '99': 'TN', '100': 'Hs', '101': 'Mi', '102': 'Di', '108': 'MT',
+  '110': 'M3', '625': 'Km', '660': 'ml', '869': 'ha',
 };
 
 export interface Issue {
@@ -103,9 +104,19 @@ export function checkPlate(plate: string): Issue | null {
  */
 export function splitRuc(raw: string): { ruc: string; dv: string } {
   const cleaned = trim(raw).replace(/\s/g, '');
-  const m = cleaned.match(/^(\d{1,8})-?(\d)$/);
+  // Without the separator there is no reliable way to know whether the last
+  // digit belongs to the base or is the DV. Keep it intact and make a missing
+  // DV visible instead of silently changing a taxpayer's identity.
+  const m = cleaned.match(/^(\d{1,8})-(\d)$/);
   if (m) return { ruc: m[1], dv: m[2] };
   return { ruc: cleaned.replace(/\D/g, '').slice(0, 8), dv: '' };
+}
+
+/** Use this when the database already stores base RUC and DV separately. */
+export function storedRucParts(rawRuc: string, rawDv: string): { ruc: string; dv: string } {
+  const ruc = trim(rawRuc).replace(/\D/g, '');
+  const dv = trim(rawDv).replace(/\D/g, '');
+  return dv ? { ruc, dv } : splitRuc(rawRuc);
 }
 
 export function formatRuc(ruc: string | null, dv: string | null): string {

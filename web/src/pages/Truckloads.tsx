@@ -1,3 +1,4 @@
+import { remisionLabels, remisionState } from '../lib/remisionWorkflow';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../state/AuthProvider';
 import { useData } from '../state/DataProvider';
@@ -23,7 +24,8 @@ import RemisionPanel from '../components/RemisionPanel';
 import CreateTruckloadModal from '../components/CreateTruckloadModal';
 import type { Candidate } from '../components/CreateTruckloadModal';
 import { buildTruckloads } from '../lib/truckloads';
-import { deleteManualTruckload, unassignLoad } from '../lib/assignments';
+import { createTruckload, deleteManualTruckload, unassignLoad } from '../lib/assignments';
+import { truckloadCropError } from '../lib/truckloadCrop';
 import { LOCK_REASON, lockedClosingIds, lockedWeighingIds } from '../lib/locking';
 import type { Truckload } from '../lib/truckloads';
 import type { Weighing } from '../lib/types';
@@ -33,7 +35,7 @@ import { filterBySeason, wetKg } from '../lib/selectors';
 
 export default function Truckloads() {
   const { user } = useAuth();
-  const { weighings, trucks, tickets, assignments, remisiones, loading, error, refresh } = useData();
+  const { weighings, trucks, destinations, tickets, assignments, remisiones, loading, error, refresh } = useData();
   const { unit, seasonId } = usePrefs();
 
   const [truckFilter, setTruckFilter] = useState('');
@@ -44,6 +46,7 @@ export default function Truckloads() {
   const [creating, setCreating] = useState(false);
   const [busyLoadId, setBusyLoadId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Truckload | null>(null);
+  const [finishing, setFinishing] = useState<Truckload | null>(null);
 
   /** Ticket weights normalised to kg, keyed by the closing empty-truck row. */
   const ticketKgById = useMemo(() => {
@@ -268,6 +271,7 @@ export default function Truckloads() {
                 onRemoveLoad={null}
                 busyLoadId={busyLoadId}
                 onDelete={null}
+                onFinish={() => setFinishing(t)}
                 expanded={expanded === t.key}
                 onToggle={() => setExpanded(expanded === t.key ? null : t.key)}
               />
@@ -316,6 +320,19 @@ export default function Truckloads() {
         />
       )}
 
+      {finishing && user && (
+        <FinishLoadingModal
+          load={finishing}
+          destinations={destinations.map((d) => d.name)}
+          userId={user.id}
+          onClose={() => setFinishing(null)}
+          onFinished={async () => {
+            setFinishing(null);
+            await refresh();
+          }}
+        />
+      )}
+
       {deleting && (
         <Modal title="Delete this truckload?" onClose={() => setDeleting(null)}>
           <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -349,8 +366,8 @@ export default function Truckloads() {
 
       <Card>
         <CardHeader
-          title="Delivered truckloads"
-          subtitle="Every load bundled between one empty-truck and the next · scale weight, not dry"
+          title="Completed truckloads"
+          subtitle="Finished loading or closed by an empty-truck event · scale weight, not dry"
           action={
             <div className="flex items-end gap-2">
               <div className="w-44">
@@ -396,6 +413,7 @@ export default function Truckloads() {
                     ? () => setDeleting(t)
                     : null
                 }
+                onFinish={null}
                 expanded={expanded === t.key}
                 onToggle={() => setExpanded(expanded === t.key ? null : t.key)}
               />
@@ -418,6 +436,7 @@ function TruckloadRow({
   onRemoveLoad,
   busyLoadId,
   onDelete,
+  onFinish,
   expanded,
   onToggle,
 }: {
@@ -430,6 +449,8 @@ function TruckloadRow({
   busyLoadId: string | null;
   /** Only console-made truckloads can be deleted; a driver's cannot. */
   onDelete: (() => void) | null;
+  /** Visible action for the currently open bundle. */
+  onFinish: (() => void) | null;
   /** Buyer's weight in kg, or null when no ticket has been entered. */
   ticketKg: number | null;
   saving: boolean;
@@ -438,15 +459,18 @@ function TruckloadRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { remisiones, emisor } = useData();
+  const remission = remisiones.find(r => r.closing_weighing_id === load.closedBy?.id);
   const isOpen = load.closedBy === null;
   const variance = ticketKg != null && load.kg > 0 ? ((ticketKg - load.kg) / load.kg) * 100 : null;
 
   return (
     <li>
+      <div className="flex items-stretch">
       <button
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40"
+        className="flex min-w-0 flex-1 flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40"
       >
         <span
           className={cx('h-2 w-2 shrink-0 rounded-full', isOpen ? 'bg-amber-500' : 'bg-brand-500')}
@@ -466,6 +490,7 @@ function TruckloadRow({
                 still loaded
               </span>
             )}
+            {emisor?.remision_enabled && remission && <span className="ml-2 text-xs text-amber-700">{remisionLabels[remisionState(remission)]}</span>}
             {load.manual && (
               <span
                 title="Assembled in the console, not closed off in the field."
@@ -480,6 +505,7 @@ function TruckloadRow({
             {load.crops.length > 0 && ` · ${load.crops.join(', ')}`}
             {load.fields.length > 0 && ` · ${load.fields.join(', ')}`}
           </p>
+          {truckloadCropError(load.loads) && <p className="mt-1 text-xs text-red-600">{truckloadCropError(load.loads)}</p>}
         </div>
 
         <div className="shrink-0 text-right">
@@ -505,7 +531,9 @@ function TruckloadRow({
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {isOpen
                 ? `last load ${relativeTime(load.lastLoadAt)}`
-                : `emptied ${relativeTime(load.emptiedAt)}`}
+                : load.finishedLoading
+                  ? `finished ${relativeTime(load.emptiedAt)}`
+                  : `emptied ${relativeTime(load.emptiedAt)}`}
             </p>
           )}
         </div>
@@ -514,6 +542,12 @@ function TruckloadRow({
           {expanded ? '▲' : '▼'}
         </span>
       </button>
+      {onFinish && (
+        <div className="flex items-center pr-4">
+          <Button variant="primary" onClick={onFinish}>Finish loading</Button>
+        </div>
+      )}
+      </div>
 
       {expanded && (
         <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2 dark:border-slate-800 dark:bg-slate-900/40">
@@ -576,7 +610,7 @@ function TruckloadRow({
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             {load.emptiedAt ? (
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Truck emptied {formatDateTime(load.emptiedAt)}
+                {load.finishedLoading ? 'Loading finished' : 'Truck emptied'} {formatDateTime(load.emptiedAt)}
                 {load.destination ? ` at ${load.destination}` : ''}.
               </p>
             ) : (
@@ -608,6 +642,92 @@ function TruckloadRow({
         </div>
       )}
     </li>
+  );
+}
+
+function localDateTimeValue(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function FinishLoadingModal({
+  load,
+  destinations,
+  userId,
+  onClose,
+  onFinished,
+}: {
+  load: Truckload;
+  destinations: string[];
+  userId: string;
+  onClose: () => void;
+  onFinished: () => Promise<void>;
+}) {
+  const { unit } = usePrefs();
+  const [destination, setDestination] = useState('');
+  const [finishedAt, setFinishedAt] = useState(() => localDateTimeValue());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function finish() {
+    if (!destination) { setError('Choose the destination before finishing the truckload.'); return; }
+    const when = new Date(finishedAt);
+    if (Number.isNaN(when.getTime())) { setError('Enter a valid completion time.'); return; }
+    const cropError = truckloadCropError(load.loads);
+    if (cropError) { setError(cropError); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await createTruckload(userId, {
+        truck: load.truck,
+        destination,
+        emptiedAt: when.toISOString(),
+        seasonId: load.loads[0]?.season_id ?? null,
+        loadIds: load.loads.map((row) => row.id),
+        reason: 'finished-loading',
+      });
+      await onFinished();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not finish this truckload.');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title="Finish loading" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+          <p className="font-medium text-slate-900 dark:text-slate-100">{load.truck}</p>
+          <p className="mt-1 text-slate-600 dark:text-slate-300">
+            {load.loads.length} transaction{load.loads.length === 1 ? '' : 's'} · {load.crops.join(', ')} ·{' '}
+            <strong>{formatWeight(load.kg, unit)}</strong>
+          </p>
+        </div>
+        {error && <ErrorNote message={error} />}
+        <div>
+          <Label>Destination</Label>
+          <Select value={destination} onChange={(e) => setDestination(e.target.value)}>
+            <option value="">Choose a destination…</option>
+            {[...new Set(destinations)].sort((a, b) => a.localeCompare(b)).map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>Loading completed at</Label>
+          <Input type="datetime-local" value={finishedAt} onChange={(e) => setFinishedAt(e.target.value)} />
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Confirming closes these transactions as one truckload. New transactions will start the next load.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="primary" disabled={saving || !destination} onClick={() => void finish()}>
+            {saving ? 'Finishing…' : 'Confirm finished'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

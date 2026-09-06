@@ -1,46 +1,15 @@
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { FenexRequest } from './fenexPayload';
-// DEMO — remove this import and every isDemo() branch below before launch.
-import {
-  demoCities,
-  demoCreate,
-  demoCustomers,
-  demoDepartments,
-  demoDistricts,
-  demoIssuers,
-  demoPdfDataUrl,
-  demoProducts,
-  demoStatus,
-  isDemo,
-} from './fenexDemo';
 
 /**
  * Every call to Fenex goes through the `fenex` Edge Function, never straight
- * from the browser. The Fenex token stays server-side; this module only ever
- * sees the results.
+ * from the browser. The server integration credential never reaches this module.
  */
 
-export interface FenexLinkStatus {
-  linked: boolean;
-  id?: string | null;
-  label?: string | null;
-  is_default?: boolean | null;
-  fenex_email?: string | null;
-  account_id?: string | null;
-  subscription_status?: string | null;
-  paid_until?: string | null;
-  linked_at?: string | null;
-}
-
-/**
- * One issuer an account can file under: a Fenex login plus the details that
- * name them as the hauler when they carry their own grain.
- *
- * Fenex reads who issued a document from the token, so an issuer IS a Fenex
- * login — there is no way to file under a name whose credentials you do not
- * hold, which is the correct behaviour for a document tied to a timbrado.
- */
+/** Public metadata for an issuer-approved connection. Not an authorization grant. */
 export interface Issuer {
+  connection_status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED' | 'UNAVAILABLE';
   id: string;
   label: string | null;
   fenex_email: string | null;
@@ -70,6 +39,9 @@ export interface GeoOption {
 export interface FenexCustomer {
   id: string;
   name?: string;
+  /** Field returned by the current Fenex CustomerResponse. */
+  rucOrDocument?: string;
+  // Forward-compatible aliases if Fenex later expands its customer response.
   legalName?: string;
   ruc?: string;
   dv?: string;
@@ -94,9 +66,12 @@ export interface FenexProduct {
 
 export interface FenexRemissionResult {
   id: string;
+  fenexRemissionId?: string;
   remissionNumber: string | null;
   cdc: string | null;
   status: string;
+  reviewStatus?: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  rejectionReason?: string | null;
   issuedAt: string | null;
   [k: string]: unknown;
 }
@@ -114,10 +89,18 @@ async function call<T>(action: string, body: Record<string, unknown> = {}): Prom
   });
 
   if (error) {
-    // The function returns a readable message in the body even on failure;
-    // surface that rather than the generic "Edge Function returned a non-2xx".
-    const detail = (data as { error?: string; detail?: unknown } | null) ?? null;
-    throw new FenexError(detail?.error ?? error.message, detail?.detail);
+    // A non-2xx response is represented as FunctionsHttpError. Supabase keeps
+    // the function's JSON body on `context`; `data` is normally null here.
+    // Reading only error.message hides the useful Fenex rejection reason.
+    if (error instanceof FunctionsHttpError) {
+      try {
+        const body = await error.context.json() as { error?: string; detail?: unknown };
+        throw new FenexError(body.error ?? error.message, body.detail);
+      } catch (bodyError) {
+        if (bodyError instanceof FenexError) throw bodyError;
+      }
+    }
+    throw new FenexError(error.message);
   }
 
   const payload = data as { error?: string; detail?: unknown };
@@ -127,25 +110,15 @@ async function call<T>(action: string, body: Record<string, unknown> = {}): Prom
   return data as T;
 }
 
-/**
- * Exchanges the password for a token once; the password is never stored.
- * Re-linking an issuer that already exists refreshes its token in place.
- */
-export const linkFenex = (email: string, password: string, label?: string) =>
-  call<FenexLinkStatus>('link', { email, password, label });
+/** Request access by RUC; the account owner approves inside Fenex. */
+export const requestFenexConnection = (label: string, ruc: string) =>
+  call<{ issuers: Issuer[] }>('requestConnection', { label, ruc }).then(r => r.issuers);
 
 export const unlinkFenex = (issuerId: string) =>
-  call<{ linked: boolean }>('unlink', { issuerId });
-
-export const fenexStatus = (issuerId?: string | null) =>
-  isDemo() ? demoStatus() : call<FenexLinkStatus>('status', { issuerId });
+  call<{ issuers: Issuer[] }>('unlink', { issuerId });
 
 export const fenexIssuers = () =>
-  isDemo() ? demoIssuers() : call<{ issuers: Issuer[] }>('issuers').then((r) => r.issuers);
-
-/** Saves the label and transportista details. Never touches the token. */
-export const saveIssuer = (issuerId: string, patch: Partial<Issuer>) =>
-  call<{ issuers: Issuer[] }>('saveIssuer', { issuerId, ...patch }).then((r) => r.issuers);
+  call<{ issuers: Issuer[] }>('issuers').then((r) => r.issuers);
 
 export const setDefaultIssuer = (issuerId: string) =>
   call<{ issuers: Issuer[] }>('setDefaultIssuer', { issuerId }).then((r) => r.issuers);
@@ -153,36 +126,33 @@ export const setDefaultIssuer = (issuerId: string) =>
 // Geography and customers are read through a specific issuer's Fenex session:
 // two issuers are two accounts, and their customer lists are not the same.
 export const fenexDepartments = (issuerId?: string | null) =>
-  isDemo() ? demoDepartments() : call<GeoOption[]>('departments', { issuerId });
+  call<GeoOption[]>('departments', { issuerId });
 
 export const fenexDistricts = (departmentCode: string, issuerId?: string | null) =>
-  isDemo()
-    ? demoDistricts(departmentCode)
-    : call<GeoOption[]>('districts', { departmentCode, issuerId });
+  call<GeoOption[]>('districts', { departmentCode, issuerId });
 
 export const fenexCities = (departmentCode: string, districtCode: string, issuerId?: string | null) =>
-  isDemo()
-    ? demoCities(departmentCode, districtCode)
-    : call<GeoOption[]>('cities', { departmentCode, districtCode, issuerId });
+  call<GeoOption[]>('cities', { departmentCode, districtCode, issuerId });
 
 export const fenexProducts = (issuerId?: string | null) =>
-  isDemo() ? demoProducts() : call<FenexProduct[]>('products', { issuerId });
+  call<FenexProduct[]>('products', { issuerId });
 
 export const fenexCustomers = (issuerId?: string | null) =>
-  isDemo() ? demoCustomers() : call<FenexCustomer[]>('customers', { issuerId });
+  call<FenexCustomer[]>('customers', { issuerId });
 
-/**
- * Creates and submits in one call. The idempotency key travels inside the
- * payload — Fenex looks it up per account, so a retry after a lost response
- * returns the original document rather than issuing a second one.
- */
-export const createRemission = (payload: FenexRequest, issuerId?: string | null) =>
-  isDemo() ? demoCreate(payload) : call<FenexRemissionResult>('create', { payload, issuerId });
+/** Sending creates only a DRAFT. The linked Fenex owner must review it. */
+export const canSendApproval = () => true;
+export async function sendDraftForApproval(payload: FenexRequest, issuerId?: string | null) {
+  if (!issuerId) throw new Error('Choose an approved Fenex issuer.');
+  return call<FenexRemissionResult>('sendDraft', { payload, issuerId });
+}
+
+/** Pulls issuer decisions and SIFEN status into the caller's own Virtus rows. */
+export const syncFenexRemissions = () =>
+  call<{ remissions: FenexRemissionResult[] }>('remissions').then(r => r.remissions);
 
 /** Copies the KuDE PDF into our own storage and returns a signed link. */
 export const fetchRemissionPdf = (remissionId: string, issuerId?: string | null) =>
-  isDemo()
-    ? Promise.resolve({ path: 'demo', url: demoPdfDataUrl() })
-    : call<{ path: string; url: string | null }>('pdf', { remissionId, issuerId });
+  call<{ path: string; url: string | null }>('pdf', { remissionId, issuerId });
 
 export { FenexError };

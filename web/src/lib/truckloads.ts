@@ -35,6 +35,8 @@ export interface Truckload {
   operators: string[];
   /** True when this truckload was assembled in the console, not in the field. */
   manual: boolean;
+  /** Closed when the operator confirmed loading was complete, before delivery. */
+  finishedLoading: boolean;
 }
 
 export interface TruckloadOptions {
@@ -98,6 +100,7 @@ function build(
     fields: distinctValues(ordered, (w) => w.zone),
     operators: distinctValues(ordered, (w) => w.worker),
     manual,
+    finishedLoading: closedBy?.notes === 'Loading completed in the web console.',
   };
 }
 

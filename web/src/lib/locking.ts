@@ -1,9 +1,11 @@
 import type { Remision, Weighing } from './types';
 import { buildTruckloads } from './truckloads';
 import type { TruckloadOptions } from './truckloads';
+import { remisionLocked } from './remisionWorkflow';
 
 /**
- * Loads that have been filed on a Nota de Remisión, and may no longer change.
+ * Loads sent for review, including unresolved delivery, may no longer change
+ * through the web console. Phone and database enforcement are separate.
  *
  * A remisión is a legal declaration of what left the field, and Fenex has no
  * way to amend one. If a load could still be edited afterwards, the app's own
@@ -22,8 +24,7 @@ export function lockedWeighingIds(
 ): Set<string> {
   const issuedClosings = new Set(
     remisiones
-      // `cdc` present means SET accepted it; status alone can lag behind.
-      .filter((r) => r.status === 'issued' || Boolean(r.cdc))
+      .filter(remisionLocked)
       .map((r) => r.closing_weighing_id),
   );
   if (issuedClosings.size === 0) return new Set();
@@ -44,8 +45,8 @@ export function lockedWeighingIds(
 }
 
 export const LOCK_REASON =
-  'This load is on an issued Nota de Remisión and can no longer be changed. ' +
-  'The document cannot be amended, so the records have to match what was filed.';
+  'This truckload is locked because its remisión has been sent or is awaiting delivery confirmation. ' +
+  'Its transactions must match the details being reviewed in Fenex.';
 
 /**
  * Truckloads whose remisión has been filed. Their membership is frozen: no
@@ -55,7 +56,7 @@ export const LOCK_REASON =
 export function lockedClosingIds(remisiones: Remision[]): Set<string> {
   return new Set(
     remisiones
-      .filter((r) => r.status === 'issued' || Boolean(r.cdc))
+      .filter(remisionLocked)
       .map((r) => r.closing_weighing_id),
   );
 }

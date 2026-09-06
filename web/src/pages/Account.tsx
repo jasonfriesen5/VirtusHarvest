@@ -17,7 +17,7 @@ import RemisionSettings from '../components/RemisionSettings';
 import { formatDateTime, downloadCsv, relativeTime } from '../lib/format';
 import { describeDevice } from '../lib/userAgent';
 
-type DangerAction = 'records' | 'everything' | 'account';
+type DangerAction = 'account';
 
 export default function Account() {
   const { user, signOut } = useAuth();
@@ -109,7 +109,7 @@ export default function Account() {
       <Card className="border-red-300 dark:border-red-900">
         <CardHeader
           title="Danger zone"
-          subtitle="Take a copy first — none of these can be undone"
+          subtitle="Deleting the account permanently removes all of its data"
           action={
             <div className="flex gap-2">
               <Button onClick={exportWeighingsCsv} disabled={recordCount === 0}>
@@ -121,18 +121,6 @@ export default function Account() {
         />
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           <DangerRow
-            title="Delete all weighing records"
-            body={`Removes all ${recordCount} records from the cloud. Farms, fields, trucks and other setup are kept.`}
-            action="Delete records"
-            onClick={() => setDanger('records')}
-          />
-          <DangerRow
-            title="Delete all cloud data"
-            body="Removes every record and all setup — farms, fields, crops, trucks, carts, operators, seasons, destinations and boundaries. The account itself stays."
-            action="Delete everything"
-            onClick={() => setDanger('everything')}
-          />
-          <DangerRow
             title="Delete account"
             body="Permanently deletes the account and all of its data. You will be signed out of every device."
             action="Delete account"
@@ -143,17 +131,9 @@ export default function Account() {
 
       {danger && (
         <DangerModal
-          action={danger}
-          recordCount={recordCount}
           email={user?.email ?? ''}
-          userId={user?.id ?? ''}
           onClose={() => setDanger(null)}
           onError={setError}
-          onDone={async (message) => {
-            setDanger(null);
-            setNotice(message);
-            await data.refresh();
-          }}
         />
       )}
     </div>
@@ -356,76 +336,26 @@ function SecurityCard({
 }
 
 function DangerModal({
-  action,
-  recordCount,
   email,
-  userId,
   onClose,
-  onDone,
   onError,
 }: {
-  action: DangerAction;
-  recordCount: number;
   email: string;
-  userId: string;
   onClose: () => void;
-  onDone: (message: string) => void;
   onError: (s: string | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
 
   const config = {
-    records: {
-      title: 'Delete all weighing records?',
-      body: `This removes all ${recordCount} weighing records from the cloud, on every device signed into this account. Farms, fields, trucks and the rest of your setup are kept.`,
-      button: 'Delete records',
-    },
-    everything: {
-      title: 'Delete all cloud data?',
-      body: 'This removes every weighing record and all setup — farms, fields, crops, trucks, carts, operators, seasons, destinations and boundaries. Your account and login stay.',
-      button: 'Delete everything',
-    },
-    account: {
-      title: 'Delete your account?',
-      body: `This permanently deletes ${email} and all of its data. Every device is signed out. There is no way to recover it.`,
-      button: 'Delete account',
-    },
-  }[action];
+    title: 'Delete your account?',
+    body: `This permanently deletes ${email} and all of its data. Every device is signed out. There is no way to recover it.`,
+    button: 'Delete account',
+  };
 
   async function run() {
     setBusy(true);
     onError(null);
     try {
-      if (action === 'records') {
-        const { error } = await supabase.from('weighings').delete().eq('user_id', userId);
-        if (error) throw error;
-        onDone('All weighing records deleted.');
-        return;
-      }
-
-      if (action === 'everything') {
-        // Children before parents: fields reference farms, boundaries
-        // reference fields. Deleting in the other order trips a constraint.
-        const order = [
-          'weighings',
-          'ht_boundaries',
-          'ht_fields',
-          'ht_farms',
-          'ht_crops',
-          'ht_trucks',
-          'ht_carts',
-          'ht_operators',
-          'ht_destinations',
-          'ht_seasons',
-        ];
-        for (const table of order) {
-          const { error } = await supabase.from(table).delete().eq('user_id', userId);
-          if (error) throw new Error(`${table}: ${error.message}`);
-        }
-        onDone('All cloud data deleted.');
-        return;
-      }
-
       const { error } = await supabase.rpc('delete_own_account');
       if (error) throw error;
       await supabase.auth.signOut();

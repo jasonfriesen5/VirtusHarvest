@@ -1,106 +1,48 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fenexIssuers } from '../lib/fenexClient';
 import type { Issuer } from '../lib/fenexClient';
+import { useAuth } from './AuthProvider';
 
-/**
- * The issuers an account can file a remisión under.
- *
- * Not part of DataProvider, because issuers are not a table this app may read
- * directly: the row carries the Fenex token, and the whole point of the Edge
- * Function is that the token never reaches a browser. So they come back from
- * `fenex/issuers`, which returns every column except that one.
- *
- * Cached at module level rather than fetched per component — the settings page
- * and every open truckload panel all want the same short list, and issuers
- * change perhaps twice a year.
- */
-
-let cache: Issuer[] | null = null;
-let inflight: Promise<Issuer[]> | null = null;
-const subscribers = new Set<() => void>();
-
-function publish(next: Issuer[]): void {
-  cache = next;
-  for (const notify of subscribers) notify();
-}
-
-/** Replaces the cache after a write, so every mounted picker updates at once. */
-export function setIssuers(next: Issuer[]): void {
-  publish(next);
-}
-
-async function load(force: boolean): Promise<Issuer[]> {
-  if (cache && !force) return cache;
-  // A single in-flight request is shared: several panels mounting together
-  // would otherwise each call the Edge Function for the same list.
-  if (!inflight || force) {
-    inflight = fenexIssuers()
-      .then((rows) => {
-        publish(rows);
-        return rows;
-      })
-      .finally(() => {
-        inflight = null;
-      });
+// Share requests, not account data. An old session response must never populate
+// a newly signed-in user's picker.
+const inflight = new Map<string, Promise<Issuer[]>>();
+function fetchIssuers(userId: string) {
+  let pending = inflight.get(userId);
+  if (!pending) {
+    pending = fenexIssuers().finally(() => inflight.delete(userId));
+    inflight.set(userId, pending);
   }
-  return inflight;
+  return pending;
 }
 
-export function useIssuers(): {
-  issuers: Issuer[];
-  loading: boolean;
-  error: string | null;
-  reload: () => Promise<void>;
-  /** Pre-selected on a new document; falls back to the only one there is. */
-  defaultIssuer: Issuer | null;
-} {
-  const [, force] = useState(0);
-  const [loading, setLoading] = useState(cache == null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const notify = () => force((n) => n + 1);
-    subscribers.add(notify);
-    return () => {
-      subscribers.delete(notify);
-    };
-  }, []);
-
+export function useIssuers() {
+  const { user } = useAuth();
+  const userId = user?.id;
+  const [state, setState] = useState<{ userId?: string; issuers: Issuer[]; error: string | null }>({ issuers: [], error: null });
+  const [loading, setLoading] = useState(false);
   const reload = useCallback(async () => {
+    if (!userId) return;
     setLoading(true);
-    setError(null);
     try {
-      await load(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load the issuers.');
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (cache != null) {
+      const issuers = await fetchIssuers(userId);
+      setState({ userId, issuers, error: null });
+    } catch (error) {
+      // Fail closed: stale approval must not remain selectable.
+      setState({ userId, issuers: [], error: error instanceof Error ? error.message : 'Could not load connections.' });
+    } finally {
       setLoading(false);
-      return;
     }
-    load(false)
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load the issuers.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const issuers = cache ?? [];
+  }, [userId]);
+  useEffect(() => {
+    void reload();
+    const timer = setInterval(() => { if (!document.hidden) void reload(); }, 15000);
+    return () => clearInterval(timer);
+  }, [reload]);
+  const issuers = state.userId === userId && userId ? state.issuers : [];
+  const connected = issuers.filter(i => i.connection_status === 'APPROVED');
   return {
-    issuers,
-    loading,
-    error,
-    reload,
-    defaultIssuer: issuers.find((i) => i.is_default) ?? issuers[0] ?? null,
+    issuers, loading, reload,
+    error: state.userId === userId ? state.error : null,
+    defaultIssuer: connected.find(i => i.is_default) ?? connected[0] ?? null,
   };
 }

@@ -1,472 +1,304 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-/**
- * The only place Virtus talks to Fenex.
- *
- * It runs server-side for two reasons. The Fenex token must never reach the
- * browser, where anyone could read it and issue fiscal documents under the
- * account's RUC. And Fenex sees one fixed address rather than every customer's
- * browser, so it can be allowlisted.
- *
- * The user's Supabase login identifies them, and RLS on ht_issuers scopes the
- * issuer rows to them. Tokens live apart in ht_issuer_tokens, which has RLS on
- * and NO policy — unreadable by anon and authenticated alike, reachable only
- * with the service role key held here. A token issues fiscal documents under
- * its account's RUC, so a browser must not be able to read one even for its
- * own account: with several issuers, one of those logins belongs to somebody
- * else.
- *
- * An account may hold SEVERAL issuers. Fenex takes no issuer fields — it reads
- * who issued a document from the token — so filing under another name means
- * using that person's own Fenex login, which is theirs to give. Every action
- * therefore names an issuer; omitting it falls back to the default one.
- */
-
-const FENEX_BASE = Deno.env.get("FENEX_BASE_URL") ?? "https://api.fenexpy.com";
-
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-idempotency-key",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+const columns = "id,label,is_default,razon_social,ruc,ruc_dv,address,phone,email";
+type Connection = {
+  id: string; requesterId: string; label: string; status: string;
+  ruc: string; legalName: string | null; updatedAt: string;
+};
+type DraftSummary = {
+  id: string;
+  connectionId: string;
+  remissionId: string;
+  status: "DRAFT" | "READY" | "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED";
+  reviewStatus: "PENDING" | "ACCEPTED" | "REJECTED";
+  rejectionReason: string | null;
+  remissionNumber: string | null;
+  cdc: string | null;
+  issuedAt: string | null;
+  updatedAt: string;
+};
+type DraftDetail = { summary: DraftSummary; remission: Record<string, unknown> };
+const unavailable = "Fenex connections are not available yet. The updated backend must be deployed and connected.";
 
-/**
- * Bypasses RLS, so every query made with it MUST filter by user_id by hand.
- * Used only for ht_issuer_tokens; everything else goes through the caller's
- * own client, where the database enforces ownership.
- */
-function adminClient() {
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!key) {
-    // Failing loudly beats quietly falling back to a client that cannot read
-    // the tokens and reporting "no Fenex account linked".
-    throw Object.assign(
-      new Error("Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is not set."),
-      { status: 500 },
-    );
+async function partner(path: string, method = "GET", payload?: unknown) {
+  const base = Deno.env.get("FENEX_PARTNER_BASE_URL");
+  const key = Deno.env.get("FENEX_PARTNER_KEY");
+  if (!base || !key) throw new Error(unavailable);
+  if (!base.startsWith("https://")) throw new Error("Fenex connection requires HTTPS.");
+  const response = await fetch(base.replace(/\/$/, "") + "/integrations/virtus" + path, {
+    method, redirect: "error",
+    headers: { "X-Virtus-Key": key, "Content-Type": "application/json" },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) {
+    // Never forward upstream bodies: they may contain internal details or secrets.
+    if (response.status === 404) throw new Error("Fenex could not find this account or connection endpoint. Confirm the RUC with the issuer.");
+    if (response.status === 401 || response.status === 403) throw new Error("The Virtus–Fenex server connection is not authorized.");
+    if (response.status === 409) throw new Error("Fenex reports that this request has already been decided.");
+    throw new Error("Fenex could not complete the request (" + response.status + ").");
   }
-  return createClient(Deno.env.get("SUPABASE_URL")!, key);
+  const raw = await response.text();
+  return raw ? JSON.parse(raw) : null;
 }
 
-const ISSUER_COLUMNS =
-  "id, label, fenex_email, account_id, subscription_status, paid_until, linked_at, " +
-  "is_default, razon_social, ruc, ruc_dv, address, phone, email";
+async function partnerPdf(path: string) {
+  const base = Deno.env.get("FENEX_PARTNER_BASE_URL");
+  const key = Deno.env.get("FENEX_PARTNER_KEY");
+  if (!base || !key) throw new Error(unavailable);
+  if (!base.startsWith("https://")) throw new Error("Fenex connection requires HTTPS.");
+  const response = await fetch(base.replace(/\/$/, "") + "/integrations/virtus" + path, {
+    redirect: "error",
+    headers: { "X-Virtus-Key": key },
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!response.ok) {
+    if (response.status === 409) throw new Error("The signed PDF is not available until SIFEN approves the remisión.");
+    if (response.status === 401 || response.status === 403) throw new Error("The Virtus–Fenex server connection is not authorized.");
+    throw new Error("Fenex could not return the signed PDF (" + response.status + ").");
+  }
+  if (!response.headers.get("content-type")?.includes("application/pdf"))
+    throw new Error("Fenex returned an invalid PDF response.");
+  return new Uint8Array(await response.arrayBuffer());
+}
 
-type Action =
-  | "link"
-  | "unlink"
-  | "status"
-  | "issuers"
-  | "saveIssuer"
-  | "setDefaultIssuer"
-  | "departments"
-  | "districts"
-  | "cities"
-  | "customers"
-  | "products"
-  | "create"
-  | "pdf";
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status, headers: { ...CORS, "Content-Type": "application/json" },
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+  });
+  const { data: { user }, error: authError } = await db.auth.getUser();
+  if (authError || !user) return json({ error: "Please sign in to Virtus again." }, 401);
+  let body: Record<string, unknown>;
+  try { body = await req.json(); }
+  catch { return json({ error: "Invalid request" }, 400); }
+  const issuerId = String(body.issuerId ?? "");
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user) return json({ error: "Not authenticated" }, 401);
-
-  let body: Record<string, unknown> = {};
+  async function localProfiles() {
+    const { data, error } = await db.from("ht_issuers").select(columns).eq("user_id", user!.id);
+    if (error) throw new Error("Could not load saved profiles.");
+    return data ?? [];
+  }
+  async function sync() {
+    const local = await localProfiles();
+    if (!Deno.env.get("FENEX_PARTNER_BASE_URL") || !Deno.env.get("FENEX_PARTNER_KEY"))
+      return local.map(p => ({ ...p, connection_status: "UNAVAILABLE" }));
+    const remote = await partner("/connections?requesterId=" + encodeURIComponent(user!.id)) as Connection[];
+    if (!Array.isArray(remote) || remote.some(c => c.requesterId !== user!.id ||
+        !/^[0-9a-f-]{36}$/i.test(c.id) || !["PENDING","APPROVED","REJECTED","REVOKED"].includes(c.status)))
+      throw new Error("Fenex returned an invalid connection response.");
+    // Materialize public profiles for the existing remisión FK. Authorization
+    // always comes from Fenex; local metadata never grants connection access.
+    if (remote.length) {
+      const { error } = await db.from("ht_issuers").upsert(remote.map(c => {
+        const [ruc, dv] = c.ruc.split("-");
+        return { id: c.id, user_id: user!.id, label: c.label,
+          is_default: local.find(p => p.id === c.id)?.is_default ?? false,
+          razon_social: c.status === "APPROVED" ? c.legalName : null, ruc, ruc_dv: dv,
+          updated_at: new Date().toISOString() };
+      }), { onConflict: "id" });
+      if (error) throw new Error("Fenex received the request, but Virtus could not save its profile. Refresh to recover it.");
+    }
+    return remote.map(c => ({
+      id: c.id, label: c.label, connection_status: c.status,
+      ruc: c.ruc.split("-")[0], ruc_dv: c.ruc.split("-")[1],
+      razon_social: c.status === "APPROVED" ? c.legalName : null,
+      is_default: local.find(p => p.id === c.id)?.is_default ?? false,
+    }));
+  }
   try {
-    body = await req.json();
-  } catch { /* handled below */ }
-
-  const action = body.action as Action | undefined;
-  if (!action) return json({ error: "An action is required" }, 400);
-
-  const issuerId = body.issuerId == null ? null : String(body.issuerId);
-
-  try {
-    switch (action) {
-      case "link":
-        return await link(supabase, user.id, body);
-      case "unlink": {
-        // Scoped to one issuer. Without the id this would unlink every issuer
-        // on the account, which is never what a person clicking "unlink" on a
-        // single profile means.
-        if (!issuerId) return json({ error: "issuerId is required to unlink" }, 400);
-        await supabase.from("ht_issuers").delete()
-          .eq("id", issuerId).eq("user_id", user.id);
-        return json({ linked: false, id: issuerId });
+    switch (body.action) {
+      case "issuers": return json({ issuers: await sync() });
+      case "requestConnection": {
+        if (!user.email || !user.email_confirmed_at) return json({ error: "Confirm your Virtus email first." }, 403);
+        const label = String(body.label ?? "").trim();
+        const ruc = String(body.ruc ?? "").trim();
+        if (!label || label.length > 120 || !/^[0-9]{3,8}-[0-9]$/.test(ruc))
+          return json({ error: "Enter a profile name and RUC including its DV (for example 80012345-6)." }, 400);
+        await partner("/connections", "POST", {
+          requesterId: user.id, requesterEmail: user.email, label, ruc,
+        });
+        return json({ issuers: await sync() });
       }
-      case "status":
-        return json(await readIssuer(supabase, user.id, issuerId, false));
-      case "issuers":
-        return json({ issuers: await listIssuers(supabase, user.id) });
-      case "saveIssuer":
-        return await saveIssuer(supabase, user.id, body);
-      case "setDefaultIssuer":
-        return await setDefaultIssuer(supabase, user.id, issuerId);
+      case "unlink": {
+        if (!/^[0-9a-f-]{36}$/i.test(issuerId)) return json({ error: "Invalid connection" }, 400);
+        await partner("/connections/" + issuerId + "?requesterId=" + encodeURIComponent(user.id), "DELETE");
+        return json({ issuers: await sync() });
+      }
+      case "setDefaultIssuer": {
+        const profiles = await sync();
+        if (!profiles.some(p => p.id === issuerId && p.connection_status === "APPROVED"))
+          return json({ error: "Choose a connected profile." }, 409);
+        const { error: clearError } = await db.from("ht_issuers").update({ is_default: false })
+          .eq("user_id", user.id).eq("is_default", true);
+        if (clearError) throw new Error("Could not change default profile.");
+        const { error } = await db.from("ht_issuers").update({ is_default: true })
+          .eq("user_id", user.id).eq("id", issuerId);
+        if (error) throw new Error("Could not set default profile.");
+        return json({ issuers: await sync() });
+      }
+      case "link": return json({ error: "Password linking has been replaced by issuer approval. Refresh Virtus." }, 409);
+      case "create":
+        return json({ error: "Immediate remisión issuance is disabled. Send a draft for issuer approval." }, 409);
+      case "sendDraft": {
+        if (!/^[0-9a-f-]{36}$/i.test(issuerId))
+          return json({ error: "Choose an approved issuer." }, 400);
+        const payload = body.payload as Record<string, unknown> | null;
+        if (!payload || typeof payload !== "object"
+            || typeof payload.idempotencyKey !== "string"
+            || typeof payload.remission !== "object"
+            || !Array.isArray(payload.items))
+          return json({ error: "Invalid remisión draft." }, 400);
+        const detail = await partner("/remission-drafts", "POST", {
+          requesterId: user.id,
+          connectionId: issuerId,
+          idempotencyKey: payload.idempotencyKey,
+          remission: payload.remission,
+          items: payload.items,
+        }) as DraftDetail;
+        if (!isDraftDetail(detail))
+          throw new Error("Fenex returned an invalid draft response.");
+        return json(result(detail.summary));
+      }
+      case "remissions":
+        return json({ remissions: await syncRemissions(db, user.id) });
       case "departments":
-        return json(await proxy(
-          supabase, user.id, issuerId, "GET", "/geography/departments?q=&limit=200",
-        ));
+        return json(await partner("/geography/departments"));
       case "districts":
-        return json(await proxy(
-          supabase, user.id, issuerId, "GET",
-          `/geography/districts?departmentCode=${enc(body.departmentCode)}`,
+        return json(await partner(
+          "/geography/districts?departmentCode=" + encodeURIComponent(String(body.departmentCode ?? "")),
         ));
       case "cities":
-        return json(await proxy(
-          supabase, user.id, issuerId, "GET",
-          `/geography/cities?departmentCode=${enc(body.departmentCode)}&districtCode=${enc(body.districtCode)}`,
-        ));
-      case "customers": {
-        const issuer = await readIssuer(supabase, user.id, issuerId, true);
-        return json(await proxy(
-          supabase, user.id, issuerId, "GET",
-          `/customers?accountId=${enc(issuer.account_id)}`,
-        ));
-      }
-      case "products": {
-        const issuer = await readIssuer(supabase, user.id, issuerId, true);
-        return json(await proxy(
-          supabase, user.id, issuerId, "GET",
-          `/products?accountId=${enc(issuer.account_id)}`,
-        ));
-      }
-      case "create":
-        return json(await proxy(
-          supabase, user.id, issuerId, "POST", "/mobile/remissions", body.payload,
+        return json(await partner(
+          "/geography/cities?departmentCode=" + encodeURIComponent(String(body.departmentCode ?? ""))
+            + "&districtCode=" + encodeURIComponent(String(body.districtCode ?? "")),
         ));
       case "pdf":
-        return await fetchPdf(supabase, user.id, issuerId, String(body.remissionId ?? ""));
-      default:
-        return json({ error: `Unknown action: ${action}` }, 400);
+        return await fetchPdf(
+          db,
+          user.id,
+          String(body.remissionId ?? ""),
+        );
+      case "customers":
+      case "products":
+        return json({ error: "Virtus now sends destination and crop snapshots; an issuer catalogue is not required." }, 409);
+      default: return json({ error: "Unsupported Fenex action." }, 400);
     }
-  } catch (e) {
-    const err = e as { status?: number; message?: string; detail?: unknown };
-    return json(
-      { error: err.message ?? String(e), detail: err.detail ?? null },
-      err.status ?? 500,
-    );
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Fenex connection failed." }, 502);
   }
 });
 
-// ── Issuers ────────────────────────────────────────────────────────────────
+function isDraftSummary(value: unknown): value is DraftSummary {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.id === "string"
+    && typeof item.connectionId === "string"
+    && typeof item.remissionId === "string"
+    && ["DRAFT", "READY", "SUBMITTED", "APPROVED", "REJECTED", "CANCELLED"].includes(String(item.status))
+    && ["PENDING", "ACCEPTED", "REJECTED"].includes(String(item.reviewStatus));
+}
 
-async function listIssuers(
-  supabase: ReturnType<typeof createClient>,
+function isDraftDetail(value: unknown): value is DraftDetail {
+  return !!value && typeof value === "object"
+    && isDraftSummary((value as Record<string, unknown>).summary);
+}
+
+function result(summary: DraftSummary) {
+  return {
+    id: summary.id,
+    fenexRemissionId: summary.remissionId,
+    remissionNumber: summary.remissionNumber,
+    cdc: summary.cdc,
+    status: summary.status,
+    reviewStatus: summary.reviewStatus,
+    rejectionReason: summary.rejectionReason,
+    issuedAt: summary.issuedAt,
+    updatedAt: summary.updatedAt,
+  };
+}
+
+async function syncRemissions(
+  db: ReturnType<typeof createClient>,
   userId: string,
 ) {
-  const { data } = await supabase
-    .from("ht_issuers")
-    .select(ISSUER_COLUMNS)
-    .eq("user_id", userId)
-    .order("is_default", { ascending: false })
-    .order("label");
-  // Tokens are deliberately not in ISSUER_COLUMNS: this list goes to a browser.
-  return data ?? [];
+  const remote = await partner(
+    "/remission-drafts?requesterId=" + encodeURIComponent(userId),
+  ) as unknown;
+  if (!Array.isArray(remote) || remote.some(item => !isDraftSummary(item)))
+    throw new Error("Fenex returned an invalid remisión status response.");
+
+  const now = new Date().toISOString();
+  for (const summary of remote as DraftSummary[]) {
+    const rejected = summary.status === "REJECTED";
+    const { error } = await db.from("ht_remisiones").update({
+      status: summary.status === "APPROVED" ? "issued" : rejected ? "failed" : "sending",
+      fenex_status: summary.status,
+      numero: summary.remissionNumber,
+      cdc: summary.cdc,
+      issued_at: summary.issuedAt,
+      response_payload: result(summary),
+      error_message: rejected
+        ? summary.rejectionReason ?? "The issuer or SIFEN rejected this remisión."
+        : null,
+      updated_at: now,
+    }).eq("user_id", userId).eq("fenex_remission_id", summary.id);
+    if (error) throw new Error("Fenex status arrived, but Virtus could not save it.");
+  }
+  return (remote as DraftSummary[]).map(result);
 }
 
-/**
- * Exchanges email and password for a token, once. The password is used for
- * this request and then discarded — it is never written anywhere. Fenex tokens
- * last about six months, so this is a twice-a-year action.
- *
- * Re-linking an existing issuer refreshes its token in place, keyed on the
- * Fenex email: the same login must never become a second profile, or a
- * document could be filed under a stale token nobody realises is there.
- */
-async function link(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: Record<string, unknown>,
-): Promise<Response> {
-  const email = String(body.email ?? "").trim();
-  const password = String(body.password ?? "");
-  const label = String(body.label ?? "").trim();
-  if (!email || !password) return json({ error: "Email and password are required" }, 400);
-
-  const res = await fetch(`${FENEX_BASE}/mobile/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    // 401 is a wrong password; anything else is Fenex having a problem. The
-    // person on the other end needs to know which.
-    return json(
-      {
-        error: res.status === 401
-          ? "Fenex rejected that email or password."
-          : `Fenex returned ${res.status}. ${text.slice(0, 300)}`,
-      },
-      res.status === 401 ? 401 : 502,
-    );
-  }
-
-  const auth = JSON.parse(text) as {
-    token?: string;
-    accountId?: string;
-    subscriptionStatus?: string;
-    paidUntil?: string;
-    email?: string;
-  };
-
-  if (!auth.token) return json({ error: "Fenex did not return a token" }, 502);
-
-  const fenexEmail = auth.email ?? email;
-
-  const { data: existing } = await supabase
-    .from("ht_issuers")
-    .select("id, label, is_default")
-    .eq("user_id", userId)
-    .eq("fenex_email", fenexEmail)
-    .maybeSingle();
-
-  // The first issuer on an account becomes the default, so a person who only
-  // ever has one never has to think about the concept at all.
-  const { count } = await supabase
-    .from("ht_issuers")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  const row = {
-    id: existing?.id ?? crypto.randomUUID(),
-    user_id: userId,
-    label: label || existing?.label || fenexEmail,
-    fenex_email: fenexEmail,
-    token: auth.token,   // split off below; never stored on ht_issuers
-    account_id: auth.accountId ?? null,
-    subscription_status: auth.subscriptionStatus ?? null,
-    paid_until: auth.paidUntil ?? null,
-    is_default: existing?.is_default ?? (count ?? 0) === 0,
-    linked_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  const { token, ...issuerRow } = row;
-  const { error } = await supabase.from("ht_issuers").upsert(issuerRow, { onConflict: "id" });
-  if (error) return json({ error: error.message }, 500);
-
-  // Written with the service role, because the browser-facing roles cannot
-  // touch this table at all. The issuer row above was written by the caller's
-  // own client, so RLS has already proved they own it.
-  const { error: tokenError } = await adminClient().from("ht_issuer_tokens").upsert(
-    { issuer_id: row.id, user_id: userId, token, updated_at: new Date().toISOString() },
-    { onConflict: "issuer_id" },
-  );
-  if (tokenError) return json({ error: tokenError.message }, 500);
-
-  // The token itself never goes back to the browser.
-  return json({
-    linked: true,
-    id: row.id,
-    label: row.label,
-    fenex_email: fenexEmail,
-    account_id: row.account_id,
-    subscription_status: row.subscription_status,
-    paid_until: row.paid_until,
-    is_default: row.is_default,
-  });
-}
-
-/** The transportista details and the label. Never the token. */
-async function saveIssuer(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: Record<string, unknown>,
-): Promise<Response> {
-  const id = String(body.issuerId ?? "");
-  if (!id) return json({ error: "issuerId is required" }, 400);
-
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const key of ["label", "razon_social", "ruc", "ruc_dv", "address", "phone", "email"]) {
-    if (key in body) patch[key] = body[key] == null ? null : String(body[key]).trim() || null;
-  }
-
-  const { error } = await supabase.from("ht_issuers")
-    .update(patch).eq("id", id).eq("user_id", userId);
-  if (error) return json({ error: error.message }, 500);
-  return json({ issuers: await listIssuers(supabase, userId) });
-}
-
-async function setDefaultIssuer(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  issuerId: string | null,
-): Promise<Response> {
-  if (!issuerId) return json({ error: "issuerId is required" }, 400);
-  // Cleared first: a unique partial index allows only one default per account,
-  // so setting the new one before clearing the old would be rejected.
-  await supabase.from("ht_issuers").update({ is_default: false })
-    .eq("user_id", userId).eq("is_default", true);
-  const { error } = await supabase.from("ht_issuers").update({ is_default: true })
-    .eq("id", issuerId).eq("user_id", userId);
-  if (error) return json({ error: error.message }, 500);
-  return json({ issuers: await listIssuers(supabase, userId) });
-}
-
-/**
- * The issuer a request runs as. A named issuer must exist and belong to the
- * caller; without a name, the default is used.
- */
-async function readIssuer(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  issuerId: string | null,
-  requireToken: boolean,
-) {
-  // The caller's own client, so RLS decides which issuers exist for them.
-  let query = supabase.from("ht_issuers").select(ISSUER_COLUMNS).eq("user_id", userId);
-
-  query = issuerId
-    ? query.eq("id", issuerId)
-    : query.order("is_default", { ascending: false }).order("linked_at");
-
-  const { data } = await query.limit(1).maybeSingle();
-  if (!data) {
-    if (requireToken) {
-      throw Object.assign(
-        new Error(
-          issuerId
-            ? "That issuer is not linked to a Fenex account."
-            : "No Fenex account is linked yet.",
-        ),
-        { status: 409 },
-      );
-    }
-    return { linked: false };
-  }
-
-  if (!requireToken) return { ...data, linked: true, token: undefined };
-
-  // The row above came back through RLS, so it is the caller's. The user_id
-  // filter here is belt and braces: this client bypasses RLS entirely, and a
-  // missing filter would hand out another account's token.
-  const { data: secret } = await adminClient()
-    .from("ht_issuer_tokens")
-    .select("token")
-    .eq("issuer_id", (data as { id: string }).id)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (!secret?.token) {
-    throw Object.assign(
-      new Error("That issuer has no Fenex session. Re-link it in Account > Nota de Remision."),
-      { status: 409 },
-    );
-  }
-  return { ...data, linked: true, token: secret.token };
-}
-
-// ── Calling Fenex ──────────────────────────────────────────────────────────
-
-async function proxy(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  issuerId: string | null,
-  method: string,
-  path: string,
-  payload?: unknown,
-): Promise<unknown> {
-  const issuer = await readIssuer(supabase, userId, issuerId, true);
-
-  const res = await fetch(`${FENEX_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${issuer.token}`,
-      ...(payload ? { "Content-Type": "application/json" } : {}),
-    },
-    body: payload ? JSON.stringify(payload) : undefined,
-  });
-
-  const text = await res.text();
-
-  if (res.status === 401 || res.status === 403) {
-    // Six-month tokens do expire eventually. Say so plainly rather than
-    // surfacing a bare 401 that reads like a bug — and name the issuer, since
-    // an account may hold several and only one of them has gone stale.
-    throw Object.assign(
-      new Error(
-        `The Fenex session for ${issuer.label ?? issuer.fenex_email ?? "this issuer"} has expired. ` +
-        "Re-link it in Account → Nota de Remisión.",
-      ),
-      { status: 401 },
-    );
-  }
-
-  if (!res.ok) {
-    let detail: unknown = text.slice(0, 1200);
-    try { detail = JSON.parse(text); } catch { /* keep the raw text */ }
-    throw Object.assign(new Error(`Fenex rejected the request (${res.status}).`), {
-      status: 502,
-      detail,
-    });
-  }
-
-  try { return JSON.parse(text); } catch { return text; }
-}
-
-/**
- * The KuDE endpoint returns PDF bytes behind the token, so a driver could never
- * open it directly. The bytes are copied into Supabase Storage once, which
- * gives a link that can be forwarded over WhatsApp and does not depend on Fenex
- * being reachable later.
- */
 async function fetchPdf(
-  supabase: ReturnType<typeof createClient>,
+  db: ReturnType<typeof createClient>,
   userId: string,
-  issuerId: string | null,
-  remissionId: string,
-): Promise<Response> {
-  if (!remissionId) return json({ error: "remissionId is required" }, 400);
-  const issuer = await readIssuer(supabase, userId, issuerId, true);
+  integrationDraftId: string,
+) {
+  if (!/^[0-9a-f-]{36}$/i.test(integrationDraftId))
+    return json({ error: "Invalid remisión identifier." }, 400);
 
-  const res = await fetch(`${FENEX_BASE}/remissions/${remissionId}/kude`, {
-    headers: { Authorization: `Bearer ${issuer.token}` },
-  });
-  if (!res.ok) {
-    return json({ error: `Fenex returned ${res.status} for the KuDE PDF.` }, 502);
-  }
+  const { data: local, error: readError } = await db.from("ht_remisiones")
+    .select("closing_weighing_id,pdf_path")
+    .eq("user_id", userId)
+    .eq("fenex_remission_id", integrationDraftId)
+    .maybeSingle();
+  if (readError || !local)
+    return json({ error: "This remisión does not belong to the signed-in Virtus account." }, 404);
 
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  const path = `${userId}/${remissionId}.pdf`;
+  const bytes = await partnerPdf(
+    "/remission-drafts/" + integrationDraftId + "/kude?requesterId="
+      + encodeURIComponent(userId),
+  );
+  const path = local.pdf_path || userId + "/" + crypto.randomUUID() + ".pdf";
+  const { error: uploadError } = await db.storage.from("remisiones").upload(
+    path,
+    bytes,
+    { contentType: "application/pdf", upsert: true },
+  );
+  if (uploadError) throw new Error("Could not safely store the signed PDF.");
 
-  const { error } = await supabase.storage
-    .from("remisiones")
-    .upload(path, bytes, { contentType: "application/pdf", upsert: true });
-
-  if (error) return json({ error: `Could not store the PDF: ${error.message}` }, 500);
-
-  // Signed rather than public: the path is guessable from the remission id, and
-  // the document carries a RUC, an address and the driver's cédula.
-  const { data: signed } = await supabase.storage
-    .from("remisiones")
+  const { data: signed, error: signError } = await db.storage.from("remisiones")
     .createSignedUrl(path, 60 * 60 * 24 * 365);
+  if (signError || !signed?.signedUrl)
+    throw new Error("Could not create a share link for the signed PDF.");
 
-  return json({ path, url: signed?.signedUrl ?? null });
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function enc(v: unknown): string {
-  return encodeURIComponent(String(v ?? ""));
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
+  const { error: saveError } = await db.from("ht_remisiones").update({
+    pdf_path: path,
+    pdf_url: signed.signedUrl,
+    updated_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("fenex_remission_id", integrationDraftId);
+  if (saveError) throw new Error("The PDF was stored but its link could not be saved.");
+  return json({ path, url: signed.signedUrl });
 }

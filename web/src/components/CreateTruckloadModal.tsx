@@ -4,6 +4,7 @@ import { useData } from '../state/DataProvider';
 import { usePrefs } from '../state/PrefsProvider';
 import { Button, ErrorNote, Input, Label, Modal, Select, cx } from './ui';
 import { createTruckload } from '../lib/assignments';
+import { truckloadCropError } from '../lib/truckloadCrop';
 import { wetKg } from '../lib/selectors';
 import type { Weighing } from '../lib/types';
 import { formatWeight } from '../lib/units';
@@ -80,6 +81,12 @@ export default function CreateTruckloadModal({
   }, [trucks, candidates]);
 
   function toggle(id: string) {
+    const candidate = candidates.find(c => c.load.id === id);
+    if (!selected.has(id) && candidate) {
+      const problem = truckloadCropError([...chosen.map(c => c.load), candidate.load]);
+      if (problem) { setError(problem); return; }
+    }
+    setError(null);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -98,6 +105,8 @@ export default function CreateTruckloadModal({
       setError('Choose which truck this load went out on.');
       return;
     }
+    const cropError = truckloadCropError(chosen.map(c => c.load));
+    if (cropError) { setError(cropError); return; }
     const when = new Date(emptiedAt);
     if (Number.isNaN(when.getTime())) {
       setError('Enter a valid date and time for when the truck was emptied.');
@@ -129,6 +138,7 @@ export default function CreateTruckloadModal({
           Bundles loads into a delivery that was never closed off in the field. Only loads
           that are not already in a delivered truckload can be picked — to move one that is,
           remove it from its truckload first.
+          {' '}The first selected transaction sets the crop; all others must match.
         </p>
 
         {error && <ErrorNote message={error} />}
@@ -168,6 +178,7 @@ export default function CreateTruckloadModal({
                       <input
                         type="checkbox"
                         checked={selected.has(load.id)}
+                        disabled={!selected.has(load.id) && Boolean(truckloadCropError([...chosen.map(c => c.load), load]))}
                         onChange={() => toggle(load.id)}
                         onClick={(e) => e.stopPropagation()}
                         aria-label={`Include the load from ${formatDateTime(load.timestamp)}`}
