@@ -1525,6 +1525,59 @@ body.rm-on button.rm-only{display:inline-flex !important;}
 .ntl-t2{font-size:11px;color:var(--text3);margin-top:2px;}
 .ntl-kg{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;}
 .ntl-empty{padding:22px 14px;text-align:center;font-size:13px;color:var(--text3);line-height:1.5;}
+.fab-wrap{
+  /* Fixed, not absolute: .tab-page is the scrolling element, so an absolute
+     button would ride up the page with the list instead of staying put. It is
+     inside the tab, which is display:none when inactive, so it cannot leak
+     onto another tab. */
+  position:fixed;right:16px;
+  bottom:calc(var(--tabbar-h) + max(env(safe-area-inset-bottom,0px), var(--safe-area-inset-bottom,0px)) + 16px);
+  display:flex;flex-direction:column;align-items:flex-end;gap:10px;z-index:60;
+}
+.fab-main{
+  width:56px;height:56px;border-radius:28px;border:none;cursor:pointer;
+  background:linear-gradient(180deg,#F5C542,#D4930A);color:#3A2A00;
+  font-size:30px;font-weight:300;line-height:1;
+  box-shadow:0 4px 14px rgba(0,0,0,.28);
+  /* Rotating the + into an × says "this closes" without a second icon. */
+  transition:transform .22s cubic-bezier(.2,.8,.3,1);
+}
+.fab-wrap.open .fab-main{transform:rotate(45deg);}
+.fab-scrim{
+  position:fixed;inset:0;background:rgba(0,0,0,.34);
+  opacity:0;pointer-events:none;transition:opacity .18s ease;
+}
+.fab-wrap.open .fab-scrim{opacity:1;pointer-events:auto;}
+.fab-items{
+  display:flex;flex-direction:column;align-items:flex-end;gap:10px;
+  pointer-events:none;opacity:0;transform:translateY(8px) scale(.96);
+  transition:opacity .18s ease, transform .18s ease;
+}
+.fab-wrap.open .fab-items{pointer-events:auto;opacity:1;transform:none;}
+.fab-item{
+  display:flex;align-items:center;gap:10px;border:none;background:none;
+  padding:0;cursor:pointer;
+}
+.fab-label{
+  background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;
+  box-shadow:0 2px 8px rgba(0,0,0,.14);white-space:nowrap;
+}
+.fab-dot{
+  width:44px;height:44px;border-radius:22px;background:var(--surface);
+  border:1px solid var(--border);display:flex;align-items:center;
+  justify-content:center;font-size:19px;box-shadow:0 2px 10px rgba(0,0,0,.18);
+}
+.fx-adv-toggle{
+  display:flex;align-items:center;gap:8px;margin:16px 0 4px;padding:10px 12px;
+  border:1px solid var(--border);border-radius:10px;cursor:pointer;
+  font-size:13px;font-weight:700;color:var(--text2);background:var(--card2,transparent);
+}
+.fx-adv-caret{font-size:11px;color:var(--text3);}
+.fx-adv-count{
+  margin-left:auto;background:#B03020;color:#fff;border-radius:999px;
+  padding:1px 8px;font-size:11px;font-weight:700;
+}
 .fx-pick-chev{color:var(--text3);font-size:16px;line-height:1;}
 .fx-f.bad .fx-pick{border-color:#C0392B;}
 /* A failing field is outlined where the eye already is, so the list at the
@@ -2895,7 +2948,6 @@ function _openPasswordResetWhenReady(){
     <div class="tab-page" id="tp-truckloads">
       <div class="page-head">
         <div class="page-title" data-en="Remisión">Remisión</div>
-        <button onclick="ntlOpen()" class="btn-gold btn-gold-sm" data-en="+ Truckload">+ Truckload</button>
       </div>
       <div class="seg-ctrl tl-seg-row" id="tl-seg">
         <button class="seg-btn active" onclick="setTruckloadFilter('all',this)" data-en="All">All</button>
@@ -2904,6 +2956,28 @@ function _openPasswordResetWhenReady(){
       </div>
       <div id="tl-summary" class="tl-summary"></div>
       <div id="tl-list" style="padding:0 14px 90px;"></div>
+
+      <!-- Everything a remisión needs but might be missing, in one place. A
+           truckload is the usual reason to press it; the other three are here
+           because that is the moment you discover the buyer or the truck was
+           never added, and leaving the tab to add one loses your place. -->
+      <div class="fab-wrap" id="tl-fab">
+        <!-- Dims the list behind the fan. Without it the labels sit directly on
+             top of the truckload cards and neither can be read. Tapping it
+             closes, which is what a tap outside an open menu should do. -->
+        <div class="fab-scrim" onclick="fabClose()"></div>
+        <div class="fab-items">
+          <button class="fab-item" onclick="fabAction('truck')">
+            <span class="fab-label" data-en="Truck">Truck</span><span class="fab-dot">🚚</span></button>
+          <button class="fab-item" onclick="fabAction('farm')">
+            <span class="fab-label" data-en="Farm">Farm</span><span class="fab-dot">🌾</span></button>
+          <button class="fab-item" onclick="fabAction('destination')">
+            <span class="fab-label" data-en="Destination">Destination</span><span class="fab-dot">🏬</span></button>
+          <button class="fab-item" onclick="fabAction('truckload')">
+            <span class="fab-label" data-en="Truckload">Truckload</span><span class="fab-dot">📋</span></button>
+        </div>
+        <button class="fab-main" onclick="fabToggle()" aria-label="Add">+</button>
+      </div>
     </div>
     <div class="tab-page" id="tp-destinations">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -5237,6 +5311,11 @@ const _i18n = {
   'Fenex profile':'Perfil Fenex','No Fenex profile connected yet.':'Aún no hay un perfil Fenex conectado.',
   'Enter a profile name':'Ingrese un nombre de perfil','Enter the RUC':'Ingrese el RUC',
   'Enter the RUC with its DV, like 00000000-0':'Ingrese el RUC con su DV, como 00000000-0',
+  'Cargo updated from the transactions':'Carga actualizada desde las transacciones',
+  'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
+  'Truckload':'Carga','Destination':'Destino','Farm':'Finca','Truck':'Camión',
+  'Emisión':'Emisión','Inicio':'Inicio','Fin':'Fin','Distancia':'Distancia',
+  'Todos los datos del documento':'Todos los datos del documento',
   'Name for this connection':'Nombre de esta conexión',
   'The name is only how this connection is labelled. The RUC owner approves it in Fenex.':
     'El nombre es solo la etiqueta de esta conexión. El dueño del RUC la aprueba en Fenex.',
@@ -6362,6 +6441,8 @@ function launchApp(){
 
 function showTab(id){
   if(id === 'truckloads') setTimeout(renderTruckloads, 0);
+  // Left open, the fan would be waiting the next time the tab is opened.
+  if(typeof fabClose === 'function') fabClose();
   // Changing tabs must never cost the screen lock — the operator is still
   // watching a live scale whether they are on Display, Fields or Trucks.
   setTimeout(_wakeLockApply, 0);
@@ -7952,6 +8033,30 @@ function ntlCandidates(){
   });
   out.sort(function(a,b){ return _tlByTime(b.load, a.load); });
   return out;
+}
+
+/**
+ * The fan-out add button on the Remisión tab.
+ *
+ * Opened and closed by the same control — the + rotates into an ×, so there is
+ * never a second button to find. Choosing anything closes it, because every
+ * action opens a sheet on top and returning to a still-open fan would be
+ * clutter over the thing just created.
+ */
+function fabToggle(){
+  var el = document.getElementById('tl-fab');
+  if(el) el.classList.toggle('open');
+}
+function fabClose(){
+  var el = document.getElementById('tl-fab');
+  if(el) el.classList.remove('open');
+}
+function fabAction(what){
+  fabClose();
+  if(what === 'truckload')   { ntlOpen(); return; }
+  if(what === 'destination') { openAddNameSheet('destination'); return; }
+  if(what === 'farm')        { openAddNameSheet('farm'); return; }
+  if(what === 'truck')       { openAddTruckSheet(); return; }
 }
 
 function ntlOpen(){
@@ -18577,7 +18682,15 @@ function fxOpenSheet(closingId){
   var queued = fxGetOutbox()['ht_remisiones:' + closingId];
   var saved = (queued && queued.row && queued.row.request_payload) ||
               (_tlRemisionRows[closingId] && _tlRemisionRows[closingId].request_payload);
-  _fxDraft = fxIsRequest(saved) ? saved : fxBuildRequest(load, _fxIssuer);
+  _fxSel = _fxSelFromLoad(load);
+  _fxAdvOpen = false;   // every open starts simple, however it was left
+  var reused = fxIsRequest(saved);
+  _fxDraft = reused ? saved : fxBuildRequest(load, _fxIssuer);
+  // The transactions are the source of truth for what is on the truck; the
+  // draft is only a snapshot of them. Editing a load's crop after saving a
+  // draft has to reach the document, so the cargo is re-derived on open.
+  if(reused && _fxRefreshCargo(closingId))
+    showToast(T('Cargo updated from the transactions'), 'warn');
 
   fxRenderSheet();
   document.getElementById('fx-sheet-overlay').classList.add('open');
@@ -18662,6 +18775,63 @@ function fxRenderSheet(){
   }
   html += '</div></div>';
 
+  // ── What the operator actually chooses ─────────────────────────────────
+  // Origin, buyer and truck are picked as RECORDS, not typed as fields. Each
+  // one carries a dozen SIFEN values — RUC, DV, address, department, district,
+  // city, plate, transportista, chofer — and those are filled in behind this,
+  // from the record. Typing them here would mean typing them again on every
+  // load, and any one of them typed differently is a document SIFEN rejects.
+  var farm  = _fxSelFarm(), dest = _fxSelDest(), truck = _fxSelTruck();
+  html += '<div class="fx-sect">' + esc(T('Traslado')) + '</div>';
+  html += '<div class="fx-grid">';
+  html += _fxPickRow(T('Desde'),  farm  ? farm.name          : '—', 'fxPickSheetFarm()',  !farm);
+  html += _fxPickRow(T('Hasta'),  dest  ? dest.name          : '—', 'fxPickSheetDest()',  !dest);
+  html += _fxPickRow(T('Camión'), truck ? _truckLabel(truck) : '—', 'fxPickSheetTruck()', !truck);
+  html += '</div>';
+
+  // ── When, and how far ──────────────────────────────────────────────────
+  html += '<div class="fx-sect">' + esc(T('Fechas')) + '</div>';
+  html += '<div class="fx-grid">';
+  html += _fxWheelRow(T('Emisión'),   r.issueDate,          'issueDate',          badFields);
+  html += _fxWheelRow(T('Inicio'),    r.transportStartDate, 'transportStartDate', badFields);
+  html += _fxWheelRow(T('Fin'),       r.transportEndDate,   'transportEndDate',   badFields);
+  html += '<div class="fx-f half' + (badFields.estimatedDistanceKm ? ' bad' : '') + '"><label>' +
+          esc(T('Distancia')) + '</label><div class="fx-pick" onclick="_fxOpenKmWheel()"><span>' +
+          esc(r.estimatedDistanceKm == null || r.estimatedDistanceKm === ''
+              ? '—' : Number(r.estimatedDistanceKm).toLocaleString() + ' km') +
+          '</span><span class="fx-pick-chev">›</span></div></div>';
+  html += '</div>';
+
+  // ── Carga: what is on the truck, and nothing else ──────────────────────
+  html += '<div class="fx-sect">' + esc(T('Carga')) + '</div>';
+  var crops = getCrops();
+  _fxDraft.items.forEach(function(item, i){
+    var match = crops.find(function(c){ return cropInternalCode(c, cropRemisionFor(c).code) === item.productCode; });
+    html += '<div class="fx-grid" style="margin-bottom:8px;">';
+    html += '<div class="fx-f"><label>' + esc(T('Crop')) + '</label><select onchange="_fxSetItemCrop('+i+', this.value)">';
+    if(!match) html += '<option value="" selected>' + esc(item.productName) + ' (' + esc(T('as saved')) + ')</option>';
+    html += crops.map(function(c){
+      return '<option value="'+_tlAttr(c)+'"'+((match===c)?' selected':'')+'>'+esc(T(c))+'</option>';
+    }).join('') + '</select></div>';
+    html += '<div class="fx-f half'+(badFields['items['+i+'].quantity']?' bad':'')+'"><label>kg</label>' +
+            '<input type="number" min="1" step="1" value="'+_tlAttr(item.quantity)+'" onchange="_fxSetItemQty('+i+', this.value)"></div>';
+    html += '</div>';
+  });
+  html += '<div class="fx-total">' + esc(T('Total')) + ' ' +
+          esc(_fxDraft.items.reduce(function(s2,i){ return s2 + i.quantity; }, 0).toLocaleString()) + ' kg</div>';
+
+  // ── Everything else, folded away ───────────────────────────────────────
+  // Not hidden: folded. Every field the document carries is still reachable and
+  // still editable here, because a value that comes from a record can be wrong
+  // in a way only this load knows about. It just is not the first thing anybody
+  // sees, and on a normal load it is never opened at all.
+  html += '<div class="fx-adv-toggle" onclick="fxToggleAdvanced()">' +
+          '<span class="fx-adv-caret">' + (_fxAdvOpen ? '▾' : '▸') + '</span>' +
+          esc(T('Todos los datos del documento')) +
+          (issues.length ? ' <span class="fx-adv-count">' + issues.length + '</span>' : '') +
+          '</div>';
+
+  if(_fxAdvOpen){
   var gridOpen = false;
   _FX_FIELDS.forEach(function(f){
     if(f.sect){
@@ -18682,7 +18852,7 @@ function fxRenderSheet(){
       // exactly what SIFEN rejects — so the name and its code are only ever
       // set together, from the official list.
       var gShown = val ? String(val) : '—';
-      html += '<div class="fx-pick" onclick="fxPickGeo(\''+f.pfx+'\', \''+f.level+'\')"><span>' +
+      html += '<div class="fx-pick" onclick="fxPickGeo(\'' + f.pfx + '\', \'' + f.level + '\')"><span>' +
               esc(gShown) + '</span><span class="fx-pick-chev">›</span></div>';
     } else if(f.type === 'wheelDate' || f.type === 'wheelKm'){
       var shown = f.type === 'wheelKm'
@@ -18690,46 +18860,25 @@ function fxRenderSheet(){
         : _fxDateLabel(val);
       var call = f.type === 'wheelKm'
         ? '_fxOpenKmWheel()'
-        : '_fxOpenDateWheel(\''+f.k+'\', \''+f.label.replace(/'/g,"\\'")+'\')';
+        : '_fxOpenDateWheel(\'' + f.k + '\', \'' + f.label.replace(/'/g, "\\'") + '\')';
       html += '<div class="fx-pick" onclick="'+call+'"><span>' + esc(shown) +
               '</span><span class="fx-pick-chev">›</span></div>';
     } else if(f.type === 'select'){
       var opts = (typeof f.options === 'string') ? _fxOptionList(f.options) : f.options;
-      html += '<select onchange="_fxSet(\''+f.k+'\', this.value, '+(f.num?'true':'false')+')">' +
+      html += '<select onchange="_fxSet(\'' + f.k + '\', this.value, ' + (f.num?'true':'false') + ')">' +
         opts.map(function(o){
           return '<option value="'+_tlAttr(o[0])+'"'+((String(val)===String(o[0]))?' selected':'')+'>'+esc(o[1])+'</option>';
         }).join('') + '</select>';
     } else {
       var t = f.type === 'date' ? 'date' : (f.type === 'number' ? 'number' : 'text');
       html += '<input type="'+t+'" value="'+_tlAttr(val==null?'':val)+'" ' +
-              'onchange="_fxSet(\''+f.k+'\', this.value, false)">';
+              'onchange="_fxSet(\'' + f.k + '\', this.value, false)">';
     }
     html += '</div>';
   });
   if(gridOpen) html += '</div>';
-
-  // ── Carga ──
-  html += '<div class="fx-sect">' + esc(T('Carga')) + '</div>';
-  html += '<div class="fx-note">' + esc(T('One line per crop, weighed by your own scale, in whole kilos.')) + '</div>';
-  var crops = getCrops();
-  _fxDraft.items.forEach(function(item, i){
-    var match = crops.find(function(c){ return cropInternalCode(c, cropRemisionFor(c).code) === item.productCode; });
-    html += '<div class="fx-grid" style="margin-bottom:8px;">';
-    html += '<div class="fx-f"><label>' + esc(T('Crop')) + '</label><select onchange="_fxSetItemCrop('+i+', this.value)">';
-    if(!match) html += '<option value="" selected>' + esc(item.productName) + ' (' + esc(T('as saved')) + ')</option>';
-    html += crops.map(function(c){
-      return '<option value="'+_tlAttr(c)+'"'+((match===c)?' selected':'')+'>'+esc(T(c))+'</option>';
-    }).join('') + '</select></div>';
-    html += '<div class="fx-f half"><label>' + esc(T('Unidad')) + '</label>' +
-            '<input type="text" readonly value="'+_tlAttr(sifenUnitName(item.unitCode))+'"></div>';
-    html += '<div class="fx-f half'+(badFields['items['+i+'].quantity']?' bad':'')+'"><label>' + esc(T('Cantidad')) + '</label>' +
-            '<input type="number" min="1" step="1" value="'+_tlAttr(item.quantity)+'" onchange="_fxSetItemQty('+i+', this.value)"></div>';
-    html += '</div>';
-  });
-  html += '<div class="fx-total">' + esc(T('Total')) + ' ' +
-          esc(_fxDraft.items.reduce(function(s2,i){ return s2 + i.quantity; }, 0).toLocaleString()) + ' kg</div>';
-
   html += '<div class="fx-note" style="margin-top:12px;">' + esc(T(SIFEN_GEOGRAPHY_CAVEAT)) + '</div>';
+  }
 
   body.innerHTML = html;
 
@@ -18748,7 +18897,127 @@ function fxRenderSheet(){
 
 function fxPickIssuer(id){
   _fxIssuer = rmGetProfiles().find(function(p){ return p.id === id; }) || null;
+  // The issuer is the transportista when nobody else hauls, so changing it can
+  // change the document's carrier — re-derive rather than leave the old one.
+  if(_fxDraft) Object.assign(_fxDraft.remission, _fxTruckFields(_fxSelTruck(), _fxIssuer, _fxLoad));
   fxRenderSheet();
+}
+
+// ── The simplified sheet's selectors ───────────────────────────────────────
+// Which farm, buyer and truck this document is for. Held apart from the payload
+// because the payload has no room for them: it carries the CONSEQUENCES of the
+// choice (an address, a plate, a RUC) and not the choice itself.
+var _fxSel    = {farmId:null, destId:null, truckId:null};
+var _fxAdvOpen = false;   // "Todos los datos" folded away by default
+
+function _fxSelFarm(){
+  return _fxSel.farmId ? (getFarms().find(function(f){ return f.id === _fxSel.farmId; }) || null) : null;
+}
+function _fxSelDest(){
+  return _fxSel.destId ? (getDestinations().find(function(d){ return d.id === _fxSel.destId; }) || null) : null;
+}
+function _fxSelTruck(){
+  return _fxSel.truckId ? (getTrucks().find(function(t){ return t.id === _fxSel.truckId; }) || null) : null;
+}
+
+/** What the load itself says, used as the opening selection. */
+function _fxSelFromLoad(load){
+  var dest = getDestinations().find(function(d){ return d.name === load.destination; });
+  var truck = _fxTruckFor(load);
+  var field = _fxOriginField(load);
+  return {
+    farmId:  (field && field.farmId) || null,
+    destId:  dest ? dest.id : null,
+    truckId: truck ? truck.id : null
+  };
+}
+
+/** One "label → value ›" row. Marked bad when nothing is chosen. */
+function _fxPickRow(label, shown, call, missing){
+  return '<div class="fx-f half' + (missing ? ' bad' : '') + '"><label>' + esc(label) + '</label>' +
+         '<div class="fx-pick" onclick="' + call + '"><span>' + esc(shown) +
+         '</span><span class="fx-pick-chev">›</span></div></div>';
+}
+
+/** One date row, in the same shape. */
+function _fxWheelRow(label, value, key, badFields){
+  return '<div class="fx-f half' + (badFields[key] ? ' bad' : '') + '"><label>' + esc(label) + '</label>' +
+         '<div class="fx-pick" onclick="_fxOpenDateWheel(\'' + key + '\', \'' + label.replace(/'/g, "\\'") + '\')">' +
+         '<span>' + esc(_fxDateLabel(value)) + '</span><span class="fx-pick-chev">›</span></div></div>';
+}
+
+function fxToggleAdvanced(){ _fxAdvOpen = !_fxAdvOpen; fxRenderSheet(); }
+
+/**
+ * Choosing an origin farm rewrites the document's punto de salida.
+ *
+ * The distance is re-read too: it is remembered per route, so a new origin has
+ * its own answer — and keeping the previous one would quietly put the wrong
+ * kilometres on the document.
+ */
+function fxPickSheetFarm(){
+  var farms = getFarms();
+  if(!farms.length){ showToast(T('No farms yet'), 'warn'); return; }
+  var names = farms.map(function(f){ return f.name; });
+  var cur = _fxSelFarm();
+  _wheelOpen({
+    title: T('Desde'), items: names, selected: cur ? cur.name : null,
+    onConfirm: function(name){
+      var f = farms.find(function(x){ return x.name === name; });
+      if(!f) return;
+      _fxSel.farmId = f.id;
+      Object.assign(_fxDraft.remission, _fxFarmFields(f));
+      _fxReRecallDistance();
+      fxRenderSheet();
+    }
+  });
+}
+
+function fxPickSheetDest(){
+  var dests = getDestinations();
+  if(!dests.length){ showToast(T('No destinations added yet'), 'warn'); return; }
+  var names = dests.map(function(d){ return d.name; });
+  var cur = _fxSelDest();
+  _wheelOpen({
+    title: T('Hasta'), items: names, selected: cur ? cur.name : null,
+    onConfirm: function(name){
+      var d = dests.find(function(x){ return x.name === name; });
+      if(!d) return;
+      _fxSel.destId = d.id;
+      Object.assign(_fxDraft.remission, _fxDestFields(d));
+      _fxReRecallDistance();
+      fxRenderSheet();
+    }
+  });
+}
+
+function fxPickSheetTruck(){
+  var trucks = getTrucks();
+  if(!trucks.length){ showToast(T('No trucks yet'), 'warn'); return; }
+  var labels = trucks.map(function(t){ return _truckLabel(t); });
+  var cur = _fxSelTruck();
+  _wheelOpen({
+    title: T('Camión'), items: labels, selected: cur ? _truckLabel(cur) : null,
+    onConfirm: function(label){
+      var i = labels.indexOf(label);
+      if(i < 0) return;
+      _fxSel.truckId = trucks[i].id;
+      Object.assign(_fxDraft.remission, _fxTruckFields(trucks[i], _fxIssuer, _fxLoad));
+      fxRenderSheet();
+    }
+  });
+}
+
+/**
+ * Re-read the remembered distance for the current route.
+ *
+ * Only fills a blank or replaces a value that came from memory — a distance
+ * typed for THIS load is the operator's, and a changed origin is not a reason
+ * to discard it silently.
+ */
+function _fxReRecallDistance(){
+  var km = fxRecallRoute(_fxSel.farmId, _fxSel.destId);
+  if(km != null) _fxDraft.remission.estimatedDistanceKm = km;
 }
 
 // ── Remisión outbox ───────────────────────────────────────────────────────
@@ -19524,40 +19793,108 @@ function fxDefaultIssuer(){
   return approved.find(function(p){ return p.is_default; }) || approved[0] || null;
 }
 
-function fxBuildRequest(load, issuer){
-  var dest  = getDestinations().find(function(d){ return d.name === load.destination; });
-  var truck = _fxTruckFor(load);
-  var originField = _fxOriginField(load);
-  var farm = (originField && originField.farmId)
-    ? getFarms().find(function(f){ return f.id === originField.farmId; })
-    : null;
+/**
+ * The SIFEN fields a DESTINATION decides.
+ *
+ * Split out of fxBuildRequest so that choosing a different buyer on the sheet
+ * re-derives exactly what building the draft from scratch would have produced.
+ * When the two rules were one inline block, only the initial build used it, and
+ * a changed selection would have left the old buyer's city and RUC behind — on
+ * a fiscal document, under the new buyer's name.
+ */
+function _fxDestFields(dest){
+  var receiver = sifenSplitRuc(_fxS(dest && dest.ruc));
+  return {
+    receiverTaxpayerType: sifenTaxpayerType(dest),
+    receiverRuc: receiver.ruc,
+    receiverDv: receiver.dv,
+    receiverName: _fxS(dest && dest.razonSocial) || _fxS(dest && dest.name),
+    receiverAddress: _fxS(dest && dest.address),
+    // Paraguayan rural addresses carry no house number; SIFEN wants the field
+    // populated regardless, and "0" is what Fenex's own tests send.
+    receiverHouseNumber: '0',
+    receiverDepartmentCode: _fxS(dest && dest.departmentCode),
+    receiverDepartmentName: _fxS(dest && dest.department),
+    receiverDistrictCode:   _fxS(dest && dest.districtCode),
+    receiverDistrictName:   _fxS(dest && dest.district),
+    receiverCityCode:       _fxS(dest && dest.cityCode),
+    receiverCityName:       _fxS(dest && dest.cityName),
+    // Delivery defaults to the receptor — grain normally goes where the buyer is.
+    deliveryAddress: _fxS(dest && dest.address),
+    deliveryHouseNumber: '0',
+    deliveryDepartmentCode: _fxS(dest && dest.departmentCode),
+    deliveryDepartmentName: _fxS(dest && dest.department),
+    deliveryDistrictCode:   _fxS(dest && dest.districtCode),
+    deliveryDistrictName:   _fxS(dest && dest.district),
+    deliveryCityCode:       _fxS(dest && dest.cityCode),
+    deliveryCityName:       _fxS(dest && dest.cityName)
+  };
+}
 
-  // The closing event decides the document's dates, in ITS timezone.
-  var closingTz = (load.closedBy && load.closedBy.tzOffsetMinutes != null)
-    ? load.closedBy.tzOffsetMinutes : null;
-  var issueDate = _fxDay(load.emptiedAt, 0, closingTz);
-  var receiver  = sifenSplitRuc(_fxS(dest && dest.ruc));
-  var issuerRuc = sifenStoredRucParts(_fxS(issuer && issuer.ruc), _fxS(issuer && issuer.ruc_dv));
+/** The SIFEN fields the ORIGIN FARM decides. */
+function _fxFarmFields(farm){
+  return {
+    departureAddress: _fxS(farm && farm.address),
+    departureHouseNumber: '0',
+    departureDepartmentCode: _fxS(farm && farm.departmentCode),
+    departureDepartmentName: _fxS(farm && farm.department),
+    departureDistrictCode:   _fxS(farm && farm.districtCode),
+    departureDistrictName:   _fxS(farm && farm.district),
+    departureCityCode:       _fxS(farm && farm.cityCode),
+    departureCityName:       _fxS(farm && farm.cityName)
+  };
+}
 
-  // A hauler named on the truck means a third party; otherwise the farm hauls
-  // its own grain — which is what "Propio" means — and the issuer is the
-  // transportista.
+/**
+ * The SIFEN fields the TRUCK decides — vehicle, transportista and chofer.
+ *
+ * A hauler named on the truck means a third party; otherwise the farm hauls its
+ * own grain — which is what "Propio" means — and the issuer is the
+ * transportista, so the issuer is needed here too.
+ */
+function _fxTruckFields(truck, issuer, load){
   var hasHauler = !!_fxS(truck && truck.transportistaName);
   var haulerRuc = sifenStoredRucParts(_fxS(truck && truck.transportistaRuc), '');
+  var issuerRuc = sifenStoredRucParts(_fxS(issuer && issuer.ruc), _fxS(issuer && issuer.ruc_dv));
   var docType   = (_fxS(truck && truck.transportistaDocumentType) || 'RUC') === 'CI' ? 'CI' : 'RUC';
+  return {
+    transportType: hasHauler ? 2 : 1,
+    transportTypeDescription: SIFEN_TRANSPORT_TYPES[hasHauler ? 2 : 1],
+    vehicleType: _fxS(truck && truck.vehicleType) || 'Camion',
+    // Capped at 10 by SIFEN, so a long make is trimmed rather than rejected —
+    // the operator can shorten it properly in the sheet.
+    vehicleBrand: _fxS(truck && _truckMakeModel(truck)).slice(0,10),
+    vehiclePlate: _fxS(truck && truck.plate),
+    transporterDocumentType: docType,
+    transporterRuc: docType === 'RUC' ? (hasHauler ? haulerRuc.ruc : issuerRuc.ruc) : '',
+    transporterDv:  docType === 'RUC' ? (hasHauler ? haulerRuc.dv  : issuerRuc.dv)  : '',
+    transporterCi:  docType === 'CI'  ? _fxS(truck && truck.transportistaCi) : '',
+    transporterName: _fxS(truck && truck.transportistaName) || _fxS(issuer && issuer.razon_social) || _fxS(issuer && issuer.label),
+    transporterFiscalAddress: _fxS(truck && truck.transportistaAddress) || _fxS(issuer && issuer.address),
+    driverCi: _fxS(truck && truck.driverCi),
+    driverName: _fxS(truck && truck.driver) || (load && load.operators && load.operators[0]) || '',
+    driverAddress: _fxS(truck && truck.driverAddress)
+  };
+}
 
-  // Grouped through the same canonical rule the truckload guard uses, so alias
-  // spellings of one grain cannot become two document lines.
+/**
+ * The document's cargo lines, derived from the weighings in the truckload.
+ *
+ * Grouped through the same canonical rule the truckload guard uses, so alias
+ * spellings of one grain cannot become two document lines. Kept separate from
+ * fxBuildRequest because a saved draft has to be able to re-derive JUST this
+ * when the underlying transactions change.
+ */
+function _fxCargoItems(load){
   var groups = [];
   var byKey = {};
-  load.loads.forEach(function(w){
+  (load.loads || []).forEach(function(w){
     var key = cropKey(w.crop);
     if(byKey[key]){ byKey[key].kg += _tlWetKg(w); return; }
     byKey[key] = {key:key, name:_fxS(w.crop) || 'Sin especificar', kg:_tlWetKg(w)};
     groups.push(byKey[key]);
   });
-
-  var items = groups.map(function(g){
+  return groups.map(function(g){
     var known = getCrops().find(function(c){ return cropKey(c) === g.key; });
     var rm = known ? cropRemisionFor(known) : {};
     return {
@@ -19571,6 +19908,54 @@ function fxBuildRequest(load, issuer){
       quantity: Math.round(g.kg)
     };
   });
+}
+
+/** Two cargo lists agree when every line matches, in order. */
+function _fxCargoSame(a, b){
+  if(!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  return a.every(function(x, i){
+    return x.productCode === b[i].productCode &&
+           x.productName === b[i].productName &&
+           x.quantity    === b[i].quantity;
+  });
+}
+
+/**
+ * Re-derive a SAVED draft's cargo from the transactions behind it.
+ *
+ * A draft is a snapshot taken when it was written. Correcting a weighing
+ * afterwards — the crop picked wrongly, most often — left the draft holding the
+ * old grain, and the sheet showed it happily: the document would have gone to
+ * SIFEN naming a crop that is no longer on any of its loads.
+ *
+ * Only an unsent draft is touched. Once it is with the issuer or SIFEN, what
+ * was filed is a matter of record and a correction belongs in a new draft.
+ */
+function _fxRefreshCargo(closingId){
+  if(!_fxDraft || !_fxLoad || tlLoadLocked(closingId)) return false;
+  var fresh = _fxCargoItems(_fxLoad);
+  if(_fxCargoSame(fresh, _fxDraft.items)) return false;
+  _fxDraft.items = fresh;
+  var total = fresh.reduce(function(sum, i){ return sum + i.quantity; }, 0);
+  _fxDraft.remission.cargoWeight = total > 0 ? total : null;
+  _fxDraft.remission.cargoDescription =
+    fresh.map(function(i){ return i.productName; }).join(', ').slice(0, 200);
+  return true;
+}
+
+function fxBuildRequest(load, issuer){
+  var dest  = getDestinations().find(function(d){ return d.name === load.destination; });
+  var truck = _fxTruckFor(load);
+  var originField = _fxOriginField(load);
+  var farm = (originField && originField.farmId)
+    ? getFarms().find(function(f){ return f.id === originField.farmId; })
+    : null;
+
+  // The closing event decides the document's dates, in ITS timezone.
+  var closingTz = (load.closedBy && load.closedBy.tzOffsetMinutes != null)
+    ? load.closedBy.tzOffsetMinutes : null;
+  var issueDate = _fxDay(load.emptiedAt, 0, closingTz);
+  var items  = _fxCargoItems(load);
   var totalKg = items.reduce(function(sum,i){ return sum + i.quantity; }, 0);
 
   var routes = fxGetRoutes();
@@ -19589,62 +19974,9 @@ function fxBuildRequest(load, issuer){
     estimatedDistanceKm: (routeKm == null ? null : routeKm),
     futureInvoiceIssueDate: issueDate,
 
-    receiverTaxpayerType: sifenTaxpayerType(dest),
-    receiverRuc: receiver.ruc,
-    receiverDv: receiver.dv,
-    receiverName: _fxS(dest && dest.razonSocial) || _fxS(dest && dest.name),
-    receiverAddress: _fxS(dest && dest.address),
-    // Paraguayan rural addresses carry no house number; SIFEN wants the field
-    // populated regardless, and "0" is what Fenex's own tests send.
-    receiverHouseNumber: '0',
-    receiverDepartmentCode: _fxS(dest && dest.departmentCode),
-    receiverDepartmentName: _fxS(dest && dest.department),
-    receiverDistrictCode:   _fxS(dest && dest.districtCode),
-    receiverDistrictName:   _fxS(dest && dest.district),
-    receiverCityCode:       _fxS(dest && dest.cityCode),
-    receiverCityName:       _fxS(dest && dest.cityName),
-
-    transportType: hasHauler ? 2 : 1,
-    transportTypeDescription: SIFEN_TRANSPORT_TYPES[hasHauler ? 2 : 1],
     freightResponsibility: 1,
     transportStartDate: issueDate,
     transportEndDate: _fxDay(load.emptiedAt, 1, closingTz),
-
-    departureAddress: _fxS(farm && farm.address),
-    departureHouseNumber: '0',
-    departureDepartmentCode: _fxS(farm && farm.departmentCode),
-    departureDepartmentName: _fxS(farm && farm.department),
-    departureDistrictCode:   _fxS(farm && farm.districtCode),
-    departureDistrictName:   _fxS(farm && farm.district),
-    departureCityCode:       _fxS(farm && farm.cityCode),
-    departureCityName:       _fxS(farm && farm.cityName),
-
-    // Delivery defaults to the receptor — grain normally goes where the buyer is.
-    deliveryAddress: _fxS(dest && dest.address),
-    deliveryHouseNumber: '0',
-    deliveryDepartmentCode: _fxS(dest && dest.departmentCode),
-    deliveryDepartmentName: _fxS(dest && dest.department),
-    deliveryDistrictCode:   _fxS(dest && dest.districtCode),
-    deliveryDistrictName:   _fxS(dest && dest.district),
-    deliveryCityCode:       _fxS(dest && dest.cityCode),
-    deliveryCityName:       _fxS(dest && dest.cityName),
-
-    vehicleType: _fxS(truck && truck.vehicleType) || 'Camion',
-    // Capped at 10 by SIFEN, so a long make is trimmed rather than rejected —
-    // the operator can shorten it properly in the sheet.
-    vehicleBrand: _fxS(truck && _truckMakeModel(truck)).slice(0,10),
-    vehiclePlate: _fxS(truck && truck.plate),
-
-    transporterDocumentType: docType,
-    transporterRuc: docType === 'RUC' ? (hasHauler ? haulerRuc.ruc : issuerRuc.ruc) : '',
-    transporterDv:  docType === 'RUC' ? (hasHauler ? haulerRuc.dv  : issuerRuc.dv)  : '',
-    transporterCi:  docType === 'CI'  ? _fxS(truck && truck.transportistaCi) : '',
-    transporterName: _fxS(truck && truck.transportistaName) || _fxS(issuer && issuer.razon_social) || _fxS(issuer && issuer.label),
-    transporterFiscalAddress: _fxS(truck && truck.transportistaAddress) || _fxS(issuer && issuer.address),
-
-    driverCi: _fxS(truck && truck.driverCi),
-    driverName: _fxS(truck && truck.driver) || (load.operators && load.operators[0]) || '',
-    driverAddress: _fxS(truck && truck.driverAddress),
 
     cargoWeight: totalKg > 0 ? totalKg : null,
     cargoWeightUnitCode: SIFEN_CARGO_UNIT_CODE,
@@ -19652,6 +19984,12 @@ function fxBuildRequest(load, issuer){
     cargoDescription: items.map(function(i){ return i.productName; }).join(', ').slice(0,200),
     notes: ''
   };
+
+  // The record-derived halves, applied by the same functions the sheet's
+  // pickers use — so a draft built here and one re-derived after a change
+  // cannot disagree.
+  Object.assign(remission,
+    _fxDestFields(dest), _fxFarmFields(farm), _fxTruckFields(truck, issuer, load));
 
   return {
     // The empty-truck row that closed this bundle, plus a revision. Stable
