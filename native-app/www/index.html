@@ -496,8 +496,16 @@ body{
 .ffp-close:active,.farm-sel-close:active,.field-only-close:active,.truck-picker-close:active,.lp-close:active,
 .wheel-add-btn:active,.wheel-custom-btn:active,.wheel-confirm-btn:active,
 .signin-forgot:active,.signin-tab:active,.pw-eye:active,.lp-btn:active,
-/* .tl-remision-btn's own rule lives inside the min-width:600px media query, but
-   the press state belongs at every width, so it is declared here. */
+/* The styling used to live ONLY inside the min-width:600px media query, so at
+   phone widths these rendered as unstyled default buttons — on the two controls
+   that edit and file the document. Declared for every width here; the tablet
+   query enlarges them further. */
+.tl-remision-btn{
+  margin-left:auto;border:1px solid var(--border);border-radius:10px;
+  background:var(--surface2);color:var(--text);
+  font:700 13px 'Inter',sans-serif;padding:10px 15px;cursor:pointer;
+}
+.tl-remision-btn.primary{background:var(--accent);border-color:var(--accent);color:#1d1705;}
 .tl-remision-btn:active{
   transform:scale(0.96);
   filter:brightness(0.94);
@@ -1563,11 +1571,11 @@ body.rm-on button.rm-only{display:inline-flex !important;}
   box-shadow:0 2px 10px rgba(0,0,0,.18);
 }
 .fx-adv-toggle{
-  display:flex;align-items:center;gap:8px;margin:16px 0 4px;padding:10px 12px;
+  display:flex;align-items:center;gap:10px;margin:16px 0 4px;padding:14px 14px;
   border:1px solid var(--border);border-radius:10px;cursor:pointer;
-  font-size:13px;font-weight:700;color:var(--text2);background:var(--card2,transparent);
+  font-size:15px;font-weight:700;color:var(--text2);background:var(--surface2);
 }
-.fx-adv-caret{font-size:11px;color:var(--text3);}
+.fx-adv-caret{font-size:17px;line-height:1;color:var(--text2);}
 .fx-adv-count{
   margin-left:auto;background:#B03020;color:#fff;border-radius:999px;
   padding:1px 8px;font-size:11px;font-weight:700;
@@ -2392,7 +2400,7 @@ body.rm-on button.rm-only{display:inline-flex !important;}
   .tl-remision-status.pending,.tl-remision-status.ready,.tl-remision-status.submitted{background:rgba(212,147,10,.14);color:#A76C00;}
   .tl-remision-status.approved{background:rgba(45,157,92,.14);color:#2D9D5C;}
   .tl-remision-status.rejected,.tl-remision-status.unknown{background:rgba(176,48,32,.12);color:#B03020;}
-  .tl-remision-btn{margin-left:auto;border:1px solid var(--border);border-radius:9px;background:var(--surface2);color:var(--text);font:700 11px 'Inter',sans-serif;padding:7px 10px;cursor:pointer;}
+  .tl-remision-btn{margin-left:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font:700 15px 'Inter',sans-serif;padding:13px 20px;cursor:pointer;}
   .tl-remision-btn.primary{background:var(--accent);border-color:var(--accent);color:#1d1705;}
   .tl-remision-note{font-size:11px;color:var(--text3);line-height:1.4;margin-top:6px;}
 </style>
@@ -6653,11 +6661,22 @@ function renderTrucks(){
     infoBtn.title='View truck transactions';
     infoBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
     infoBtn.addEventListener('click',function(e){ e.stopPropagation(); openTruckDetail(t.id); });
+    // Edit button. NOT rm-only, unlike the farm and destination rows: a truck's
+    // plate, driver and capacity matter whether or not remisión is switched on,
+    // and reaching them through the detail panel was a step nobody found.
+    var editBtn=document.createElement('button');
+    editBtn.className='btn-edit-sm';
+    editBtn.textContent=T('Edit');
+    editBtn.title='Edit truck';
+    editBtn.style.cssText='border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;';
+    editBtn.addEventListener('click',function(e){ e.stopPropagation(); openAddTruckSheet(t.id); });
     // Delete button
     var delBtn=document.createElement('button');
     delBtn.className='btn-del-sm';
     delBtn.textContent='x';
     delBtn.addEventListener('click',function(e){ e.stopPropagation(); deleteTruckById(t.id); });
+    // Edit, information, delete — the same order as the farm and destination rows.
+    right.appendChild(editBtn);
     right.appendChild(infoBtn);
     right.appendChild(delBtn);
     // Tap row → open detail
