@@ -1525,6 +1525,12 @@ body.rm-on button.rm-only{display:inline-flex !important;}
 .ntl-t2{font-size:11px;color:var(--text3);margin-top:2px;}
 .ntl-kg{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;}
 .ntl-empty{padding:22px 14px;text-align:center;font-size:13px;color:var(--text3);line-height:1.5;}
+.fx-ro{
+  /* Deliberately not styled like an input. Boxed and cream, it looked exactly
+     like the fields beside it and invited a tap that does nothing; as plain
+     text it reads as what it is — a weight the scale already decided. */
+  padding:11px 2px;color:var(--text);font-size:16px;font-weight:700;
+}
 .fab-wrap{
   /* Fixed, not absolute: .tab-page is the scrolling element, so an absolute
      button would ride up the page with the list instead of staying put. It is
@@ -18721,12 +18727,6 @@ function _fxSet(key, raw, isNum){
   fxRenderSheet();
 }
 
-function _fxSetItemQty(i, raw){
-  var items = _fxDraft.items;
-  items[i].quantity = Math.round(Number(raw) || 0);
-  _fxDraft.remission.cargoWeight = items.reduce(function(s2,it){ return s2 + it.quantity; }, 0);
-  fxRenderSheet();
-}
 function _fxSetItemCrop(i, cropName){
   var rm = cropRemisionFor(cropName);
   _fxDraft.items[i].productId = null;
@@ -18803,8 +18803,12 @@ function fxRenderSheet(){
     html += crops.map(function(c){
       return '<option value="'+_tlAttr(c)+'"'+((match===c)?' selected':'')+'>'+esc(T(c))+'</option>';
     }).join('') + '</select></div>';
+    // Read-only on purpose. The weight is what the scale recorded, and a
+    // number typed over it would put a figure on a fiscal document that no
+    // weighing supports. A wrong weight is corrected where it was captured —
+    // on the transaction — and the draft re-reads it on open.
     html += '<div class="fx-f half'+(badFields['items['+i+'].quantity']?' bad':'')+'"><label>kg</label>' +
-            '<input type="number" min="1" step="1" value="'+_tlAttr(item.quantity)+'" onchange="_fxSetItemQty('+i+', this.value)"></div>';
+            '<div class="fx-ro">'+esc(Number(item.quantity).toLocaleString())+'</div></div>';
     html += '</div>';
   });
   html += '<div class="fx-total">' + esc(T('Total')) + ' ' +
