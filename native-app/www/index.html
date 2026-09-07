@@ -5315,6 +5315,7 @@ const _i18n = {
   'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
+  'Campo':'Campo','has no fields yet — add one first.':'todavía no tiene campos — agregá uno primero.',
   'Truckload':'Carga','Destination':'Destino','Farm':'Finca','Truck':'Camión',
   'Emisión':'Emisión','Inicio':'Inicio','Fin':'Fin','Distancia':'Distancia',
   'Todos los datos del documento':'Todos los datos del documento',
@@ -18924,7 +18925,10 @@ function fxRenderSheet(){
   var farm  = _fxSelFarm(), dest = _fxSelDest(), truck = _fxSelTruck();
   html += '<div class="fx-sect">' + esc(T('Traslado')) + '</div>';
   html += '<div class="fx-grid">';
-  html += _fxPickRow(T('Desde'),  farm  ? farm.name          : '—', 'fxPickSheetFarm()',  !farm);
+  var oField = _fxSelField();
+  html += _fxPickRow(T('Desde'),
+    farm ? (farm.name + (oField ? ' · ' + oField.name : '')) : '—',
+    'fxPickSheetFarm()', !farm);
   html += _fxPickRow(T('Hasta'),  dest  ? dest.name          : '—', 'fxPickSheetDest()',  !dest);
   html += _fxPickRow(T('Camión'), truck ? _truckLabel(truck) : '—', 'fxPickSheetTruck()', !truck);
   html += '</div>';
@@ -19047,7 +19051,7 @@ function fxPickIssuer(id){
 // Which farm, buyer and truck this document is for. Held apart from the payload
 // because the payload has no room for them: it carries the CONSEQUENCES of the
 // choice (an address, a plate, a RUC) and not the choice itself.
-var _fxSel    = {farmId:null, destId:null, truckId:null};
+var _fxSel    = {farmId:null, destId:null, truckId:null, fieldId:null};
 var _fxAdvOpen = false;   // "Todos los datos" folded away by default
 
 function _fxSelFarm(){
@@ -19067,9 +19071,14 @@ function _fxSelFromLoad(load){
   var field = _fxOriginField(load);
   return {
     farmId:  (field && field.farmId) || null,
+    fieldId: field ? field.id : null,
     destId:  dest ? dest.id : null,
     truckId: truck ? truck.id : null
   };
+}
+
+function _fxSelField(){
+  return _fxSel.fieldId ? (getFields().find(function(f){ return f.id === _fxSel.fieldId; }) || null) : null;
 }
 
 /** One "label → value ›" row. Marked bad when nothing is chosen. */
@@ -19105,11 +19114,55 @@ function fxPickSheetFarm(){
     onConfirm: function(name){
       var f = farms.find(function(x){ return x.name === name; });
       if(!f) return;
+      var wasFarm = _fxSel.farmId, wasField = _fxSel.fieldId;
       _fxSel.farmId = f.id;
       Object.assign(_fxDraft.remission, _fxFarmFields(f));
       _fxReRecallDistance();
       fxRenderSheet();
+      // The loads are filed under a FIELD, not a farm. Moving them to another
+      // farm without saying which field would leave them belonging nowhere, so
+      // the field is asked for straight away rather than guessed.
+      if(f.id !== wasFarm) setTimeout(function(){ fxPickSheetField(wasFarm, wasField); }, 250);
     }
+  });
+}
+
+/**
+ * Which field on the chosen farm the grain came from.
+ *
+ * Dismissing it puts the farm back. A document naming one farm while its loads
+ * sit on another is worse than not having changed anything, and there is no
+ * sensible field to pick on the operator's behalf.
+ */
+function fxPickSheetField(revertFarmId, revertFieldId){
+  var farm = _fxSelFarm();
+  if(!farm) return;
+  var fields = getFields().filter(function(z){ return z.farmId === farm.id; });
+  var undo = function(){
+    _fxSel.farmId = revertFarmId || null;
+    _fxSel.fieldId = revertFieldId || null;
+    var back = _fxSelFarm();
+    if(back) Object.assign(_fxDraft.remission, _fxFarmFields(back));
+    _fxReRecallDistance();
+    fxRenderSheet();
+  };
+
+  if(!fields.length){
+    showToast('"' + farm.name + '" ' + T('has no fields yet — add one first.'), 'warn');
+    undo();
+    return;
+  }
+  var names = fields.map(function(z){ return z.name; });
+  _wheelOpen({
+    title: T('Campo'), items: names,
+    selected: (_fxSelField() && _fxSelField().farmId === farm.id) ? _fxSelField().name : null,
+    onConfirm: function(name){
+      var z = fields.find(function(x){ return x.name === name; });
+      if(!z){ undo(); return; }
+      _fxSel.fieldId = z.id;
+      fxRenderSheet();
+    },
+    onCancel: undo
   });
 }
 
@@ -19309,6 +19362,63 @@ setInterval(fxFlushOutbox, 60000);
  * the operator is told the truth either way.
  */
 /**
+ * Push the origin chosen on the remisión sheet back onto the weighings.
+ *
+ * The document says where the grain came from; the transactions say which field
+ * it was booked against. Changing one and not the other splits the farm's
+ * harvest record from the paperwork covering it — the field would still be
+ * credited with grain the remisión says came from somewhere else.
+ *
+ * A field is required, not derived: the sheet picks a farm, and a farm can hold
+ * many fields. fxPickSheetField() asks for it at the moment the farm changes,
+ * so by the time this runs the answer is already known.
+ *
+ * Returns the ids of the transactions that moved.
+ */
+function _fxWriteBackOrigin(){
+  if(!_fxDraft || !_fxLoad) return [];
+  var closingId = _fxLoad.closedBy && _fxLoad.closedBy.id;
+  if(!closingId || tlLoadLocked(closingId)) return [];
+
+  var field = _fxSelField();
+  var farm  = _fxSelFarm();
+  if(!field || !farm || field.farmId !== farm.id) return [];
+
+  // The closing empty-truck row is deliberately left out: it is not a field
+  // transaction and carries no field of its own.
+  var ids = {};
+  (_fxLoad.loads || []).forEach(function(w){ if(w && w.id) ids[w.id] = 1; });
+
+  var changed = [];
+  var logs = getLogs().map(function(l){
+    if(!l || !ids[l.id]) return l;
+    if(l.fieldId === field.id && l.zone === field.name && l.farm === farm.name) return l;
+    l.fieldId = field.id;
+    l.zone    = field.name;
+    l.farm    = farm.name;
+    changed.push(l.id);
+    return l;
+  });
+  if(!changed.length) return [];
+  localStorage.setItem(LS_LOGS, JSON.stringify(logs));
+
+  var queue = getQueue();
+  logs.forEach(function(l){
+    if(changed.indexOf(l.id) === -1) return;
+    var qi = queue.findIndex(function(q){ return q.id === l.id; });
+    if(qi === -1) queue.push(l); else queue[qi] = l;
+  });
+  localStorage.setItem(LS_QUEUE, JSON.stringify(queue));
+
+  if(typeof renderLogs === 'function') renderLogs();
+  if(typeof refreshQueue === 'function') refreshQueue();
+  if(typeof renderFields === 'function') renderFields();
+  if(typeof renderFarms === 'function') renderFarms();
+  if(isOnline && typeof autoSync === 'function') autoSync();
+  return changed;
+}
+
+/**
  * Push a crop chosen on the remisión sheet back onto the weighings it came from.
  *
  * The cargo lines are DERIVED from the transactions, and an unsent draft
@@ -19470,7 +19580,9 @@ async function fxSaveDraft(){
     // before the draft is stored, so nothing on screen disagrees with what was
     // just saved. Unioned by id: a load whose buyer AND crop both changed is one
     // transaction that moved, not two.
-    var movedIds = _fxWriteBackDestination().concat(_fxWriteBackCrops());
+    var movedIds = _fxWriteBackDestination()
+      .concat(_fxWriteBackCrops())
+      .concat(_fxWriteBackOrigin());
     var moved = movedIds.filter(function(id, i){ return movedIds.indexOf(id) === i; }).length;
     var payload = fxNormalise(_fxDraft);
     fxQueueRemision(closingId, {
