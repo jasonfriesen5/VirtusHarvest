@@ -9949,10 +9949,19 @@ function saveTxSheet(){
     logs[idx].date = dt.toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'});
     logs[idx].time = dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     localStorage.setItem(LS_LOGS, JSON.stringify(logs));
-    // Update queue too
+    // Queue the edit — ALWAYS, not only when the record happened to be waiting
+    // to upload already.
+    //
+    // This used to be `if (qi !== -1)`, so editing a transaction that had
+    // already synced changed it on the device and nowhere else. The next pull
+    // then overwrote it with the server's copy: change the crop from canola to
+    // corn, press sync, and it was canola again. Queueing also protects it on
+    // the way down — pullConfig() keeps the local copy of anything pending
+    // upload, precisely because its edits are newer than the cloud's.
     var queue = getQueue();
     var qi = queue.findIndex(function(l){ return l.id===editId; });
-    if(qi!==-1){ queue[qi]=logs[idx]; localStorage.setItem(LS_QUEUE, JSON.stringify(queue)); }
+    if(qi!==-1) queue[qi] = logs[idx]; else queue.push(logs[idx]);
+    localStorage.setItem(LS_QUEUE, JSON.stringify(queue));
     showToast('Transaction updated','success');
   } else {
     // Create new
