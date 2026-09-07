@@ -1,0 +1,52 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "virtus",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "http-server",
+        "/Users/jason/Downloads/Virtus Harvest/site",
+        "-p",
+        "8090",
+        "-c-1"
+      ],
+      "port": 8090
+    },
+    {
+      "name": "virtus-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/jason/Downloads/Virtus Harvest/web"
+      ],
+      "port": 5180
+    },
+    {
+      "name": "virtus-feed",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8777",
+        "--directory",
+        "/Users/jason/Downloads/Virtus Harvest/Virtus Feed Folder/www"
+      ],
+      "port": 8777
+    },
+    {
+      "name": "virtus-feed-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/jason/Downloads/Virtus Harvest/Virtus Feed Folder/web"
+      ],
+      "port": 5181
+    }
+  ],
+  "autoVerify": false
+}

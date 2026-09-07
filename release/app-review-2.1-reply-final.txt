@@ -1,0 +1,58 @@
+Thank you for the review. The requested information is below, and a screen recording captured on a physical iPhone is attached.
+
+2. DEVICES AND OPERATING SYSTEMS TESTED
+
+- iPhone 17 Pro, iOS 26.6 - physical device, tested with the Virtus scale connected over Bluetooth LE
+- iPad Pro 13-inch (M5), iPadOS 26.5 - Simulator, for layout and record management (Bluetooth is unavailable in the Simulator)
+
+Testing covered account creation, sign-in, sign-out, account deletion, cloud sync across two devices, Bluetooth connection, live weighing, calibration, firmware update, and record creation, editing and deletion.
+
+3. WHAT THE APP DOES, AND FOR WHOM
+
+Virtus Harvest is the companion app for the Virtus grain cart scale, a Bluetooth LE weighing device fitted to agricultural grain carts. The audience is grain growers and their operators.
+
+During harvest, grain moves from the combine to a grain cart and then into trucks. Growers need to know how much came off each field, which truck carried it and where it went. Traditionally this is tracked on paper in the cab, or not at all.
+
+The app reads live weight from the scale over Bluetooth and records each load against a field, truck, destination, crop and operator, with a GPS point and moisture reading. It totals yield per field and per hectare, works offline, and syncs when back in service so the same records appear on every device.
+
+4. SETUP AND ACCESS
+
+Demo account (also entered in the Sign-In fields of App Review Information):
+
+Email: demo@virtusharvest.com
+Password: as entered in the Sign-In Information fields
+
+It is pre-loaded with two farms, four fields, drawn field boundaries, three trucks, three destinations, three operators and around eighteen recorded loads, so every screen has representative data on first sign-in.
+
+Hardware dependency: live weighing requires the physical Virtus scale, which we cannot ship to the review team. Without it the weight display shows no reading and the Device tab shows no scale. This is expected, not a defect. The attached recording shows these screens with real hardware connected.
+
+Everything else is fully reviewable with the demo account and no hardware:
+
+- Fields tab: create farms and fields, draw a field boundary on the map
+- Trucks and Destinations tabs: create a truck with a capacity
+- More > Seasons and Operators: record management
+- More > Settings: units (kg / lb / bushels), language, dark mode
+- Transactions can be added manually and appear in the field history
+- More > Settings > Delete Account: permanent account deletion
+
+5. EXTERNAL SERVICES USED
+
+- Supabase: authentication and the Postgres database storing the grower's own records. Row-level security restricts each account to its own data.
+- Google Maps JavaScript API: the satellite map used to view and draw field boundaries, under the Google Maps Platform terms.
+- Apple Core Bluetooth: connects to the customer's own Virtus scale.
+
+There are no payment processors, advertising networks, analytics or crash-reporting SDKs, and no AI services. Nothing is shared with third parties for their own purposes or used for tracking.
+
+6. REGIONAL DIFFERENCES
+
+None. The app functions identically in every region. It includes English and Spanish interface languages selectable by the user, and supports kilograms, pounds and bushels as a user preference. No feature, content or behaviour varies by country.
+
+7. REGULATED INDUSTRY / THIRD-PARTY MATERIAL
+
+The app does not operate in a regulated industry. It is a record-keeping and measurement tool for a grower's own farm operation, providing no financial, medical or legal services.
+
+The only third-party material displayed is Google Maps satellite imagery, used under the Google Maps Platform Terms of Service via a licensed API key.
+
+The Bluetooth connection is only ever to the customer's own Virtus scale hardware, purchased from us. No other devices are contacted.
+
+Contact: support@virtusharvest.com

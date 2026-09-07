@@ -1,0 +1,15 @@
+// @capacitor/filesystem declares `kotlin { jvmToolchain(21) }` — a *strict* request:
+// Gradle needs a JDK whose major version is exactly 21, so neither the JBR 17 on
+// PATH nor Android Studio's bundled JBR 25 satisfies it. (bluetooth-le uses
+// jvmTarget instead, which any JDK >= 21 meets — that's why it built fine.)
+// This plugin lets Gradle download its own JDK 21 into ~/.gradle on demand, so
+// the build doesn't depend on which JDKs happen to be installed on the machine.
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+include ':app'
+include ':capacitor-cordova-android-plugins'
+project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+
+apply from: 'capacitor.settings.gradle'

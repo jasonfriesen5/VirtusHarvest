@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      System bar colours, matched to what the web UI paints directly against them.
+      Without these the status bar falls back to a grey system default and the
+      navigation bar to black, which is what framed the app in mismatched bands.
+
+      statusBar sits immediately above .topbar, whose gradient starts at
+      rgba(255,255,255,0.92) over the page background (CSS var bg-top, #FFFEF5).
+      navigationBar sits immediately below .tabbar, whose gradient ends at
+      rgba(252,247,238,0.93) over the page background.
+
+      Keep these in step with the topbar and tabbar colours in index.html: they
+      are two separate sources of truth for one visible seam, and any drift shows
+      up as a faint line across the top or bottom of the screen.
+    -->
+    <color name="systemBarTop">#FFFEF5</color>
+    <color name="systemBarBottom">#FCF7EE</color>
+</resources>

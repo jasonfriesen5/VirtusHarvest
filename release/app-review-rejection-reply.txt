@@ -1,0 +1,47 @@
+Thank you for the detailed report. Both issues are fixed in build 11, which has been uploaded.
+
+GUIDELINE 2.1(a) - CRASH ON "TAKE PHOTO"
+
+Cause: the profile photo picker used an HTML file input with capture="user" to open the camera, but the app's Info.plist did not declare NSCameraUsageDescription. iOS terminates an app immediately when it accesses the camera without that key, which is exactly what your tester saw.
+
+Fix: we removed the profile photo feature entirely rather than adding the permission. It was a minor convenience on an app used from a tractor seat, and removing it means the app now requests no camera or photo library access at all. The account avatar shows the operator's initials instead.
+
+As a result:
+- There is no longer any "Take Photo" or "Choose from Gallery" option anywhere in the app
+- No camera or photo library APIs are referenced in the code
+- Info.plist declares only Bluetooth and Location (When In Use)
+- App Privacy has been updated: Photos or Videos is not collected
+
+GUIDELINE 5.1.1(v) - ACCOUNT DELETION
+
+Account deletion was present in build 9, but our reviewer notes gave the wrong path. We wrote "More > Settings > Delete Account" when the control was actually under More > Cloud Sync. Your tester followed our instructions to Settings, found nothing there, and reasonably concluded the option was missing. That was our error in the notes, not a missing feature.
+
+Fix: account deletion has been moved to Settings, where a user and a reviewer look first, and it is now the single place it appears:
+
+  More > Settings > Delete Account
+
+What deletion does:
+- Calls a SECURITY DEFINER Postgres function, delete_own_account(), which reads the caller's own user id server-side, so a tampered client can only ever delete its own account
+- Removes the user's row from auth.users and every record belonging to it: harvest loads, farms, fields, field boundaries, trucks, destinations, operators, crops, grain carts and seasons
+- Clears the matching local copies on the device
+- Takes effect immediately, is permanent, and requires no email, phone call or website visit
+
+It is a single in-app action behind one confirmation dialog, which exists only to prevent accidental taps.
+
+We have verified end-to-end that a deleted account and all of its data are removed from the database, with no orphaned records remaining in any table.
+
+TESTING
+
+Build 11 was tested on an iPhone 17 Pro running iOS 26.6, and on an iPad Pro 13-inch (iPadOS 26.5) in Simulator, covering account creation, sign-in, sign-out, account deletion, Bluetooth connection to the scale, live weighing, and record creation, editing and deletion.
+
+DEMO ACCOUNT
+
+The credentials in App Review Information are unchanged and remain valid:
+
+  Email: demo@virtusharvest.com
+
+The account is pre-loaded with farms, fields, drawn field boundaries, trucks, destinations, operators and recorded loads, so every screen has representative data on first sign-in.
+
+Please note the hardware dependency described in our earlier reply: live weighing requires the physical Virtus grain cart scale, which we cannot ship to the review team. Without it the weight display shows no reading and the Device tab shows no scale. This is expected, not a defect. Account deletion, record management, field boundaries and all settings are fully reviewable without hardware.
+
+Contact: support@virtusharvest.com
