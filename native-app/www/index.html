@@ -1555,18 +1555,10 @@ body.rm-on button.rm-only{display:inline-flex !important;}
 }
 .fab-wrap.open .fab-items{pointer-events:auto;opacity:1;transform:none;}
 .fab-item{
-  display:flex;align-items:center;gap:10px;border:none;background:none;
-  padding:0;cursor:pointer;
-}
-.fab-label{
   background:var(--surface);color:var(--text);border:1px solid var(--border);
-  border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;
-  box-shadow:0 2px 8px rgba(0,0,0,.14);white-space:nowrap;
-}
-.fab-dot{
-  width:44px;height:44px;border-radius:22px;background:var(--surface);
-  border:1px solid var(--border);display:flex;align-items:center;
-  justify-content:center;font-size:19px;box-shadow:0 2px 10px rgba(0,0,0,.18);
+  border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;
+  font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;
+  box-shadow:0 2px 10px rgba(0,0,0,.18);
 }
 .fx-adv-toggle{
   display:flex;align-items:center;gap:8px;margin:16px 0 4px;padding:10px 12px;
@@ -2967,14 +2959,10 @@ function _openPasswordResetWhenReady(){
              closes, which is what a tap outside an open menu should do. -->
         <div class="fab-scrim" onclick="fabClose()"></div>
         <div class="fab-items">
-          <button class="fab-item" onclick="fabAction('truck')">
-            <span class="fab-label" data-en="Truck">Truck</span><span class="fab-dot">🚚</span></button>
-          <button class="fab-item" onclick="fabAction('farm')">
-            <span class="fab-label" data-en="Farm">Farm</span><span class="fab-dot">🌾</span></button>
-          <button class="fab-item" onclick="fabAction('destination')">
-            <span class="fab-label" data-en="Destination">Destination</span><span class="fab-dot">🏬</span></button>
-          <button class="fab-item" onclick="fabAction('truckload')">
-            <span class="fab-label" data-en="Truckload">Truckload</span><span class="fab-dot">📋</span></button>
+          <button class="fab-item" onclick="fabAction('truck')" data-en="Truck">Truck</button>
+          <button class="fab-item" onclick="fabAction('farm')" data-en="Farm">Farm</button>
+          <button class="fab-item" onclick="fabAction('destination')" data-en="Destination">Destination</button>
+          <button class="fab-item" onclick="fabAction('truckload')" data-en="Truckload">Truckload</button>
         </div>
         <button class="fab-main" onclick="fabToggle()" aria-label="Add">+</button>
       </div>
