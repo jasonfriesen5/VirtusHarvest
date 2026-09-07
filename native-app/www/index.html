@@ -1538,6 +1538,25 @@ body.rm-on button.rm-only{display:inline-flex !important;}
 .ntl-t1{font-size:14px;font-weight:700;color:var(--text);}
 .ntl-t2{font-size:11px;color:var(--text3);margin-top:2px;}
 .ntl-kg{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;}
+.fa-row{
+  display:flex;align-items:center;gap:10px;padding:10px 2px;
+  border-bottom:1px solid var(--border);
+}
+.fa-row:last-child{border-bottom:none;}
+.fa-info{flex:1 1 auto;min-width:0;}
+.fa-kg{font-size:15px;font-weight:800;color:var(--text);}
+.fa-meta{font-size:11px;color:var(--text3);margin-top:2px;}
+.fa-row select{
+  flex:0 0 44%;padding:9px 11px;background:var(--surface2);
+  border:1.5px solid var(--border);border-radius:10px;
+  font-family:'Inter',sans-serif;font-size:14px;color:var(--text);
+  outline:none;appearance:none;-webkit-appearance:none;
+}
+.fa-all{
+  display:flex;align-items:center;gap:10px;padding:10px 2px 14px;
+  border-bottom:1px solid var(--border);margin-bottom:4px;
+}
+.fa-all .fa-info{font-size:13px;font-weight:700;color:var(--text2);}
 .ntl-empty{padding:22px 14px;text-align:center;font-size:13px;color:var(--text3);line-height:1.5;}
 .fab-wrap{
   /* Fixed, not absolute: .tab-page is the scrolling element, so an absolute
@@ -4007,6 +4026,25 @@ function _openPasswordResetWhenReady(){
   </div>
 </div>
 
+<!-- ══ FIELD ASSIGNMENT SHEET ══
+     Opened when the remisión's origin farm changes. A truckload can hold loads
+     off several fields, so each transaction gets its own answer rather than one
+     applied to the lot — with a "set them all" row for the usual case where it
+     really was just one field. -->
+<div class="tx-sheet-overlay" id="fa-sheet-overlay" style="z-index:930;" onclick="if(event.target===this)faCancel()">
+  <div class="tx-sheet">
+    <div class="tx-sheet-header">
+      <div class="tx-sheet-title" data-en="Which field?">Which field?</div>
+      <button class="tx-sheet-close" onclick="faCancel()">×</button>
+    </div>
+    <div class="tx-sheet-body" id="fa-body"></div>
+    <div class="tx-sheet-footer">
+      <button class="tx-btn-cancel" onclick="faCancel()" data-en="Cancel">Cancel</button>
+      <button class="tx-btn-save" onclick="faConfirm()" id="fa-save-btn" data-en="Save">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ NOTA DE REMISIÓN SHEET ══
      Asks only what varies per load: who issues it, where from, where to, which
      truck, when, how far, and what is aboard. Everything else is derived from
@@ -5316,6 +5354,8 @@ const _i18n = {
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
   'Campo':'Campo','has no fields yet — add one first.':'todavía no tiene campos — agregá uno primero.',
+  'Which field?':'¿De qué campo?','Pick the field each load came off.':'Elegí el campo de cada carga.',
+  'Set them all':'Aplicar a todas','fields':'campos',
   'Truckload':'Carga','Destination':'Destino','Farm':'Finca','Truck':'Camión',
   'Emisión':'Emisión','Inicio':'Inicio','Fin':'Fin','Distancia':'Distancia',
   'Todos los datos del documento':'Todos los datos del documento',
@@ -18925,9 +18965,7 @@ function fxRenderSheet(){
   var farm  = _fxSelFarm(), dest = _fxSelDest(), truck = _fxSelTruck();
   html += '<div class="fx-sect">' + esc(T('Traslado')) + '</div>';
   html += '<div class="fx-grid">';
-  var oField = _fxSelField();
-  html += _fxPickRow(T('Desde'),
-    farm ? (farm.name + (oField ? ' · ' + oField.name : '')) : '—',
+  html += _fxPickRow(T('Desde'), farm ? (farm.name + _fxOriginSuffix()) : '—',
     'fxPickSheetFarm()', !farm);
   html += _fxPickRow(T('Hasta'),  dest  ? dest.name          : '—', 'fxPickSheetDest()',  !dest);
   html += _fxPickRow(T('Camión'), truck ? _truckLabel(truck) : '—', 'fxPickSheetTruck()', !truck);
@@ -19051,7 +19089,10 @@ function fxPickIssuer(id){
 // Which farm, buyer and truck this document is for. Held apart from the payload
 // because the payload has no room for them: it carries the CONSEQUENCES of the
 // choice (an address, a plate, a RUC) and not the choice itself.
-var _fxSel    = {farmId:null, destId:null, truckId:null, fieldId:null};
+// fieldByLoad maps a weighing id to the field it came off. A truckload can be
+// filled from more than one field, so one answer for the whole load would be a
+// guess dressed up as a fact.
+var _fxSel    = {farmId:null, destId:null, truckId:null, fieldId:null, fieldByLoad:{}};
 var _fxAdvOpen = false;   // "Todos los datos" folded away by default
 
 function _fxSelFarm(){
@@ -19069,9 +19110,12 @@ function _fxSelFromLoad(load){
   var dest = getDestinations().find(function(d){ return d.name === load.destination; });
   var truck = _fxTruckFor(load);
   var field = _fxOriginField(load);
+  var byLoad = {};
+  (load.loads || []).forEach(function(w){ if(w && w.id && w.fieldId) byLoad[w.id] = w.fieldId; });
   return {
     farmId:  (field && field.farmId) || null,
     fieldId: field ? field.id : null,
+    fieldByLoad: byLoad,
     destId:  dest ? dest.id : null,
     truckId: truck ? truck.id : null
   };
@@ -19114,56 +19158,137 @@ function fxPickSheetFarm(){
     onConfirm: function(name){
       var f = farms.find(function(x){ return x.name === name; });
       if(!f) return;
-      var wasFarm = _fxSel.farmId, wasField = _fxSel.fieldId;
+      var wasFarm = _fxSel.farmId;
+      var wasMap  = Object.assign({}, _fxSel.fieldByLoad);
       _fxSel.farmId = f.id;
       Object.assign(_fxDraft.remission, _fxFarmFields(f));
       _fxReRecallDistance();
       fxRenderSheet();
       // The loads are filed under a FIELD, not a farm. Moving them to another
       // farm without saying which field would leave them belonging nowhere, so
-      // the field is asked for straight away rather than guessed.
-      if(f.id !== wasFarm) setTimeout(function(){ fxPickSheetField(wasFarm, wasField); }, 250);
+      // it is asked straight away, per load, rather than guessed.
+      if(f.id !== wasFarm) setTimeout(function(){ fxPickSheetField(wasFarm, wasMap); }, 250);
     }
   });
 }
 
+/** "· 100H", or "· 2 campos" when the loads came off more than one. */
+function _fxOriginSuffix(){
+  var ids = (_fxLoad && _fxLoad.loads || [])
+    .map(function(w){ return _fxSel.fieldByLoad[w.id]; })
+    .filter(Boolean);
+  var uniq = ids.filter(function(id, i){ return ids.indexOf(id) === i; });
+  if(!uniq.length) return '';
+  if(uniq.length === 1){
+    var z = getFields().find(function(f){ return f.id === uniq[0]; });
+    return z ? ' · ' + z.name : '';
+  }
+  return ' · ' + uniq.length + ' ' + T('fields');
+}
+
+// What the assignment sheet is editing, and what to put back if it is dismissed.
+var _faRevert = null;
+
 /**
- * Which field on the chosen farm the grain came from.
+ * Ask which field each load came off, on the farm just chosen.
  *
- * Dismissing it puts the farm back. A document naming one farm while its loads
- * sit on another is worse than not having changed anything, and there is no
- * sensible field to pick on the operator's behalf.
+ * The sheet picks a farm; the transactions are filed under a field, and one
+ * truckload can hold loads off several. So every transaction gets its own row
+ * rather than one answer applied to all — with a "set them all" row on top,
+ * because usually it really was one field.
+ *
+ * Dismissing puts the whole origin back. A document naming one farm while its
+ * loads sit on another is worse than not having changed anything.
  */
-function fxPickSheetField(revertFarmId, revertFieldId){
+function fxPickSheetField(revertFarmId, revertFieldMap){
   var farm = _fxSelFarm();
   if(!farm) return;
   var fields = getFields().filter(function(z){ return z.farmId === farm.id; });
-  var undo = function(){
-    _fxSel.farmId = revertFarmId || null;
-    _fxSel.fieldId = revertFieldId || null;
-    var back = _fxSelFarm();
-    if(back) Object.assign(_fxDraft.remission, _fxFarmFields(back));
-    _fxReRecallDistance();
-    fxRenderSheet();
-  };
+
+  _faRevert = { farmId: revertFarmId || null, byLoad: revertFieldMap || {} };
 
   if(!fields.length){
     showToast('"' + farm.name + '" ' + T('has no fields yet — add one first.'), 'warn');
-    undo();
+    faCancel();
     return;
   }
-  var names = fields.map(function(z){ return z.name; });
-  _wheelOpen({
-    title: T('Campo'), items: names,
-    selected: (_fxSelField() && _fxSelField().farmId === farm.id) ? _fxSelField().name : null,
-    onConfirm: function(name){
-      var z = fields.find(function(x){ return x.name === name; });
-      if(!z){ undo(); return; }
-      _fxSel.fieldId = z.id;
-      fxRenderSheet();
-    },
-    onCancel: undo
+  // Anything still pointing at a field on another farm has to be re-answered;
+  // the first field is offered so a single tap on "set them all" is enough.
+  (_fxLoad && _fxLoad.loads || []).forEach(function(w){
+    var cur = _fxSel.fieldByLoad[w.id];
+    if(!cur || !fields.some(function(z){ return z.id === cur; }))
+      _fxSel.fieldByLoad[w.id] = fields[0].id;
   });
+
+  faRender();
+  document.getElementById('fa-sheet-overlay').classList.add('open');
+}
+
+function faRender(){
+  var body = document.getElementById('fa-body');
+  var farm = _fxSelFarm();
+  if(!body || !farm || !_fxLoad) return;
+  var fields = getFields().filter(function(z){ return z.farmId === farm.id; });
+
+  function options(sel){
+    return fields.map(function(z){
+      return '<option value="'+_tlAttr(z.id)+'"'+(z.id===sel?' selected':'')+'>'+esc(z.name)+'</option>';
+    }).join('');
+  }
+
+  var html = '<div class="fx-note" style="margin-top:0;">' +
+    esc(T('Pick the field each load came off.')) + '</div>';
+
+  if(_fxLoad.loads.length > 1){
+    html += '<div class="fa-all"><div class="fa-info">' + esc(T('Set them all')) + '</div>' +
+            '<select onchange="faSetAll(this.value)"><option value="">—</option>' +
+            options(null) + '</select></div>';
+  }
+
+  _fxLoad.loads.forEach(function(w){
+    var when = w.time || (w.timestamp ? new Date(w.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '');
+    html += '<div class="fa-row"><div class="fa-info">' +
+              '<div class="fa-kg">' + esc(fmtWt(_tlWetKg(w), '')) + '</div>' +
+              '<div class="fa-meta">' + esc([when, T(w.crop || ''), w.worker || ''].filter(Boolean).join(' · ')) + '</div>' +
+            '</div>' +
+            '<select onchange="faSetOne(\'' + _tlAttr(w.id) + '\', this.value)">' +
+              options(_fxSel.fieldByLoad[w.id]) + '</select></div>';
+  });
+  body.innerHTML = html;
+}
+
+function faSetAll(fieldId){
+  if(!fieldId) return;
+  (_fxLoad && _fxLoad.loads || []).forEach(function(w){ _fxSel.fieldByLoad[w.id] = fieldId; });
+  faRender();
+}
+function faSetOne(loadId, fieldId){
+  if(fieldId) _fxSel.fieldByLoad[loadId] = fieldId;
+}
+
+function faConfirm(){
+  document.getElementById('fa-sheet-overlay').classList.remove('open');
+  _faRevert = null;
+  // Kept for the document's own use — the departure point is the farm, but the
+  // Desde row names the field when there is only one.
+  var ids = (_fxLoad && _fxLoad.loads || []).map(function(w){ return _fxSel.fieldByLoad[w.id]; }).filter(Boolean);
+  _fxSel.fieldId = ids[0] || null;
+  fxRenderSheet();
+}
+
+function faCancel(){
+  document.getElementById('fa-sheet-overlay').classList.remove('open');
+  if(_faRevert){
+    _fxSel.farmId = _faRevert.farmId;
+    _fxSel.fieldByLoad = _faRevert.byLoad || {};
+    var ids = Object.keys(_fxSel.fieldByLoad).map(function(k){ return _fxSel.fieldByLoad[k]; });
+    _fxSel.fieldId = ids[0] || null;
+    var back = _fxSelFarm();
+    if(back && _fxDraft) Object.assign(_fxDraft.remission, _fxFarmFields(back));
+    _fxReRecallDistance();
+    _faRevert = null;
+  }
+  fxRenderSheet();
 }
 
 function fxPickSheetDest(){
@@ -19369,9 +19494,10 @@ setInterval(fxFlushOutbox, 60000);
  * harvest record from the paperwork covering it — the field would still be
  * credited with grain the remisión says came from somewhere else.
  *
- * A field is required, not derived: the sheet picks a farm, and a farm can hold
- * many fields. fxPickSheetField() asks for it at the moment the farm changes,
- * so by the time this runs the answer is already known.
+ * The field is per load, not per truckload: the sheet picks a farm, and one
+ * truckload can hold grain off several of its fields. fxPickSheetField() asks
+ * for each at the moment the farm changes, so by the time this runs every load
+ * already has its answer.
  *
  * Returns the ids of the transactions that moved.
  */
@@ -19380,18 +19506,25 @@ function _fxWriteBackOrigin(){
   var closingId = _fxLoad.closedBy && _fxLoad.closedBy.id;
   if(!closingId || tlLoadLocked(closingId)) return [];
 
-  var field = _fxSelField();
-  var farm  = _fxSelFarm();
-  if(!field || !farm || field.farmId !== farm.id) return [];
+  var farm = _fxSelFarm();
+  if(!farm) return [];
 
   // The closing empty-truck row is deliberately left out: it is not a field
   // transaction and carries no field of its own.
-  var ids = {};
-  (_fxLoad.loads || []).forEach(function(w){ if(w && w.id) ids[w.id] = 1; });
+  var want = {};
+  (_fxLoad.loads || []).forEach(function(w){
+    if(!w || !w.id) return;
+    var fid = _fxSel.fieldByLoad[w.id];
+    if(!fid) return;
+    var z = getFields().find(function(f){ return f.id === fid; });
+    // A field on a different farm is a stale answer, not an instruction.
+    if(z && z.farmId === farm.id) want[w.id] = z;
+  });
 
   var changed = [];
   var logs = getLogs().map(function(l){
-    if(!l || !ids[l.id]) return l;
+    if(!l || !want[l.id]) return l;
+    var field = want[l.id];
     if(l.fieldId === field.id && l.zone === field.name && l.farm === farm.name) return l;
     l.fieldId = field.id;
     l.zone    = field.name;
