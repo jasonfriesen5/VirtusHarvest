@@ -1525,12 +1525,6 @@ body.rm-on button.rm-only{display:inline-flex !important;}
 .ntl-t2{font-size:11px;color:var(--text3);margin-top:2px;}
 .ntl-kg{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;}
 .ntl-empty{padding:22px 14px;text-align:center;font-size:13px;color:var(--text3);line-height:1.5;}
-.fx-ro{
-  /* Deliberately not styled like an input. Boxed and cream, it looked exactly
-     like the fields beside it and invited a tap that does nothing; as plain
-     text it reads as what it is — a weight the scale already decided. */
-  padding:11px 2px;color:var(--text);font-size:16px;font-weight:700;
-}
 .fab-wrap{
   /* Fixed, not absolute: .tab-page is the scrolling element, so an absolute
      button would ride up the page with the list instead of staying put. It is
@@ -3372,7 +3366,6 @@ function _openPasswordResetWhenReady(){
           <div id="rm-list" style="padding:0 14px 4px;"></div>
 
           <div style="padding:10px 14px 14px;display:flex;gap:8px;justify-content:flex-start;">
-            <button class="tx-btn-cancel" style="padding:7px 14px;font-size:13px;font-weight:700;width:auto;flex:0 0 auto;" onclick="rmRefresh()" data-en="Refresh">Refresh</button>
             <button class="tx-btn-save" style="padding:7px 14px;font-size:13px;font-weight:700;width:auto;flex:0 0 auto;" onclick="rmOpenAdd()" data-en="Add profile">Add profile</button>
           </div>
         </div>
@@ -3402,9 +3395,7 @@ function _openPasswordResetWhenReady(){
           </div>
         </div>
 
-        <!-- Kept as the status line the Fenex calls write into (connecting,
-             errors, "not available yet"), but with no standing blurb. -->
-        <div style="font-size:11px;color:var(--text3);padding:0 4px 14px;text-align:center;" id="rm-status"></div>
+
       </div>
     </div>
 
@@ -4005,10 +3996,11 @@ function _openPasswordResetWhenReady(){
 </div>
 
 <!-- ══ NOTA DE REMISIÓN SHEET ══
-     The same document the web console's RemisionForm edits, in the same
-     section order, validated against the same rules. Every input is filled and
-     read by JS from one field table (_FX_FIELDS), so the sheet and the payload
-     cannot drift apart the way two hand-written copies would. -->
+     Asks only what varies per load: who issues it, where from, where to, which
+     truck, when, how far, and what is aboard. Everything else is derived from
+     the farm, destination and truck records — entered once where it belongs
+     rather than retyped on every load — and stays reachable, and editable,
+     under "Todos los datos del documento". -->
 <div class="tx-sheet-overlay" id="fx-sheet-overlay" style="z-index:920;" onclick="if(event.target===this)fxCloseSheet()">
   <div class="tx-sheet">
     <div class="tx-sheet-header">
@@ -5308,6 +5300,7 @@ const _i18n = {
   'Enter a profile name':'Ingrese un nombre de perfil','Enter the RUC':'Ingrese el RUC',
   'Enter the RUC with its DV, like 00000000-0':'Ingrese el RUC con su DV, como 00000000-0',
   'Cargo updated from the transactions':'Carga actualizada desde las transacciones',
+  'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
   'Truckload':'Carga','Destination':'Destino','Farm':'Finca','Truck':'Camión',
   'Emisión':'Emisión','Inicio':'Inicio','Fin':'Fin','Distancia':'Distancia',
@@ -8564,6 +8557,15 @@ function rmOpenAdd(){
 function rmCloseAdd(){
   var c = document.getElementById('rm-add-card'); if(c) c.style.display = 'none';
 }
+/**
+ * The page no longer carries a status line — each profile shows its own state,
+ * which is the part that matters, and a paragraph of prose underneath was noise
+ * on a screen with one toggle and a list.
+ *
+ * Kept as a no-op rather than deleted from a dozen call sites: the connection
+ * request still reports its outcome by toast, and a refresh that fails leaves
+ * the list exactly as it was, which is the honest thing to show.
+ */
 function _rmStatus(msg){
   var el = document.getElementById('rm-status'); if(el) el.textContent = msg;
 }
@@ -15106,6 +15108,13 @@ async function fullSync(){
   try{
     await syncQueue();                     // push local -> cloud
     await pullConfig();                    // pull cloud -> local (incl. weighings)
+    // Connection states live in Fenex, not in our database, so a sync that
+    // skipped them would leave an approved RUC still reading as pending. It
+    // cannot fail the sync: rmRefresh() reports its own trouble in place, and
+    // a Fenex outage must not make "Sync complete" read as a failure.
+    if(typeof remisionEnabled === 'function' && remisionEnabled()){
+      try{ await rmRefresh(); }catch(e){ console.warn('[sync] fenex refresh:', e); }
+    }
     showToast(T('Sync complete'), 'success');
   }catch(e){
     console.warn('[sync] failed:', e);
@@ -18803,12 +18812,6 @@ function fxRenderSheet(){
     html += crops.map(function(c){
       return '<option value="'+_tlAttr(c)+'"'+((match===c)?' selected':'')+'>'+esc(T(c))+'</option>';
     }).join('') + '</select></div>';
-    // Read-only on purpose. The weight is what the scale recorded, and a
-    // number typed over it would put a figure on a fiscal document that no
-    // weighing supports. A wrong weight is corrected where it was captured —
-    // on the transaction — and the draft re-reads it on open.
-    html += '<div class="fx-f half'+(badFields['items['+i+'].quantity']?' bad':'')+'"><label>kg</label>' +
-            '<div class="fx-ro">'+esc(Number(item.quantity).toLocaleString())+'</div></div>';
     html += '</div>';
   });
   html += '<div class="fx-total">' + esc(T('Total')) + ' ' +
@@ -18874,6 +18877,7 @@ function fxRenderSheet(){
   html += '<div class="fx-note" style="margin-top:12px;">' + esc(T(SIFEN_GEOGRAPHY_CAVEAT)) + '</div>';
   }
 
+
   body.innerHTML = html;
 
   // ── The verdict, in the same words Fenex would use ──
@@ -18884,8 +18888,7 @@ function fxRenderSheet(){
       issues.map(function(i){ return '<li><code>'+esc(i.field)+'</code> — '+esc(i.message)+'</li>'; }).join('') +
       '</ul><div style="margin-top:6px;">' + esc(T('You can still save — the draft is kept and nothing is sent.')) + '</div></div>';
   } else {
-    box.innerHTML = '<div class="box ok">' +
-      esc(T('The saved details pass the local checks. The issuer will review them in Fenex before creating the document.')) + '</div>';
+    box.innerHTML = '';
   }
 }
 
@@ -19162,6 +19165,75 @@ setInterval(fxFlushOutbox, 60000);
  * the outbox until it lands — so this succeeds in a field with no signal, and
  * the operator is told the truth either way.
  */
+/**
+ * Push a destination chosen on the remisión sheet back onto the weighings.
+ *
+ * The document and the transactions have to name the same buyer. Changing it
+ * here and nowhere else would leave the field history, the destination totals
+ * and the truckload row still saying the old one, and a person reconciling the
+ * two would have no way to tell which was true.
+ *
+ * Applied on SAVE, not when the wheel is spun — the sheet has a Cancel button
+ * and it has to mean it. Written straight to storage by id, because the loads
+ * on a truckload are copies built by buildTruckloads(), not live rows.
+ *
+ * Returns how many transactions moved.
+ */
+function _fxWriteBackDestination(){
+  var dest = _fxSelDest();
+  if(!dest || !_fxLoad) return 0;
+
+  // The closing empty-truck row is what the truckload reads its destination
+  // from; the loads are what the field and destination views read.
+  var ids = {};
+  (_fxLoad.loads || []).forEach(function(w){ if(w && w.id) ids[w.id] = 'load'; });
+  if(_fxLoad.closedBy && _fxLoad.closedBy.id) ids[_fxLoad.closedBy.id] = 'closing';
+
+  var changed = [];
+  function apply(rows){
+    return (rows || []).map(function(l){
+      if(!l || !ids[l.id]) return l;
+      var was = l.deliveredTo || l.unload || null;
+      if(was === dest.name && l.destId === dest.id) return l;
+      l.deliveredTo = dest.name;
+      // destId is the link that survives a rename. It is local-only — the sync
+      // payload has no dest_id column — so deliveredTo is what actually
+      // reaches the cloud, and both are set.
+      l.destId = dest.id;
+      // The closing row is the one whose `unload` the truckload falls back to.
+      if(ids[l.id] === 'closing') l.unload = dest.name;
+      if(changed.indexOf(l.id) === -1) changed.push(l.id);
+      return l;
+    });
+  }
+
+  var logs = apply(getLogs());
+  localStorage.setItem(LS_LOGS, JSON.stringify(logs));
+
+  // Queue them so the change reaches the cloud. A row already synced is
+  // re-queued rather than skipped: the upsert is by id, so sending it again is
+  // harmless, and skipping it would leave the old buyer on the server.
+  var queue = getQueue();
+  logs.forEach(function(l){
+    if(changed.indexOf(l.id) === -1) return;
+    var qi = queue.findIndex(function(q){ return q.id === l.id; });
+    if(qi === -1) queue.push(l); else queue[qi] = l;
+  });
+  localStorage.setItem(LS_QUEUE, JSON.stringify(queue));
+
+  if(changed.length){
+    // Everything that shows a destination has just gone stale.
+    if(typeof renderLogs === 'function') renderLogs();
+    if(typeof refreshQueue === 'function') refreshQueue();
+    if(typeof renderDestinations === 'function') renderDestinations();
+    if(typeof renderTruckloads === 'function') renderTruckloads();
+    if(isOnline && typeof autoSync === 'function') autoSync();
+  }
+  // The closing row is bookkeeping, not a transaction anybody weighed, so it
+  // is not counted in what the operator is told moved.
+  return changed.filter(function(id){ return ids[id] === 'load'; }).length;
+}
+
 async function fxSaveDraft(){
   if(_fxBusy || !_fxDraft || !_fxLoad) return;
   var closingId = _fxLoad.closedBy && _fxLoad.closedBy.id;
@@ -19178,6 +19250,9 @@ async function fxSaveDraft(){
   var btn = document.getElementById('fx-save-btn');
   if(btn) btn.disabled = true;
   try{
+    // Before the draft is stored, so the transactions and the document agree
+    // from the moment it is saved.
+    var moved = _fxWriteBackDestination();
     var payload = fxNormalise(_fxDraft);
     fxQueueRemision(closingId, {
       closing_weighing_id: closingId,
@@ -19212,9 +19287,14 @@ async function fxSaveDraft(){
     fxCloseSheet();
     // Say which of the two happened rather than claiming it is filed when it is
     // only queued.
-    showToast(fxOutboxPending(closingId)
+    var saved = fxOutboxPending(closingId)
       ? T('Draft saved — will upload when there is signal')
-      : T('Remisión draft saved'), 'success');
+      : T('Remisión draft saved');
+    // Moving transactions to another buyer is a bigger change than saving a
+    // draft, so it is said out loud rather than left to be discovered.
+    showToast(moved
+      ? saved + ' · ' + moved + ' ' + T(moved === 1 ? 'transaction moved' : 'transactions moved')
+      : saved, 'success');
     renderTruckloads();
   }catch(e){
     showToast((e && e.message) || T('Could not save the draft'),'error');
