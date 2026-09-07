@@ -506,6 +506,12 @@ body{
   font:700 13px 'Inter',sans-serif;padding:10px 15px;cursor:pointer;
 }
 .tl-remision-btn.primary{background:var(--accent);border-color:var(--accent);color:#1d1705;}
+/* Incomplete drafts cannot be sent, so the button reads as unavailable rather
+   than inviting a press that only produces a warning. */
+.tl-remision-btn:disabled{
+  opacity:.42;cursor:default;filter:grayscale(.5);
+}
+.tl-remision-btn:disabled:active{transform:none;filter:grayscale(.5);}
 .tl-remision-btn:active{
   transform:scale(0.96);
   filter:brightness(0.94);
@@ -5308,6 +5314,7 @@ const _i18n = {
   'Enter a profile name':'Ingrese un nombre de perfil','Enter the RUC':'Ingrese el RUC',
   'Enter the RUC with its DV, like 00000000-0':'Ingrese el RUC con su DV, como 00000000-0',
   'Cargo updated from the transactions':'Carga actualizada desde las transacciones',
+  'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
   'Truckload':'Carga','Destination':'Destino','Farm':'Finca','Truck':'Camión',
@@ -8345,12 +8352,33 @@ function _tlPaintRemision(el,row){
   // Queuing is the commit point, so the card locks the moment it is queued —
   // not when the network happens to succeed.
   var frozen = state !== 'draft' || !!pendingSend;
+  // How far off the draft is, counted with the same rules the sheet applies —
+  // so the card, the sheet and the send guard never disagree about what is
+  // missing. Counted before the buttons are built, because it decides whether
+  // sending is offered at all.
+  var missing = 0;
+  if(!frozen){
+    try{
+      var vLoad = _tlFindLoad(closingId);
+      if(vLoad){
+        var vDraft = (row && fxIsRequest(row.request_payload))
+          ? row.request_payload : fxBuildRequest(vLoad, fxDefaultIssuer());
+        missing = fxValidate(fxNormalise(vDraft)).length;
+      }
+    }catch(e){}
+  }
+
   var action='';
   if(!frozen){
     var savedDraft = row && fxIsRequest(row.request_payload);
+    // An incomplete draft cannot be sent, and the button says so by being
+    // dead rather than by refusing after it is pressed. fxSendForApproval()
+    // checks the same thing again — this is the signal, not the safeguard.
     action='<button class="tl-remision-btn" onclick="fxOpenSheet(this.closest(&quot;.tl-remision&quot;).getAttribute(&quot;data-closing-id&quot;))">'+
              esc(T(savedDraft ? 'Edit details' : 'Fill in details'))+'</button>'+
-           '<button class="tl-remision-btn primary" onclick="fxSendForApproval(this.closest(&quot;.tl-remision&quot;).getAttribute(&quot;data-closing-id&quot;))">'+esc(T('Send for approval'))+'</button>';
+           '<button class="tl-remision-btn primary"'+(missing ? ' disabled' : '')+
+             ' onclick="fxSendForApproval(this.closest(&quot;.tl-remision&quot;).getAttribute(&quot;data-closing-id&quot;))">'+
+             esc(T('Send for approval'))+'</button>';
   }else if(state==='rejected'){
     // The rejected draft itself stays untouched — it is what was submitted
     // under that RUC. Correcting means a NEW draft with a new idempotency key,
@@ -8365,8 +8393,10 @@ function _tlPaintRemision(el,row){
       : '<button class="tl-remision-btn primary" onclick="fxGetPdf(this.closest(&quot;.tl-remision&quot;).getAttribute(&quot;data-closing-id&quot;))">'+esc(T('Get PDF'))+'</button>';
   }
   var note='';
+  // A draft says nothing: the buttons already say what can be done with it,
+  // and a line of instruction on every unsent row is noise. What is SAID here
+  // is only ever status — queued, with the issuer, or failed.
   if(pendingSend) note=T('Queued for the issuer. Nothing is issued until they approve it in Fenex.');
-  else if(state==='draft') note=T('Fill in the details, then send the draft to the issuer for approval in Fenex.');
   // Once it is with the issuer they may correct it before submitting, so what
   // this device holds is what was SENT, not necessarily what gets issued.
   else if(['pending','ready','submitted'].indexOf(state) !== -1)
@@ -8374,19 +8404,11 @@ function _tlPaintRemision(el,row){
   else if(row && row.error_message) note=row.error_message;
   else if(state==='pending') note=T('The issuer will review this request in Fenex.');
 
-  // How far off the draft is, counted with the same rules the sheet applies —
-  // so the card and the sheet never disagree about what is missing.
-  var short='';
-  if(!frozen){
-    try{
-      var load=_tlFindLoad(closingId);
-      if(load){
-        var draft=(row && fxIsRequest(row.request_payload)) ? row.request_payload : fxBuildRequest(load, fxDefaultIssuer());
-        var n=fxValidate(fxNormalise(draft)).length;
-        if(n) short='<div class="tl-remision-note">'+n+' '+esc(T(n===1 ? 'field still needed — open Fill in details.' : 'fields still needed — open Fill in details.'))+'</div>';
-      }
-    }catch(e){}
-  }
+  // Shown only when it explains something — why the send button is dead.
+  var short = missing
+    ? '<div class="tl-remision-note">'+missing+' '+
+      esc(T(missing===1 ? 'field still needed' : 'fields still needed'))+'</div>'
+    : '';
 
   // Waiting is normal and says so quietly. Repeated failure is NOT waiting —
   // after a few tries this is something no amount of signal will fix, and
