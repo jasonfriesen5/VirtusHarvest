@@ -31,9 +31,14 @@ export interface MappingContext {
   routes: Route[];
 }
 
-function day(iso: string | null, plusDays = 0): string {
+function day(iso: string | null, plusDays = 0, offsetMinutes?: number | null): string {
   const d = iso ? new Date(iso) : new Date();
   if (Number.isNaN(d.getTime())) return '';
+  if (offsetMinutes != null) {
+    const local = new Date(d.getTime() + offsetMinutes * 60_000);
+    local.setUTCDate(local.getUTCDate() + plusDays);
+    return `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, '0')}-${String(local.getUTCDate()).padStart(2, '0')}`;
+  }
   d.setDate(d.getDate() + plusDays);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -73,7 +78,9 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
   const originField = originFieldFor(load, ctx);
   const farm = originField?.farm_id ? ctx.farms.find((f) => f.id === originField.farm_id) : undefined;
 
-  const issueDate = day(load.emptiedAt);
+  const savedOffset = load.closedBy?.timezone_offset_minutes
+    ?? load.loads[load.loads.length - 1]?.timezone_offset_minutes;
+  const issueDate = day(load.emptiedAt, 0, savedOffset);
   const receiver = splitRuc(s(dest?.ruc));
   const issuerRuc = storedRucParts(s(ctx.issuer?.ruc), s(ctx.issuer?.ruc_dv));
 
@@ -138,7 +145,9 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
       null,
     futureInvoiceIssueDate: issueDate,
 
-    receiverTaxpayerType: '1',
+    // 2 = Persona Jurídica. Must match the app's prefill, or the same delivery
+    // yields a different document depending on where it was raised.
+    receiverTaxpayerType: '2',
     receiverRuc: receiver.ruc,
     receiverDv: receiver.dv,
     receiverName: s(dest?.razon_social) || s(dest?.name),
@@ -157,7 +166,7 @@ export function buildFenexRequest(load: Truckload, ctx: MappingContext): FenexRe
     transportTypeDescription: TRANSPORT_TYPES[hasHauler ? 2 : 1],
     freightResponsibility: 1,
     transportStartDate: issueDate,
-    transportEndDate: day(load.emptiedAt, 1),
+    transportEndDate: day(load.emptiedAt, 1, savedOffset),
 
     departureAddress: s(farm?.address),
     departureHouseNumber: '0',

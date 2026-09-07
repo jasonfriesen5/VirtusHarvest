@@ -4,11 +4,12 @@ import { useData } from '../state/DataProvider';
 import { usePrefs } from '../state/PrefsProvider';
 import type { AreaUnit, DisplayUnit } from '../lib/units';
 import { Button, cx } from './ui';
+import RemisionRetryRunner from './RemisionRetryRunner';
 
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/records', label: 'Records', end: false },
-  { to: '/truckloads', label: 'Truckloads', end: false },
+  { to: '/truckloads', label: 'Remisión', end: false },
   { to: '/live', label: 'Today', end: false },
   { to: '/map', label: 'Map', end: false },
   { to: '/manage', label: 'Manage', end: false },
@@ -48,6 +49,7 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-full flex-col">
+      <RemisionRetryRunner />
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="flex items-center gap-2">

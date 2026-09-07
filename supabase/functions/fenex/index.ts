@@ -26,6 +26,21 @@ type DraftSummary = {
 type DraftDetail = { summary: DraftSummary; remission: Record<string, unknown> };
 const unavailable = "Fenex connections are not available yet. The updated backend must be deployed and connected.";
 
+/**
+ * One line per upstream call, so a failure can be diagnosed from the logs
+ * instead of guessed at. Deliberately partial:
+ *   - the KEY is never logged, in any form, at any level;
+ *   - the path is logged WITHOUT its query string, which carries user ids;
+ *   - a body is logged only for a failure, capped, and only as far as it helps.
+ * The base URL is not a secret, but it is fixed per deployment, so the path
+ * alone identifies the call.
+ */
+function logUpstream(method: string, path: string, status: number, body?: string) {
+  const route = path.split("?")[0];
+  const detail = body ? " " + body.replace(/\s+/g, " ").slice(0, 300) : "";
+  console.log(`fenex upstream ${method} /integrations/virtus${route} -> ${status}${detail}`);
+}
+
 async function partner(path: string, method = "GET", payload?: unknown) {
   const base = Deno.env.get("FENEX_PARTNER_BASE_URL");
   const key = Deno.env.get("FENEX_PARTNER_KEY");
@@ -38,12 +53,18 @@ async function partner(path: string, method = "GET", payload?: unknown) {
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) {
-    // Never forward upstream bodies: they may contain internal details or secrets.
+    // Read once: the body is wanted for the log, and a Response can only be
+    // consumed a single time.
+    const failure = await response.text().catch(() => "");
+    logUpstream(method, path, response.status, failure);
+    // Never forward upstream bodies TO THE BROWSER: they may contain internal
+    // details or secrets. The log above is server-side only.
     if (response.status === 404) throw new Error("Fenex could not find this account or connection endpoint. Confirm the RUC with the issuer.");
     if (response.status === 401 || response.status === 403) throw new Error("The Virtus–Fenex server connection is not authorized.");
     if (response.status === 409) throw new Error("Fenex reports that this request has already been decided.");
     throw new Error("Fenex could not complete the request (" + response.status + ").");
   }
+  logUpstream(method, path, response.status);
   const raw = await response.text();
   return raw ? JSON.parse(raw) : null;
 }
@@ -59,10 +80,14 @@ async function partnerPdf(path: string) {
     signal: AbortSignal.timeout(20000),
   });
   if (!response.ok) {
+    const failure = await response.text().catch(() => "");
+    logUpstream("GET", path, response.status, failure);
     if (response.status === 409) throw new Error("The signed PDF is not available until SIFEN approves the remisión.");
     if (response.status === 401 || response.status === 403) throw new Error("The Virtus–Fenex server connection is not authorized.");
     throw new Error("Fenex could not return the signed PDF (" + response.status + ").");
   }
+  // Never the bytes, just the fact that they arrived.
+  logUpstream("GET", path, response.status);
   if (!response.headers.get("content-type")?.includes("application/pdf"))
     throw new Error("Fenex returned an invalid PDF response.");
   return new Uint8Array(await response.arrayBuffer());
@@ -127,7 +152,7 @@ Deno.serve(async (req: Request) => {
         const label = String(body.label ?? "").trim();
         const ruc = String(body.ruc ?? "").trim();
         if (!label || label.length > 120 || !/^[0-9]{3,8}-[0-9]$/.test(ruc))
-          return json({ error: "Enter a profile name and RUC including its DV (for example 80012345-6)." }, 400);
+          return json({ error: "Enter a name for the connection and the RUC including its DV (like 00000000-0)." }, 400);
         await partner("/connections", "POST", {
           requesterId: user.id, requesterEmail: user.email, label, ruc,
         });

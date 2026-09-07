@@ -4,10 +4,8 @@ import type { Issuer } from '../lib/fenexClient';
 import { normalise, validate } from '../lib/fenexPayload';
 import type { FenexRemission, FenexRequest } from '../lib/fenexPayload';
 import {
-  EMISSION_RESPONSIBILITIES,
   FREIGHT_RESPONSIBILITIES,
   REASONS,
-  TRANSPORT_TYPES,
 } from '../lib/sifen';
 import GeographyPicker from './GeographyPicker';
 import type { GeoValue } from './GeographyPicker';
@@ -144,16 +142,6 @@ export default function RemisionForm({
               </div>
             </div>
             <T k="receiverAddress" label="Dirección" wide />
-            <div>
-              <Label>Tipo de contribuyente</Label>
-              <Select
-                value={r.receiverTaxpayerType}
-                onChange={(e) => field('receiverTaxpayerType', e.target.value)}
-              >
-                <option value="1">1 — Persona física</option>
-                <option value="2">2 — Persona jurídica</option>
-              </Select>
-            </div>
           </div>
           <GeographyPicker value={geo('receiver')} onChange={(v) => setGeo('receiver', v)} />
         </Section>
@@ -196,39 +184,6 @@ export default function RemisionForm({
                 />
               </div>
             )}
-
-            <div>
-              <Label>Responsable de emisión</Label>
-              <Select
-                value={String(r.emissionResponsibilityCode)}
-                onChange={(e) => {
-                  const c = Number(e.target.value);
-                  set({
-                    emissionResponsibilityCode: c,
-                    emissionResponsibilityDescription: EMISSION_RESPONSIBILITIES[c],
-                  });
-                }}
-              >
-                {Object.entries(EMISSION_RESPONSIBILITIES).map(([c, d]) => (
-                  <option key={c} value={c}>{d}</option>
-                ))}
-              </Select>
-            </div>
-
-            <div>
-              <Label>Tipo de transporte</Label>
-              <Select
-                value={String(r.transportType)}
-                onChange={(e) => {
-                  const c = Number(e.target.value);
-                  set({ transportType: c, transportTypeDescription: TRANSPORT_TYPES[c] });
-                }}
-              >
-                {Object.entries(TRANSPORT_TYPES).map(([c, d]) => (
-                  <option key={c} value={c}>{d}</option>
-                ))}
-              </Select>
-            </div>
 
             <div>
               <Label>Responsable del flete</Label>
@@ -325,7 +280,7 @@ export default function RemisionForm({
         <Section title="Carga" note="One line per crop, weighed by your own scale, in whole kilos.">
           {req.items.map((item, i) => (
             <div key={i} className="grid gap-2 sm:grid-cols-12">
-              <div className="sm:col-span-5">
+              <div className="sm:col-span-6">
                 <Label>Crop</Label>
                 <Select
                   value={crops.find((crop) =>
@@ -359,16 +314,12 @@ export default function RemisionForm({
                 </Select>
               </div>
               <div className="sm:col-span-3">
-                <Label>Internal code</Label>
-                <Input value={item.productCode} disabled />
-              </div>
-              <div className="sm:col-span-2">
                 <Label>Unidad</Label>
                 {/* Keep SIFEN's numeric code in the payload, but operators only
                     need the human-readable unit in the sheet. */}
                 <Input value={item.unitDescription} disabled />
               </div>
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-3">
                 <Label>Cantidad</Label>
                 <Input
                   type="number"

@@ -27,6 +27,8 @@ export interface Weighing {
   unit: string | null;
   notes: string | null;
   timestamp: string | null;
+  /** UTC offset at the field when this event was saved (Paraguay is normally negative). */
+  timezone_offset_minutes: number | null;
   lat: number | null;
   lng: number | null;
   is_truck_empty: boolean | null;

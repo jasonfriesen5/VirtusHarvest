@@ -342,6 +342,15 @@ export function normalise(req: FenexRequest): FenexRequest {
     items,
     remission: {
       ...req.remission,
+      // Required SIFEN values intentionally hidden from the operator-facing
+      // sheet. Keep them deterministic here so old saved drafts and new
+      // prefills produce the same valid JSON.
+      receiverTaxpayerType: '2',   // Persona Jurídica — see fenexMapping.ts
+      emissionResponsibilityCode: 1,
+      emissionResponsibilityDescription: EMISSION_RESPONSIBILITIES[1],
+      transportType: req.remission.transportType === 2 ? 2 : 1,
+      transportTypeDescription:
+        TRANSPORT_TYPES[req.remission.transportType === 2 ? 2 : 1],
       futureInvoiceIssueDate:
         req.remission.reasonCode === 1 ? req.remission.futureInvoiceIssueDate : null,
       cargoWeight: cargoWeight > 0 ? cargoWeight : null,

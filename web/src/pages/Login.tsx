@@ -17,11 +17,16 @@ export default function Login() {
     setBusy(true);
     setError(null);
     setNotice(null);
-    const { error: err } = await signIn(email, password);
-    // On success the auth listener swaps this page out, so there is nothing
-    // to do here but surface a failure.
-    if (err) setError(err);
-    setBusy(false);
+    try {
+      const { error: err } = await signIn(email, password);
+      // On success the auth listener swaps this page out, so there is nothing
+      // to do here but surface a failure.
+      if (err) setError(err);
+    } catch {
+      setError('Could not reach the sign-in service. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onReset() {
@@ -31,10 +36,15 @@ export default function Login() {
     }
     setBusy(true);
     setError(null);
-    const { error: err } = await sendPasswordReset(email);
-    setBusy(false);
-    if (err) setError(err);
-    else setNotice(`If an account exists for ${email.trim()}, a reset link is on its way.`);
+    try {
+      const { error: err } = await sendPasswordReset(email);
+      if (err) setError(err);
+      else setNotice(`If an account exists for ${email.trim()}, a reset link is on its way.`);
+    } catch {
+      setError('Could not reach the password-reset service. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

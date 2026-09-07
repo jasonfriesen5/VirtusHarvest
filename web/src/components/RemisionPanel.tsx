@@ -9,7 +9,6 @@ import type { FenexRequest } from '../lib/fenexPayload';
 import {
   canSendApproval,
   fetchRemissionPdf,
-  sendDraftForApproval,
   syncFenexRemissions,
 } from '../lib/fenexClient';
 import { truckloadCropError } from '../lib/truckloadCrop';
@@ -26,6 +25,12 @@ import {
   sourcesChanged,
   storeDraft,
 } from '../lib/draftSources';
+import {
+  flushQueuedRemisions,
+  queueRemision,
+  queuedRemision,
+  REMISION_OUTBOX_EVENT,
+} from '../lib/remisionOutbox';
 
 /**
  * Issuing a Nota de Remisión for one truckload. The document is created by an
@@ -44,6 +49,7 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
   // Which issuer this document goes out under. Null until the list arrives,
   // then the one already recorded on the draft, else the account default.
   const [pickedIssuerId, setPickedIssuerId] = useState<string | null>(null);
+  const [queued, setQueued] = useState(false);
 
   const closingId = load.closedBy?.id ?? null;
   const remision: Remision | undefined = closingId
@@ -88,6 +94,14 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
   const oldSource = sourceFromStored(savedPayload);
   const sourceChanged = sourcesChanged(savedPayload, sourceDraft);
   const currentDraft = refreshedDraft ?? savedRequest ?? sourceDraft;
+
+  useEffect(() => {
+    if (!user || !closingId) return;
+    const update = () => setQueued(Boolean(queuedRemision(user.id, closingId)));
+    update();
+    window.addEventListener(REMISION_OUTBOX_EVENT, update);
+    return () => window.removeEventListener(REMISION_OUTBOX_EVENT, update);
+  }, [user, closingId]);
 
   // The same rules Fenex enforces, applied here first. With no sandbox and no
   // cancellation, a payload that fails here is a document that never existed.
@@ -188,40 +202,19 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
     if (validate(payload).length || !issuer || truckloadCropError(load.loads)) return;
     setBusy(true); setError(null); setConfirmation(null); setFormOpen(false);
     try {
-      const { error: saveError } = await supabase.from('ht_remisiones').upsert(
-        {
-          closing_weighing_id: closingId,
-          user_id: user.id,
-          status: 'sending',
-          request_payload: payload,
-          response_payload: null,
-          issuer_id: issuerId,
-          issuer_name: issuer.label ?? issuer.razon_social ?? null,
-          fenex_status: null,
-          error_message: null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'closing_weighing_id' },
-      );
-      if (saveError) throw new Error(saveError.message);
-      await data.refresh();
-      const result = await sendDraftForApproval(payload, issuerId);
-      const { error: resultError } = await supabase.from('ht_remisiones').update({
-        fenex_remission_id: result.id,
-        fenex_status: result.status,
-        response_payload: result,
-        error_message: null,
-        updated_at: new Date().toISOString(),
-      }).eq('closing_weighing_id', closingId).eq('user_id', user.id);
-      if (resultError) throw new Error(resultError.message);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      await supabase.from('ht_remisiones').update({
-        error_message: message,
-        updated_at: new Date().toISOString(),
-      }).eq('closing_weighing_id', closingId).eq('user_id', user.id);
-      setError(message);
-    } finally { setBusy(false); await data.refresh(); }
+      queueRemision({
+        closingId,
+        userId: user.id,
+        issuerId: issuer.id,
+        issuerName: issuer.label ?? issuer.razon_social ?? null,
+        payload,
+      });
+      const result = await flushQueuedRemisions(user.id, closingId, true);
+      if (result.permanentError) setError(result.permanentError);
+    } finally {
+      setBusy(false);
+      if (navigator.onLine) await data.refresh();
+    }
   }
 
   async function share() {
@@ -243,11 +236,11 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
   }
 
   const status = remisionState(remision);
-  const frozen = !!remision && remisionLocked(remision);
+  const frozen = queued || (!!remision && remisionLocked(remision));
   return (
     <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">Nota de Remisión · {remisionLabels[status]}</span>
+        <span className="text-sm font-medium">Nota de Remisión · {queued ? 'Waiting for internet' : remisionLabels[status]}</span>
         {!frozen && <>
           <Button disabled={busy} onClick={() => setFormOpen(true)}>{savedDraft ? 'Edit details' : 'Fill in details'}</Button>
           <Button variant="primary" disabled={busy || sourceChanged || !canSendApproval() || missing.length > 0 || !issuer}
@@ -265,6 +258,7 @@ export default function RemisionPanel({ load }: { load: Truckload }) {
             } catch (e) { setError(String(e)); }
           }}>Get PDF</Button>}
       </div>
+      {queued && <p className="mt-2 text-xs text-amber-700">Saved safely on this device. It will send automatically when the internet connection returns.</p>}
       {sourceChanged && !frozen && oldSource && savedRequest && (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
           <p className="flex-1 text-xs text-amber-900 dark:text-amber-100">

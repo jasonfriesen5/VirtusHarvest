@@ -107,6 +107,8 @@ export interface NewTruckload {
   destination: string;
   /** ISO timestamp the truck was emptied. */
   emptiedAt: string;
+  /** UTC offset where this closing event was entered. */
+  timezoneOffsetMinutes?: number | null;
   seasonId: string | null;
   loadIds: string[];
   reason?: 'assembled' | 'finished-loading';
@@ -132,6 +134,7 @@ export async function createTruckload(userId: string, input: NewTruckload): Prom
     unload: input.destination || null,
     delivered_to: input.destination || null,
     timestamp: input.emptiedAt,
+    timezone_offset_minutes: input.timezoneOffsetMinutes ?? null,
     season_id: input.seasonId,
     is_truck_empty: true,
     // Weight lives on the field loads; the closing row only marks the event.

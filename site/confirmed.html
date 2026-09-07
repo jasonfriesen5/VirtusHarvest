@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Email Confirmed — Virtus Harvest</title>
+<meta name="description" content="Your Virtus Harvest account email has been confirmed.">
+<style>
+  :root{
+    --bg:#FAF7EF; --card:#FFFFFF; --text:#2A1F00; --text2:rgba(42,31,0,0.68);
+    --amber:#C47D00; --green:#1A6B3C; --border:rgba(160,110,0,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#151517; --card:#1E1E21; --text:#ECECEC; --text2:rgba(236,236,236,0.70);
+           --amber:#E3A11C; --green:#4CBE7E; --border:rgba(255,255,255,0.12); }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;
+       min-height:100vh;display:flex;align-items:center;justify-content:center;
+       padding:32px 20px;}
+  .wrap{max-width:520px;width:100%;text-align:center;}
+  .brand{font-weight:800;letter-spacing:.16em;font-size:22px;margin-bottom:36px;}
+  .brand span{display:block;font-size:10px;font-weight:600;letter-spacing:.34em;color:var(--amber);margin-top:2px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:34px 26px;}
+  .tick{width:58px;height:58px;border-radius:50%;background:var(--green);
+        display:flex;align-items:center;justify-content:center;margin:0 auto 20px;}
+  .tick svg{width:30px;height:30px;stroke:#fff;stroke-width:3;fill:none;
+            stroke-linecap:round;stroke-linejoin:round;}
+  h1{font-size:23px;margin:0 0 10px;}
+  p{color:var(--text2);margin:0 0 8px;}
+  .steps{text-align:left;margin:24px auto 0;max-width:340px;color:var(--text2);
+         font-size:15px;padding-left:22px;}
+  .steps li{margin-bottom:7px;}
+  footer{margin-top:28px;font-size:13px;color:var(--text2);}
+  a{color:var(--amber);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">VIRTUS<span>HARVEST</span></div>
+
+  <div class="card">
+    <div class="tick">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 12.5 9.5 18 20 6.5"></polyline></svg>
+    </div>
+
+    <h1>Email confirmed</h1>
+    <p>Your account is now active.</p>
+
+    <ol class="steps">
+      <li>Return to the Virtus Harvest app on your phone or tablet.</li>
+      <li>Sign in with the email and password you just registered.</li>
+      <li>Your farms, fields and loads sync to every device you sign in on.</li>
+    </ol>
+  </div>
+
+  <footer>
+    <!--email_off-->
+    <!-- Opted out of Cloudflare email obfuscation: this address has to work
+         without JavaScript, same reasoning as on the privacy page. -->
+    Trouble signing in? <a href="mailto:support@virtusharvest.com">support@virtusharvest.com</a>
+    <!--/email_off-->
+    <br><a href="/privacy">Privacy</a> · <a href="/support">Support</a>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -119,6 +119,7 @@ export default function CreateTruckloadModal({
         truck: effectiveTruck,
         destination,
         emptiedAt: when.toISOString(),
+        timezoneOffsetMinutes: -when.getTimezoneOffset(),
         // Follows the season being viewed, so the new truckload shows up in
         // the same filter as the loads it contains.
         seasonId: seasonId || chosen[0].load.season_id,

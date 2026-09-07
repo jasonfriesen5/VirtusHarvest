@@ -1,4 +1,4 @@
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { FenexRequest } from './fenexPayload';
 
@@ -77,7 +77,7 @@ export interface FenexRemissionResult {
 }
 
 class FenexError extends Error {
-  constructor(message: string, readonly detail?: unknown) {
+  constructor(message: string, readonly detail?: unknown, readonly retryable = false) {
     super(message);
     this.name = 'FenexError';
   }
@@ -93,14 +93,21 @@ async function call<T>(action: string, body: Record<string, unknown> = {}): Prom
     // the function's JSON body on `context`; `data` is normally null here.
     // Reading only error.message hides the useful Fenex rejection reason.
     if (error instanceof FunctionsHttpError) {
+      const retryable = error.context.status === 408
+        || error.context.status === 429
+        || error.context.status >= 500;
       try {
         const body = await error.context.json() as { error?: string; detail?: unknown };
-        throw new FenexError(body.error ?? error.message, body.detail);
+        throw new FenexError(body.error ?? error.message, body.detail, retryable);
       } catch (bodyError) {
         if (bodyError instanceof FenexError) throw bodyError;
       }
     }
-    throw new FenexError(error.message);
+    throw new FenexError(
+      error.message,
+      undefined,
+      error instanceof FunctionsFetchError || error instanceof FunctionsRelayError,
+    );
   }
 
   const payload = data as { error?: string; detail?: unknown };

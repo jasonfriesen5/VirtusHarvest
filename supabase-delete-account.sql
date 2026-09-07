@@ -45,36 +45,40 @@ grant execute on function public.delete_own_account() to authenticated;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- CHECK THIS BEFORE RELYING ON IT
+-- CASCADE STATUS — VERIFIED 2026-08-18
 --
 -- Deleting auth.users only removes the user's rows automatically if each table
--- references it with ON DELETE CASCADE. Run this to see which of your tables do:
+-- references it with ON DELETE CASCADE. Originally none of them did: all ten
+-- foreign keys were NO ACTION, so `delete from auth.users` was REJECTED for any
+-- account that held data, and account deletion failed with a foreign-key error.
+-- That made the App Store 5.1.1(v) feature non-functional and the privacy
+-- policy's deletion claim untrue.
 --
---   select tc.table_name,
---          kcu.column_name,
---          rc.delete_rule
+-- Fixed by migration `cascade_user_data_on_account_delete`, which re-created
+-- every user_id foreign key with ON DELETE CASCADE:
+--
+--   weighings, ht_boundaries, ht_carts, ht_crops, ht_destinations,
+--   ht_farms, ht_fields, ht_operators, ht_seasons, ht_trucks
+--
+-- Because the cascade is now in the schema, the function body needs no explicit
+-- deletes, and any NEW table picks up the same behaviour as long as its
+-- user_id foreign key is declared `references auth.users(id) on delete cascade`.
+-- Declare it that way when you add one — that is the whole maintenance burden.
+--
+-- Re-check at any time with:
+--
+--   select tc.table_name, rc.delete_rule
 --   from information_schema.table_constraints tc
---   join information_schema.key_column_usage kcu
---     on tc.constraint_name = kcu.constraint_name
 --   join information_schema.referential_constraints rc
 --     on tc.constraint_name = rc.constraint_name
 --   where tc.constraint_type = 'FOREIGN KEY'
---     and tc.table_schema = 'public';
+--     and tc.table_schema = 'public'
+--   order by rc.delete_rule, tc.table_name;
 --
--- Any table whose delete_rule is not CASCADE will be left behind as orphaned
--- rows after the account is gone. Either add the cascade:
+-- Anything that is not CASCADE will be orphaned when an account is deleted.
 --
---   alter table public.ht_logs
---     drop constraint ht_logs_user_id_fkey,
---     add constraint ht_logs_user_id_fkey
---       foreign key (user_id) references auth.users(id) on delete cascade;
---
--- ...or delete them explicitly inside the function above.
---
--- This matters legally as well as technically: the privacy policy states that
--- deleting the account removes the associated data, so orphaned rows would make
--- that statement untrue.
---
--- TO TEST: create a throwaway account in the app, add a load, delete the
--- account from More ▸ Cloud ▸ Delete Account, then confirm the rows are gone.
+-- STILL WORTH DOING: an end-to-end test. Create a throwaway account in the app,
+-- add a load, delete the account from More ▸ Cloud ▸ Delete Account, then
+-- confirm the rows are gone. The schema is correct, but only a real run proves
+-- the whole path works.
 -- ─────────────────────────────────────────────────────────────────────────────
