@@ -3400,7 +3400,6 @@ function _openPasswordResetWhenReady(){
               <div class="sr-label" style="margin-bottom:5px;" data-en="RUC (with DV)">RUC (with DV)</div>
               <input type="text" id="rm-ruc" class="tx-input" placeholder="00000000-0" inputmode="text" style="width:100%;">
             </div>
-            <div class="sr-sub" data-en="The name is only how this connection is labelled. The RUC owner approves it in Fenex.">The name is only how this connection is labelled. The RUC owner approves it in Fenex.</div>
             <div style="display:flex;gap:8px;justify-content:flex-start;">
               <button class="tx-btn-cancel" style="padding:7px 14px;font-size:13px;font-weight:700;width:auto;flex:0 0 auto;" onclick="rmCloseAdd()" data-en="Cancel">Cancel</button>
               <button class="tx-btn-save" style="padding:7px 14px;font-size:13px;font-weight:700;width:auto;flex:0 0 auto;" onclick="rmRequestConnection()" data-en="Request connection">Request connection</button>
@@ -5320,8 +5319,6 @@ const _i18n = {
   'Emisión':'Emisión','Inicio':'Inicio','Fin':'Fin','Distancia':'Distancia',
   'Todos los datos del documento':'Todos los datos del documento',
   'Name for this connection':'Nombre de esta conexión',
-  'The name is only how this connection is labelled. The RUC owner approves it in Fenex.':
-    'El nombre es solo la etiqueta de esta conexión. El dueño del RUC la aprueba en Fenex.',
   'RUC (with DV)':'RUC (con DV)',
   'That RUC is already connected':'Ese RUC ya está conectado','Disconnect profile?':'¿Desconectar perfil?',
   'That RUC already has a request waiting':'Ese RUC ya tiene una solicitud pendiente',
@@ -10336,10 +10333,19 @@ function renderFields(){
       '</div></div><div class="fi-right"></div>';
     row.innerHTML=inner;
     row.addEventListener('click',function(e){
-      if(e.target.classList.contains('btn-del-sm')||e.target.classList.contains('btn-info')) return;
+      if(e.target.classList.contains('btn-del-sm')||e.target.classList.contains('btn-info')||
+         e.target.classList.contains('btn-edit-sm')) return;
       selectFieldById(z.id);
     });
     var right=row.querySelector('.fi-right');
+    // Edit, information, delete — the same three, in the same order, as the
+    // farm, destination, truck and season rows.
+    var editBtn=document.createElement('button');
+    editBtn.className='btn-edit-sm';
+    editBtn.textContent=T('Edit');
+    editBtn.title='Edit field';
+    editBtn.style.cssText='border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;';
+    editBtn.addEventListener('click',function(e){ e.stopPropagation(); openFieldEditSheet(z.id); });
     var infoBtn=document.createElement('button');
     infoBtn.className='btn-info';
     infoBtn.title='View field data';
@@ -10349,6 +10355,7 @@ function renderFields(){
     delBtn.className='btn-del-sm';
     delBtn.textContent='x';
     delBtn.addEventListener('click',function(e){ e.stopPropagation(); deleteFieldById(z.id); });
+    right.appendChild(editBtn);
     right.appendChild(infoBtn);
     right.appendChild(delBtn);
     list.appendChild(row);
@@ -13152,8 +13159,9 @@ function confirmGeofence(){
 // ══ FIELD EDIT SHEET ══
 var _fesFieldId = null;
 
-function openFieldEditSheet(){
-  var fieldId = document.getElementById('field-detail-panel').dataset.fid;
+function openFieldEditSheet(fieldId){
+  var panel = document.getElementById('field-detail-panel');
+  fieldId = fieldId || (panel && panel.dataset.fid);
   if(!fieldId) return;
   var field = getFields().find(function(z){ return z.id===fieldId; });
   if(!field) return;
