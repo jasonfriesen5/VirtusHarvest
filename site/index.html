@@ -5343,8 +5343,8 @@ const _i18n = {
   'Sign in to create a truckload.':'Inicia sesión para crear una carga.',
   'Set a crop on every transaction before adding it to a truckload.':'Asigna un cultivo a cada transacción antes de agregarla a una carga.',
   'A truckload can contain only one crop. Remove the different-crop transaction first.':'Una carga solo puede tener un cultivo. Quita primero la transacción de otro cultivo.',
-  'Bundles loads into a delivery that was never closed off in the field. Only loads that are not already in a delivered truckload appear here. The first one picked sets the crop; the rest must match.':'Agrupa transacciones en una entrega que nunca se cerró en el campo. Solo aparecen las que no están ya en una carga entregada. La primera elegida fija el cultivo; las demás deben coincidir.',
-  'Every load is already in a delivered truckload. Remove one from its truckload in the web console to make it available here.':'Todas las transacciones ya están en una carga entregada. Quita una desde la consola web para poder usarla aquí.',
+  'Transactions that are not in a truckload yet. Pick the ones to group.':'Transacciones que todavía no están en una carga. Elegí las que querés agrupar.',
+  'Every transaction is already in a truckload.':'Todas las transacciones ya están en una carga.',
   'Delivery':'Entrega','Emptied on':'Vaciado el','Destination':'Destino',
   'No trucks added yet':'Aún no hay camiones','No destinations added yet':'Aún no hay destinos',
   'Loaded now':'Cargado ahora','Delivered total':'Total entregado','Loading since':'Cargando desde',
@@ -8154,13 +8154,16 @@ function ntlRender(){
   var total = chosen.reduce(function(sum, w){ return sum + _tlWetKg(w); }, 0);
 
   var html = '';
+  // One line: what is in the list, and what to do with it. The crop rule it
+  // used to explain enforces itself — a load of another crop is refused with
+  // its own message at the moment it is picked, which is when it matters.
   html += '<div class="fx-note" style="margin-top:0;">' +
-    esc(T('Bundles loads into a delivery that was never closed off in the field. Only loads that are not already in a delivered truckload appear here. The first one picked sets the crop; the rest must match.')) +
+    esc(T('Transactions that are not in a truckload yet. Pick the ones to group.')) +
     '</div>';
 
   if(!_ntlCandidates.length){
     html += '<div class="ntl-empty">' +
-      esc(T('Every load is already in a delivered truckload. Remove one from its truckload in the web console to make it available here.')) +
+      esc(T('Every transaction is already in a truckload.')) +
       '</div>';
     body.innerHTML = html;
     var btn0 = document.getElementById('ntl-create-btn');
