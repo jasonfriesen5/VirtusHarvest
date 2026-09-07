@@ -10038,7 +10038,10 @@ function deleteTxById(logId, fieldId){
     await _deleteLogsWhere(function(l){ return l.id===logId; });
     showToast('Transaction deleted','warn');
     if(fieldId) openFieldDetail(fieldId);
+    // The bar was the one thing this did not redraw, so deleting the only load
+    // on a truck left it still showing that weight aboard.
     renderLogs(); refreshQueue(); updateSessionTotal(); updateWeighDisplay();
+    updateTruckLoadBar(); renderTrucks();
   });
 }
 
@@ -11371,6 +11374,9 @@ function setSelectedTruck(truck){
   }
   updateWeighDisplay();
   updateTruckLoadBar();
+  // Driving up to a truck another cart has been loading is exactly when the
+  // real number is wanted, so it is asked for now rather than at the next tick.
+  if(truck && typeof truckBarSync === 'function') truckBarSync();
 
   // If there's a pending manual unload entry waiting for a truck — save it now
   if(truck && _auPendingManualEntry){
@@ -11444,6 +11450,77 @@ function _truckLoadedCrops(truck){
   });
   return out;
 }
+
+// ── Sharing one truck between carts ────────────────────────────────────────
+//
+// Two grain carts can load the same truck, and each only knows what it weighed
+// itself. Until now the fill bar was a local count: the second cart drove up to
+// a truck the first had already half filled and saw an empty bar, with nothing
+// to say how much room was left.
+//
+// The loads already sync — they just only arrived on a manual sync, because
+// autoSync() pushes and never pulls. This is a narrow pull: the rows for the
+// selected truck since it was last emptied, which is exactly what the bar sums.
+// It never overwrites a local row, only adds ones this device has not seen, so
+// it cannot fight an edit that has not uploaded yet.
+var _tbSyncBusy = false;
+
+/** Newest empty-truck timestamp this device knows about for `truck`. */
+function _tbLastEmptyAt(truck){
+  var logs = getLogs();
+  for(var i = 0; i < logs.length; i++){          // getLogs() is newest-first
+    if(logs[i].isTruckEmpty && _logBelongsToTruck(logs[i], truck)) return logs[i].timestamp;
+  }
+  return null;
+}
+
+async function truckBarSync(){
+  if(_tbSyncBusy || !selectedTruck || !isOnline) return 0;
+  if(!currentWorker || !currentWorker.id) return 0;
+  var sb = getSupabase();
+  if(!sb) return 0;
+  var truck = getTrucks().find(function(t){ return t.id === selectedTruck.id; });
+  if(!truck) return 0;
+
+  _tbSyncBusy = true;
+  try{
+    // 'weighings' — the loads table has no ht_ prefix, unlike every other one.
+    var q = sb.from('weighings').select('*')
+      .eq('user_id', currentWorker.id).eq('truck_id', truck.id);
+    // Only what could still be aboard. Without a bound this would re-read the
+    // truck's whole history every twenty seconds.
+    var since = _tbLastEmptyAt(truck);
+    if(since) q = q.gte('timestamp', since);
+    var res = await q;
+    if(res.error || !res.data) return 0;
+
+    var have = {};
+    getLogs().forEach(function(l){ have[l.id] = 1; });
+    var incoming = res.data.filter(function(r){ return !have[r.id]; }).map(mapCloudLog);
+    if(!incoming.length) return 0;
+
+    // Newest-first, the order getLogs() and the bar both assume.
+    var merged = incoming.concat(getLogs()).sort(function(a, b){
+      return (b.timestamp || '') < (a.timestamp || '') ? -1 : 1;
+    });
+    localStorage.setItem(LS_LOGS, JSON.stringify(merged));
+
+    renderLogs(); updateSessionTotal(); updateTruckLoadBar(); renderTrucks();
+    if(typeof renderTruckloads === 'function') renderTruckloads();
+    return incoming.length;
+  }catch(e){
+    // A poll that fails is not worth telling anybody about; the next one is
+    // twenty seconds away and the bar still shows what this device weighed.
+    return 0;
+  }finally{
+    _tbSyncBusy = false;
+  }
+}
+
+// Often enough that a cart arriving at a part-filled truck sees the real
+// number, rarely enough to be nothing on a hotspot. Only runs with a truck
+// selected and a connection.
+setInterval(function(){ truckBarSync(); }, 20000);
 
 function updateTruckLoadBar(){
   var bar = document.getElementById('truck-load-bar');
@@ -15244,6 +15321,38 @@ function _clearAccountIdentity(){
   try{ if(typeof updateProfileStrip==='function') updateProfileStrip(); }catch(e){}
 }
 
+/** One cloud ht_weighings row in the shape the app stores locally. */
+function mapCloudLog(r){
+    return {
+      id:            r.id,
+      worker:        r.worker,
+      farm:          r.farm,
+      buggy:         r.buggy,
+      truckId:       r.truck_id || null,
+      tzOffsetMinutes: (r.timezone_offset_minutes == null ? null : r.timezone_offset_minutes),
+      crop:          r.crop,
+      zone:          r.zone,
+      fieldId:       r.field_id,
+      seasonId:      r.season_id || null,
+      unload:        r.unload,
+      deliveredTo:   r.delivered_to,
+      notes:         r.notes||'',
+      weight:        r.weight,
+      wetWeight:     r.wet_weight,
+      dryWeight:     r.dry_weight,
+      moisture:      r.moisture,
+      unit:          r.unit||'kg',
+      timestamp:     r.timestamp,
+      date:          r.timestamp ? new Date(r.timestamp).toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'}) : '',
+      time:          r.timestamp ? new Date(r.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '',
+      lat:           r.lat,
+      lng:           r.lng,
+      isTruckEmpty:  r.is_truck_empty||false,
+      autoDetected:  r.auto_detected||false,
+      synced:        true
+    };
+  }
+
 async function pullConfig(){
   var sb = getSupabase();
   // Don't silently promote a recovery session into a logged-in state —
@@ -15497,37 +15606,6 @@ async function pullConfig(){
     // the last transaction) and must clear this device too. A failed request
     // gives null and is skipped, so an error is never read as "all deleted".
     if(weighRes.data){
-      var mapCloudLog = function(r){
-        return {
-          id:            r.id,
-          worker:        r.worker,
-          farm:          r.farm,
-          buggy:         r.buggy,
-          truckId:       r.truck_id || null,
-          tzOffsetMinutes: (r.timezone_offset_minutes == null ? null : r.timezone_offset_minutes),
-          crop:          r.crop,
-          zone:          r.zone,
-          fieldId:       r.field_id,
-          seasonId:      r.season_id || null,
-          unload:        r.unload,
-          deliveredTo:   r.delivered_to,
-          notes:         r.notes||'',
-          weight:        r.weight,
-          wetWeight:     r.wet_weight,
-          dryWeight:     r.dry_weight,
-          moisture:      r.moisture,
-          unit:          r.unit||'kg',
-          timestamp:     r.timestamp,
-          date:          r.timestamp ? new Date(r.timestamp).toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'}) : '',
-          time:          r.timestamp ? new Date(r.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '',
-          lat:           r.lat,
-          lng:           r.lng,
-          isTruckEmpty:  r.is_truck_empty||false,
-          autoDetected:  r.auto_detected||false,
-          synced:        true
-        };
-      };
-
       var cloudById = {};
       weighRes.data.forEach(function(r){ cloudById[r.id] = r; });
 
@@ -18539,7 +18617,6 @@ var _FX_FIELDS = [
   {k:'receiverCityName', type:'geo', pfx:'receiver', level:'city',       label:'Ciudad',          w:'half'},
 
   {sect:'Datos del traslado'},
-  {k:'issueDate',          label:'Fecha de emisión',     w:'half', type:'wheelDate'},
   {k:'transportStartDate', label:'Inicio del traslado',  w:'half', type:'wheelDate'},
   {k:'transportEndDate',   label:'Fin estimado',         w:'half', type:'wheelDate'},
   {k:'futureInvoiceIssueDate', label:'Fecha futura de la factura', w:'half', type:'wheelDate'},
@@ -18855,7 +18932,9 @@ function fxRenderSheet(){
   // ── When, and how far ──────────────────────────────────────────────────
   html += '<div class="fx-sect">' + esc(T('Fechas')) + '</div>';
   html += '<div class="fx-grid">';
-  html += _fxWheelRow(T('Emisión'),   r.issueDate,          'issueDate',          badFields);
+  // Emisión is not asked for: the document is issued when it is sent, so the
+  // date is stamped at that moment rather than chosen in advance and left to
+  // go stale in a draft that sits for a day.
   html += _fxWheelRow(T('Inicio'),    r.transportStartDate, 'transportStartDate', badFields);
   html += _fxWheelRow(T('Fin'),       r.transportEndDate,   'transportEndDate',   badFields);
   html += '<div class="fx-f half' + (badFields.estimatedDistanceKm ? ' bad' : '') + '"><label>' +
@@ -19806,6 +19885,23 @@ async function fxSendForApproval(closingId){
 
   var draft = fxIsRequest(savedPayload) ? savedPayload : fxBuildRequest(load, issuer);
   var payload = fxNormalise(draft);
+
+  // The document is issued now, so it is dated now — in the device's own
+  // timezone, not UTC. Stamped here rather than chosen in the sheet, where a
+  // draft left overnight would go out carrying yesterday's date.
+  payload.remission.issueDate = _fxToday();
+  // SIFEN will not accept a transport that starts before the document exists.
+  // A draft written yesterday has yesterday's start date, so it is carried
+  // forward with the issue date rather than failing at Fenex for a reason the
+  // operator never chose. The end date follows if it would end up behind.
+  if(payload.remission.transportStartDate < payload.remission.issueDate)
+    payload.remission.transportStartDate = payload.remission.issueDate;
+  if(payload.remission.transportEndDate < payload.remission.transportStartDate)
+    payload.remission.transportEndDate = _fxAddDays(payload.remission.transportStartDate, 1);
+  // Only meaningful for a sale, where it defaults to the issue date.
+  if(payload.remission.futureInvoiceIssueDate &&
+     payload.remission.futureInvoiceIssueDate < payload.remission.issueDate)
+    payload.remission.futureInvoiceIssueDate = payload.remission.issueDate;
 
   var issues = fxValidate(payload);
   if(issues.length){
