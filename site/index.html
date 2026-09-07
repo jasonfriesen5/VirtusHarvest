@@ -19222,6 +19222,77 @@ setInterval(fxFlushOutbox, 60000);
  * the operator is told the truth either way.
  */
 /**
+ * Push a crop chosen on the remisión sheet back onto the weighings it came from.
+ *
+ * The cargo lines are DERIVED from the transactions, and an unsent draft
+ * re-derives them every time it opens. So changing the crop on the sheet alone
+ * lasted exactly until the next open, when the transactions — still saying
+ * canola — put it back. The choice has to reach the loads or it cannot mean
+ * anything.
+ *
+ * Items are paired with groups by position: both come from the same ordered
+ * grouping of the same loads, so item i is the group i was built from, even
+ * after its crop has been changed and no longer matches by code.
+ *
+ * Returns the ids of the transactions that moved.
+ */
+function _fxWriteBackCrops(){
+  if(!_fxDraft || !_fxLoad) return [];
+  var closingId = _fxLoad.closedBy && _fxLoad.closedBy.id;
+  if(!closingId || tlLoadLocked(closingId)) return [];
+
+  // The groups as the transactions stand now, in the order _fxCargoItems builds.
+  var groups = [], byKey = {};
+  (_fxLoad.loads || []).forEach(function(w){
+    if(!w || !w.id) return;
+    var key = cropKey(w.crop);
+    if(!byKey[key]){ byKey[key] = {key:key, ids:[]}; groups.push(byKey[key]); }
+    byKey[key].ids.push(w.id);
+  });
+
+  var crops = getCrops();
+  var wanted = {};   // weighing id → the crop name it should now carry
+  _fxDraft.items.forEach(function(item, i){
+    var g = groups[i];
+    if(!g) return;
+    var picked = crops.find(function(c){
+      return cropInternalCode(c, cropRemisionFor(c).code) === item.productCode;
+    });
+    if(!picked || cropKey(picked) === g.key) return;
+    g.ids.forEach(function(id){ wanted[id] = picked; });
+  });
+  if(!Object.keys(wanted).length) return [];
+
+  var changed = [];
+  var logs = getLogs().map(function(l){
+    if(!l || !wanted[l.id] || l.crop === wanted[l.id]) return l;
+    l.crop = wanted[l.id];
+    // The dry weight is crop-dependent, so it is recomputed rather than left
+    // describing the previous grain.
+    l.dryWeight = parseFloat(calcDryWeight(l.wetWeight || l.weight, l.moisture || 0, l.crop).toFixed(2));
+    changed.push(l.id);
+    return l;
+  });
+  if(!changed.length) return [];
+  localStorage.setItem(LS_LOGS, JSON.stringify(logs));
+
+  // Queued either way — an already-synced row is not in the queue, and without
+  // this the next pull would hand back the old crop.
+  var queue = getQueue();
+  logs.forEach(function(l){
+    if(changed.indexOf(l.id) === -1) return;
+    var qi = queue.findIndex(function(q){ return q.id === l.id; });
+    if(qi === -1) queue.push(l); else queue[qi] = l;
+  });
+  localStorage.setItem(LS_QUEUE, JSON.stringify(queue));
+
+  if(typeof renderLogs === 'function') renderLogs();
+  if(typeof refreshQueue === 'function') refreshQueue();
+  if(isOnline && typeof autoSync === 'function') autoSync();
+  return changed;
+}
+
+/**
  * Push a destination chosen on the remisión sheet back onto the weighings.
  *
  * The document and the transactions have to name the same buyer. Changing it
@@ -19233,11 +19304,11 @@ setInterval(fxFlushOutbox, 60000);
  * and it has to mean it. Written straight to storage by id, because the loads
  * on a truckload are copies built by buildTruckloads(), not live rows.
  *
- * Returns how many transactions moved.
+ * Returns the ids of the transactions that moved.
  */
 function _fxWriteBackDestination(){
   var dest = _fxSelDest();
-  if(!dest || !_fxLoad) return 0;
+  if(!dest || !_fxLoad) return [];
 
   // The closing empty-truck row is what the truckload reads its destination
   // from; the loads are what the field and destination views read.
@@ -19286,8 +19357,8 @@ function _fxWriteBackDestination(){
     if(isOnline && typeof autoSync === 'function') autoSync();
   }
   // The closing row is bookkeeping, not a transaction anybody weighed, so it
-  // is not counted in what the operator is told moved.
-  return changed.filter(function(id){ return ids[id] === 'load'; }).length;
+  // is left out of what the operator is told moved.
+  return changed.filter(function(id){ return ids[id] === 'load'; });
 }
 
 async function fxSaveDraft(){
@@ -19308,7 +19379,12 @@ async function fxSaveDraft(){
   try{
     // Before the draft is stored, so the transactions and the document agree
     // from the moment it is saved.
-    var moved = _fxWriteBackDestination();
+    // Both selections the sheet shares with the transactions are pushed back
+    // before the draft is stored, so nothing on screen disagrees with what was
+    // just saved. Unioned by id: a load whose buyer AND crop both changed is one
+    // transaction that moved, not two.
+    var movedIds = _fxWriteBackDestination().concat(_fxWriteBackCrops());
+    var moved = movedIds.filter(function(id, i){ return movedIds.indexOf(id) === i; }).length;
     var payload = fxNormalise(_fxDraft);
     fxQueueRemision(closingId, {
       closing_weighing_id: closingId,
