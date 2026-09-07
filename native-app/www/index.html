@@ -3161,7 +3161,7 @@ function _openPasswordResetWhenReady(){
           <!-- Same shape as the Zero Scale row: label + sub + a real button,
                rather than a whole-row tap target with a chevron. -->
           <div class="setting-row" style="border-bottom:none;">
-            <div><div class="sr-label">Check for Firmware Updates</div><div class="sr-sub" id="dfu-sub">Tap to check for the latest version</div></div>
+            <div><div class="sr-label">Check for Firmware Updates</div><div class="sr-sub" id="dfu-sub"></div></div>
             <button class="btn-small-green" id="btn-fw-check" onclick="onFwButtonTap()" data-en="Check">Check</button>
           </div>
         </div>
@@ -3174,7 +3174,6 @@ function _openPasswordResetWhenReady(){
           <div class="setting-row" style="border-bottom:none;">
             <div>
               <div class="sr-label">Zero Scale <span class="info-ico" onclick="showInfoDialog('zero')">ⓘ</span></div>
-              <div class="sr-sub" data-en="Permanently re-zeros the scale — hold the button">Permanently re-zeros the scale — hold the button</div>
             </div>
             <button class="btn-small-green btn-hold" id="btn-zero" disabled>Zero</button>
           </div>
@@ -5313,7 +5312,7 @@ const _i18n = {
   'Fenex profile':'Perfil Fenex','No Fenex profile connected yet.':'Aún no hay un perfil Fenex conectado.',
   'Enter a profile name':'Ingrese un nombre de perfil','Enter the RUC':'Ingrese el RUC',
   'Enter the RUC with its DV, like 00000000-0':'Ingrese el RUC con su DV, como 00000000-0',
-  'Cargo updated from the transactions':'Carga actualizada desde las transacciones',
+  'Updated from your saved records':'Actualizado desde tus datos guardados',
   'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
@@ -5920,9 +5919,9 @@ function applyLanguage() {
   var fwCheckRow = document.getElementById('dfu-sub') && document.getElementById('dfu-sub').closest('.setting-row').querySelector('.sr-label');
   if (fwCheckRow && (fwCheckRow.textContent.trim()==='Check for Firmware Updates'||fwCheckRow.textContent.trim()==='Buscar Actualizaciones de Firmware'))
     fwCheckRow.textContent = T('Check for Firmware Updates');
-  var dfuSub = document.getElementById('dfu-sub');
-  if (dfuSub && (dfuSub.textContent.trim()==='Tap to check for the latest version'||dfuSub.textContent.trim()==='Toca para buscar la última versión'))
-    dfuSub.textContent = T('Tap to check for the latest version');
+  // #dfu-sub is left alone on a language change: it is empty unless the DFU
+  // flow has written progress into it, and re-translating a live status would
+  // replace it with a stale one.
 
   // ── Sleep overlay / Unrecognized-scale block ──
   var stt = document.getElementById('sleep-title-txt'); if (stt) stt.textContent = T('Scale in Sleep Mode');
@@ -5980,7 +5979,6 @@ function applyLanguage() {
   document.querySelectorAll('#sp-devices .sr-sub').forEach(function(sub) {
     var txt = sub.textContent.trim();
     if (txt === 'Check via scale WiFi connection' || txt === 'Verificar vía conexión WiFi de la báscula') sub.textContent = T('Check via scale WiFi connection');
-    if (txt === 'Permanently re-zeros the scale' || txt === 'Pone la báscula a cero permanentemente') sub.textContent = T('Permanently re-zeros the scale');
   });
 
   // ── Cloud sub-panel ──
@@ -18744,11 +18742,16 @@ function fxOpenSheet(closingId){
   _fxAdvOpen = false;   // every open starts simple, however it was left
   var reused = fxIsRequest(saved);
   _fxDraft = reused ? saved : fxBuildRequest(load, _fxIssuer);
-  // The transactions are the source of truth for what is on the truck; the
-  // draft is only a snapshot of them. Editing a load's crop after saving a
-  // draft has to reach the document, so the cargo is re-derived on open.
-  if(reused && _fxRefreshCargo(closingId))
-    showToast(T('Cargo updated from the transactions'), 'warn');
+  // A saved draft is a snapshot; the transactions and the records behind it
+  // are the source of truth. Both are re-read on open, so a crop corrected on
+  // a load — or a city filled in on the farm afterwards — reaches the document
+  // instead of leaving it reporting the same gap forever.
+  if(reused){
+    var cargoMoved  = _fxRefreshCargo(closingId);
+    var fieldsMoved = _fxRefreshFromRecords(closingId);
+    if(cargoMoved || fieldsMoved)
+      showToast(T('Updated from your saved records'), 'warn');
+  }
 
   fxRenderSheet();
   document.getElementById('fx-sheet-overlay').classList.add('open');
@@ -20058,6 +20061,41 @@ function _fxCargoSame(a, b){
  * Only an unsent draft is touched. Once it is with the issuer or SIFEN, what
  * was filed is a matter of record and a correction belongs in a new draft.
  */
+/**
+ * Re-derive a SAVED draft's record-backed fields from the farm, buyer and truck
+ * as they stand NOW.
+ *
+ * Same problem as the cargo, one level up. A draft written while a farm had no
+ * department, district or city kept those blanks forever: filling them in on
+ * the farm afterwards — which is exactly what someone does when the sheet tells
+ * them the departure city is missing — changed the record and nothing else, and
+ * the truckload went on reporting the same missing fields.
+ *
+ * The record is the source of truth. Where the draft already agrees with it,
+ * this changes nothing; where it disagrees, the draft was stale. Only an unsent
+ * draft is touched.
+ *
+ * Returns the number of fields that moved.
+ */
+function _fxRefreshFromRecords(closingId){
+  if(!_fxDraft || !_fxLoad || tlLoadLocked(closingId)) return 0;
+  var fresh = Object.assign({},
+    _fxDestFields(_fxSelDest()),
+    _fxFarmFields(_fxSelFarm()),
+    _fxTruckFields(_fxSelTruck(), _fxIssuer, _fxLoad));
+
+  var r = _fxDraft.remission, moved = 0;
+  Object.keys(fresh).forEach(function(k){
+    // A record that has since been emptied does not blank a value already on
+    // the document — that would take information away rather than add it.
+    if(fresh[k] === '' || fresh[k] == null) return;
+    if(r[k] === fresh[k]) return;
+    r[k] = fresh[k];
+    moved++;
+  });
+  return moved;
+}
+
 function _fxRefreshCargo(closingId){
   if(!_fxDraft || !_fxLoad || tlLoadLocked(closingId)) return false;
   var fresh = _fxCargoItems(_fxLoad);
