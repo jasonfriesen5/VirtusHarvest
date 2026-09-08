@@ -2243,9 +2243,17 @@ body.panel-open .fab-wrap{display:none;}
 [data-theme="dark"] .sub-panel{ background:#151517!important; }
 /* Detail panels pick up the card gradient from the rule above; flatten it here
    for the same tiling reason (they're full-screen scrolling panels, not cards). */
-[data-theme="dark"] .field-detail-panel{ background:#151517!important; }
+[data-theme="dark"] .field-detail-panel{
+  background:#151517!important;
+  border-color:rgba(255,255,255,0.12)!important;
+}
 /* Cards lighter than the near-black page background so they visibly stand out */
-[data-theme="dark"] .card,[data-theme="dark"] .info-rows,[data-theme="dark"] .tx-sheet,[data-theme="dark"] .wheel-sheet,[data-theme="dark"] .field-detail-panel,[data-theme="dark"] .sleep-box,[data-theme="dark"] .field-only-sheet,
+/* .field-detail-panel is deliberately NOT in this list. It is a full-screen
+   page, and these backgrounds are translucent (0.97/0.94) — over a card that
+   reads as glass, over a whole page it showed the screen underneath. Its own
+   opaque rule above is what should apply; being named here overrode it, because
+   both carry !important and this one comes later. */
+[data-theme="dark"] .card,[data-theme="dark"] .info-rows,[data-theme="dark"] .tx-sheet,[data-theme="dark"] .wheel-sheet,[data-theme="dark"] .sleep-box,[data-theme="dark"] .field-only-sheet,
 [data-theme="dark"] .add-form,[data-theme="dark"] .login-card,[data-theme="dark"] .entry-form-panel,[data-theme="dark"] .confirm-box,
 [data-theme="dark"] .cal-sheet,[data-theme="dark"] .truck-load-bar-wrap,
 [data-theme="dark"] .farm-item,[data-theme="dark"] .field-item,
