@@ -783,6 +783,30 @@ body{
    to ~800px with the text floating in the middle. Rows grow to a sane size and any
    remainder simply stays inside the card. */
 .sub-panel > div:not(.sp-header) > .card > .setting-row{flex:1 0 auto;max-height:104px;}
+
+/* Remisión settings: a switch and a list of profiles, neither of which has
+   any reason to be as tall as the screen. The panel-wide rule above stretches
+   every card to fill the page, which left two mostly-empty slabs. Here the
+   cards size to their contents, and on a tablet the switch takes a narrow
+   column so the profiles get the width they actually use. */
+/* Scoped by the panel's id on purpose. `.sub-panel > div:not(.sp-header)` above
+   scores 0,2,1 — higher than any selector built only from these classes — and
+   it is what stretched both cards down the page and kept them in one column. An
+   id settles it rather than piling on classes to out-specify a rule by one. */
+#sp-remision > .rm-panel{
+  padding:14px;display:flex;flex-direction:column;align-items:stretch;
+  gap:12px;flex:0 0 auto;
+}
+#sp-remision > .rm-panel > .rm-col{display:flex;flex-direction:column;gap:12px;min-width:0;flex:0 0 auto;}
+#sp-remision > .rm-panel .card{flex:0 0 auto;margin-bottom:0;}
+#sp-remision > .rm-panel .setting-row{flex:0 0 auto;max-height:none;padding:14px;gap:12px;}
+@media (min-width:700px){
+  #sp-remision > .rm-panel{flex-direction:row;align-items:flex-start;gap:16px;}
+  /* Wide enough that "Nota de Remisión" sits on one line beside the switch
+     rather than wrapping into it. */
+  #sp-remision > .rm-panel > .rm-col-switch{flex:0 0 380px;}
+  #sp-remision > .rm-panel > .rm-col-profiles{flex:1 1 auto;}
+}
 /* Season nests its body one level deeper, inside the list-view wrapper. */
 #season-list-view{flex:1 0 auto;display:flex;flex-direction:column;}
 #season-list-view > div:not(.sp-header){flex:1 0 auto;}
@@ -3382,8 +3406,9 @@ function _openPasswordResetWhenReady(){
         <button class="sp-back" onclick="closeMorePanel('remision')">‹ More</button>
         <div class="sp-title">Remisión</div>
       </div>
-      <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
+      <div class="rm-panel">
 
+        <div class="rm-col rm-col-switch">
         <div class="card">
           <div class="setting-row" style="border-bottom:none;">
             <div>
@@ -3395,7 +3420,9 @@ function _openPasswordResetWhenReady(){
             </div>
           </div>
         </div>
+        </div>
 
+        <div class="rm-col rm-col-profiles">
         <div class="card rm-only">
           <div class="sp-section-lbl" data-en="Fenex profiles">Fenex profiles</div>
           <div id="rm-list" style="padding:0 14px 4px;"></div>
@@ -3427,6 +3454,7 @@ function _openPasswordResetWhenReady(){
               <button class="tx-btn-save" style="padding:7px 14px;font-size:13px;font-weight:700;width:auto;flex:0 0 auto;" onclick="rmRequestConnection()" data-en="Request connection">Request connection</button>
             </div>
           </div>
+        </div>
         </div>
 
 
@@ -5356,6 +5384,7 @@ const _i18n = {
   'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
+  'Preparing the PDF…':'Preparando el PDF…','Open or send the remisión':'Abrir o enviar la remisión',
   'Campo':'Campo','has no fields yet — add one first.':'todavía no tiene campos — agregá uno primero.',
   'Which field?':'¿De qué campo?','Pick the field each load came off.':'Elegí el campo de cada carga.',
   'Set them all':'Aplicar a todas','fields':'campos',
@@ -5390,7 +5419,7 @@ const _i18n = {
   'Loaded now':'Cargado ahora','Delivered total':'Total entregado','Loading since':'Cargando desde',
   'loads':'cargas','load':'carga','No field':'Sin lote','Manual':'Manual',
   'No loads in this truckload':'Sin cargas en esta carga de camión',
-  'No truckloads yet — record loads against a truck, then tap Empty Truck when it leaves.':'Aún no hay cargas de camión — registre cargas en un camión y luego toque Vaciar Camión cuando salga.',
+  'No truckloads':'Sin cargas',
   'Loading remisión status…':'Cargando estado de la remisión…','Draft — not sent':'Sin enviar',
   'Sending':'Enviando','Checking delivery':'Verificando entrega','Awaiting issuer review':'Esperando revisión del emisor',
   'Awaiting submission':'Esperando envío','Awaiting SIFEN response':'Esperando respuesta de SIFEN','Issued':'Emitida',
@@ -8033,7 +8062,7 @@ function renderTruckloads(){
   }
 
   if(!groups.length){
-    list.innerHTML = '<div class="tl-empty">'+esc(T('No truckloads yet — record loads against a truck, then tap Empty Truck when it leaves.'))+'</div>';
+    list.innerHTML = '<div class="tl-empty">'+esc(T('No truckloads'))+'</div>';
     return;
   }
 
@@ -8415,9 +8444,54 @@ function _tlRemisionLabel(state){
 function _tlApprovalUnavailable(){
   showToast(T('Sending is unavailable until Fenex enables draft approval.'),'warn');
 }
-function _tlOpenRemisionPdf(closingId){
-  var row=_tlRemisionRows[closingId];
-  if(row && row.pdf_url) window.open(row.pdf_url,'_blank','noopener,noreferrer');
+/**
+ * Open the signed KuDE.
+ *
+ * On a phone or tablet the file is downloaded and handed to the operating
+ * system's own share sheet, which is what "which app?" actually means: Android
+ * and iOS already know every reader installed, and they offer sending it on —
+ * to the driver over WhatsApp, to the buyer by mail — in the same list. A
+ * hard-coded reader would be a button that does nothing on a device without
+ * that app, and this document exists to be forwarded, not only looked at.
+ *
+ * Anything that fails falls back to the browser, which is what it did before.
+ */
+async function _tlOpenRemisionPdf(closingId){
+  var row = _tlRemisionRows[closingId];
+  if(!row || !row.pdf_url) return;
+
+  var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+  var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if(!native || !plugins.Filesystem || !plugins.Share){
+    window.open(row.pdf_url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  try{
+    showToast(T('Preparing the PDF…'), 'info');
+    var res = await fetch(row.pdf_url);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    var bytes = new Uint8Array(await res.arrayBuffer());
+
+    // Chunked, like the firmware staging does: String.fromCharCode on a whole
+    // multi-megabyte array blows the argument limit.
+    var bin = '', CH = 0x8000;
+    for(var i = 0; i < bytes.length; i += CH)
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+
+    // Named after the document, so it is recognisable in Files or WhatsApp
+    // rather than a row id nobody can read.
+    var label = _fxS(row.numero) || _fxS(row.cdc) || String(closingId).slice(0, 8);
+    var name  = 'Remision-' + label.replace(/[^0-9A-Za-z-]/g, '') + '.pdf';
+
+    await plugins.Filesystem.writeFile({ path:name, data:btoa(bin), directory:'CACHE', recursive:true });
+    var uri = await plugins.Filesystem.getUri({ path:name, directory:'CACHE' });
+    await plugins.Share.share({ title:name, url:uri.uri, dialogTitle:T('Open or send the remisión') });
+  }catch(e){
+    // A dismissed share sheet rejects too; that is not a failure worth a toast.
+    if(e && /cancel|abort|dismiss/i.test(String(e.message || e))) return;
+    window.open(row.pdf_url, '_blank', 'noopener,noreferrer');
+  }
 }
 function _tlPaintRemision(el,row){
   var state=_tlRemisionState(row);
@@ -8472,13 +8546,11 @@ function _tlPaintRemision(el,row){
   // A draft says nothing: the buttons already say what can be done with it,
   // and a line of instruction on every unsent row is noise. What is SAID here
   // is only ever status — queued, with the issuer, or failed.
+  // Only things that need doing or have gone wrong. The status pill already
+  // says where the document is; a sentence restating it under every card was
+  // read once and then never again.
   if(pendingSend) note=T('Queued for the issuer. Nothing is issued until they approve it in Fenex.');
-  // Once it is with the issuer they may correct it before submitting, so what
-  // this device holds is what was SENT, not necessarily what gets issued.
-  else if(['pending','ready','submitted'].indexOf(state) !== -1)
-    note=T('With the issuer. They may correct details in Fenex before submitting it.');
   else if(row && row.error_message) note=row.error_message;
-  else if(state==='pending') note=T('The issuer will review this request in Fenex.');
 
   // Shown only when it explains something — why the send button is dead.
   var short = missing
