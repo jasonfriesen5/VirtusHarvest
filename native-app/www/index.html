@@ -1546,11 +1546,10 @@ body.rm-on button.rm-only{display:inline-flex !important;}
 .fa-info{flex:1 1 auto;min-width:0;}
 .fa-kg{font-size:15px;font-weight:800;color:var(--text);}
 .fa-meta{font-size:11px;color:var(--text3);margin-top:2px;}
-.fa-row select{
-  flex:0 0 44%;padding:9px 11px;background:var(--surface2);
-  border:1.5px solid var(--border);border-radius:10px;
-  font-family:'Inter',sans-serif;font-size:14px;color:var(--text);
-  outline:none;appearance:none;-webkit-appearance:none;
+.fa-pick{
+  flex:0 0 44%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 12px;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:10px;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;
 }
 .fa-all{
   display:flex;align-items:center;gap:10px;padding:10px 2px 14px;
@@ -19244,6 +19243,10 @@ function fxPickSheetField(revertFarmId, revertFieldMap){
     if(!cur || !fields.some(function(z){ return z.id === cur; }))
       _fxSel.fieldByLoad[w.id] = fields[0].id;
   });
+  // Redraw the sheet behind: its Desde row was still naming a field on the
+  // farm just left, which read as "Tres Maria · 100H" — a pairing that does
+  // not exist.
+  fxRenderSheet();
 
   faRender();
   document.getElementById('fa-sheet-overlay').classList.add('open');
@@ -19255,10 +19258,16 @@ function faRender(){
   if(!body || !farm || !_fxLoad) return;
   var fields = getFields().filter(function(z){ return z.farmId === farm.id; });
 
-  function options(sel){
-    return fields.map(function(z){
-      return '<option value="'+_tlAttr(z.id)+'"'+(z.id===sel?' selected':'')+'>'+esc(z.name)+'</option>';
-    }).join('');
+  // The same rolling wheel as the farm, crop, truck and destination pickers.
+  // A native <select> was the odd one out, and on Android it opens a system
+  // dropdown that looks nothing like the rest of the app.
+  function pick(label, call){
+    return '<div class="fa-pick" onclick="' + call + '"><span>' + esc(label) +
+           '</span><span class="fx-pick-chev">›</span></div>';
+  }
+  function nameOf(id){
+    var z = fields.find(function(f){ return f.id === id; });
+    return z ? z.name : '—';
   }
 
   var html = '<div class="fx-note" style="margin-top:0;">' +
@@ -19266,8 +19275,7 @@ function faRender(){
 
   if(_fxLoad.loads.length > 1){
     html += '<div class="fa-all"><div class="fa-info">' + esc(T('Set them all')) + '</div>' +
-            '<select onchange="faSetAll(this.value)"><option value="">—</option>' +
-            options(null) + '</select></div>';
+            pick('—', 'faPickAll()') + '</div>';
   }
 
   _fxLoad.loads.forEach(function(w){
@@ -19276,10 +19284,42 @@ function faRender(){
               '<div class="fa-kg">' + esc(fmtWt(_tlWetKg(w), '')) + '</div>' +
               '<div class="fa-meta">' + esc([when, T(w.crop || ''), w.worker || ''].filter(Boolean).join(' · ')) + '</div>' +
             '</div>' +
-            '<select onchange="faSetOne(\'' + _tlAttr(w.id) + '\', this.value)">' +
-              options(_fxSel.fieldByLoad[w.id]) + '</select></div>';
+            pick(nameOf(_fxSel.fieldByLoad[w.id]), 'faPickOne(\'' + _tlAttr(w.id) + '\')') + '</div>';
   });
   body.innerHTML = html;
+}
+
+/** The fields on the farm currently chosen, in one place for both pickers. */
+function _faFields(){
+  var farm = _fxSelFarm();
+  return farm ? getFields().filter(function(z){ return z.farmId === farm.id; }) : [];
+}
+
+function faPickOne(loadId){
+  var fields = _faFields();
+  if(!fields.length) return;
+  var names = fields.map(function(z){ return z.name; });
+  var cur = fields.find(function(z){ return z.id === _fxSel.fieldByLoad[loadId]; });
+  _wheelOpen({
+    title: T('Campo'), items: names, selected: cur ? cur.name : null,
+    onConfirm: function(name){
+      var z = fields.find(function(x){ return x.name === name; });
+      if(z){ _fxSel.fieldByLoad[loadId] = z.id; faRender(); }
+    }
+  });
+}
+
+function faPickAll(){
+  var fields = _faFields();
+  if(!fields.length) return;
+  var names = fields.map(function(z){ return z.name; });
+  _wheelOpen({
+    title: T('Set them all'), items: names, selected: null,
+    onConfirm: function(name){
+      var z = fields.find(function(x){ return x.name === name; });
+      if(z) faSetAll(z.id);
+    }
+  });
 }
 
 function faSetAll(fieldId){
