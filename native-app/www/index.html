@@ -8096,6 +8096,14 @@ function renderTruckloads(){
       remisionRow+
     '</div>';
   }).join('');
+  // Paint from what is already known BEFORE going to the network. Changing the
+  // filter, or saving a draft, otherwise blanked every card back to the loading
+  // line for as long as the round trip took.
+  if(_tlRemisionsLoaded){
+    document.querySelectorAll('#tl-list .tl-remision[data-closing-id]').forEach(function(el){
+      _tlPaintRemision(el, _tlRemisionRows[el.getAttribute('data-closing-id')] || null);
+    });
+  }
   _tlLoadRemisiones();
 }
 
@@ -8592,6 +8600,11 @@ function _tlFindLoad(closingId){
     return t.closedBy && t.closedBy.id === closingId;
   }) || null;
 }
+// Set once the status has been fetched, so a later re-render can tell "not
+// asked yet" (show the loading line) from "asked, and this truckload has no
+// remisión" (show the buttons). Without it every redraw looks like a cold start.
+var _tlRemisionsLoaded = false;
+
 async function _tlLoadRemisiones(retried){
   var els=Array.prototype.slice.call(document.querySelectorAll('.tl-remision[data-closing-id]'));
   if(!els.length) return;
@@ -8606,6 +8619,7 @@ async function _tlLoadRemisiones(retried){
     if(res.error) throw res.error;
     _tlRemisionRows={};
     (res.data||[]).forEach(function(r){ _tlRemisionRows[r.closing_weighing_id]=r; });
+    _tlRemisionsLoaded = true;
     els.forEach(function(el){ _tlPaintRemision(el,_tlRemisionRows[el.getAttribute('data-closing-id')]||null); });
   }catch(e){
     // The first failure is rarely final. Opening this tab straight after launch
@@ -19959,9 +19973,13 @@ async function rmSyncRemisiones(){
   if(!remisionEnabled()) return;
   try{
     await fenexCall('remissions');
+    // _tlLoadRemisiones() repaints exactly the blocks that can have changed.
+    // renderTruckloads() used to run straight after it, rebuilding the entire
+    // list — which reset every card to "Loading remisión status…" and then
+    // fetched again to fill it back in. Twice a minute, on screen: buttons
+    // gone, spinner text, buttons back. A status poll cannot change which
+    // truckloads exist, so there is nothing for it to redraw.
     await _tlLoadRemisiones();
-    if(document.getElementById('tp-truckloads') &&
-       document.getElementById('tp-truckloads').classList.contains('active')) renderTruckloads();
   }catch(e){
     // Silent: this runs on a timer, and a backend that is not deployed yet must
     // not produce a toast every fifteen seconds.
