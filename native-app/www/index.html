@@ -6477,6 +6477,19 @@ function launchApp(){
   // Pull config from server in background
   if(isOnline) setTimeout(pullConfig, 1500);
   setTimeout(fxFlushOutbox, 2000);   // any drafts written before signing in
+  // Connected profiles live in Fenex, not in our own pull, and everything on
+  // the Remisión tab needs them: which issuer a draft goes out under, and
+  // therefore what the card counts as missing. They used to arrive only when
+  // somebody happened to open More › Remisión, so a fresh install showed no
+  // issuer until then.
+  if(isOnline && typeof remisionEnabled === 'function' && remisionEnabled()){
+    setTimeout(function(){
+      rmRefresh().then(function(){
+        // The cards were drawn without an issuer; redraw now there is one.
+        if(typeof renderTruckloads === 'function') renderTruckloads();
+      }).catch(function(){});
+    }, 2500);
+  }
 }
 
 function showTab(id){
@@ -8480,7 +8493,7 @@ function _tlFindLoad(closingId){
     return t.closedBy && t.closedBy.id === closingId;
   }) || null;
 }
-async function _tlLoadRemisiones(){
+async function _tlLoadRemisiones(retried){
   var els=Array.prototype.slice.call(document.querySelectorAll('.tl-remision[data-closing-id]'));
   if(!els.length) return;
   var sb=getSupabase();
@@ -8496,6 +8509,18 @@ async function _tlLoadRemisiones(){
     (res.data||[]).forEach(function(r){ _tlRemisionRows[r.closing_weighing_id]=r; });
     els.forEach(function(el){ _tlPaintRemision(el,_tlRemisionRows[el.getAttribute('data-closing-id')]||null); });
   }catch(e){
+    // The first failure is rarely final. Opening this tab straight after launch
+    // can beat the session restore, and an access token that died overnight
+    // refreshes on demand — both look like this. So confirm the session and try
+    // once more, leaving the loading line up meanwhile rather than reporting a
+    // failure the operator would have to clear by hand.
+    if(!retried){
+      var ok = false;
+      try{ var ses = await _requireSession(sb); ok = !!(ses && ses.ok); }catch(_e){}
+      if(ok) return _tlLoadRemisiones(true);
+      setTimeout(function(){ _tlLoadRemisiones(true); }, 2500);
+      return;
+    }
     els.forEach(function(el){ el.innerHTML='<div class="tl-remision-note">'+esc(T('Could not load remisión status.'))+'</div>'; });
   }
 }
