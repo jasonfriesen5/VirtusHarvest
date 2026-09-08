@@ -1382,8 +1382,11 @@ body{
    button can sit beside it instead of below, which is where the thumb already
    is when the cab display is mounted. align-items:stretch makes the button
    exactly as tall as track+labels, so the two read as one row. */
-.tlb-row{display:flex;align-items:stretch;gap:12px;}
-.tlb-gauge{flex:0 0 34%;max-width:34%;min-width:110px;display:flex;flex-direction:column;justify-content:center;}
+/* Pushed to the right-hand edge, gauge then button. The tablet sits in the cab
+   and the driver reaches it with their right hand, so the control they press
+   every load belongs on that side rather than across the screen from it. */
+.tlb-row{display:flex;align-items:stretch;gap:12px;justify-content:flex-end;}
+.tlb-gauge{flex:0 1 46%;max-width:46%;min-width:110px;display:flex;flex-direction:column;justify-content:center;}
 .tlb-labels{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text3);}
 .tlb-pct{font-weight:700;font-size:13px;}
 .tlb-pct.warn{color:#A85E00;}
