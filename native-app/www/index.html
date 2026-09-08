@@ -1561,7 +1561,9 @@ body.rm-on button.rm-only{display:inline-flex !important;}
   /* Fixed, not absolute: .tab-page is the scrolling element, so an absolute
      button would ride up the page with the list instead of staying put. It is
      inside the tab, which is display:none when inactive, so it cannot leak
-     onto another tab. */
+     onto another TAB — but a sub-panel (Device, Settings, Remisión…) covers the
+     page without deactivating it, and a fixed child keeps painting through.
+     Hence the body class below. */
   position:fixed;right:16px;
   bottom:calc(var(--tabbar-h) + max(env(safe-area-inset-bottom,0px), var(--safe-area-inset-bottom,0px)) + 16px);
   display:flex;flex-direction:column;align-items:flex-end;gap:10px;z-index:60;
@@ -1576,6 +1578,8 @@ body.rm-on button.rm-only{display:inline-flex !important;}
   transition:transform .22s cubic-bezier(.2,.8,.3,1);
 }
 .fab-wrap.open .fab-main{transform:rotate(45deg);}
+/* Anything covering the tab page hides the button with it. */
+body.panel-open .fab-wrap{display:none;}
 .fab-scrim{
   position:fixed;inset:0;background:rgba(0,0,0,.34);
   opacity:0;pointer-events:none;transition:opacity .18s ease;
@@ -6500,6 +6504,7 @@ function showTab(id){
   setTimeout(_wakeLockApply, 0);
   // Close any open overlays/panels first
   document.querySelectorAll('.sub-panel.open').forEach(function(p){ p.classList.remove('open'); });
+  if(typeof _syncPanelOpenClass === 'function') _syncPanelOpenClass();
   // Close detail panels
   var fdp = document.getElementById('field-detail-panel'); if(fdp) fdp.classList.remove('open');
   var tdp = document.getElementById('truck-detail-panel'); if(tdp) tdp.classList.remove('open');
@@ -6541,7 +6546,25 @@ function showTab(id){
   if(id==='destinations') renderDestinations();
 }
 
+/**
+ * Mirrors "is a sub-panel covering the tab page?" onto <body>.
+ *
+ * Computed from the DOM, never toggled by hand: several places close panels
+ * without going through closeMorePanel(), and a flag they forgot to clear
+ * would hide the add button for the rest of the session.
+ */
+function _syncPanelOpenClass(){
+  document.body.classList.toggle('panel-open', !!document.querySelector('.sub-panel.open'));
+}
+
 function openMorePanel(name){
+  // A sub-panel covers the tab page WITHOUT deactivating it, so anything the
+  // page renders position:fixed keeps painting on top. The Remisión tab's add
+  // button did exactly that: it appeared over the Devices panel, and with the
+  // fan open its full-screen scrim swallowed every tap on the panel beneath —
+  // which read as the tab being dead.
+  if(typeof fabClose === 'function') fabClose();
+
   // Close any other sub-panel that's already open, otherwise it stays stacked
   // on top (e.g. tapping Device while Settings is open left Settings covering
   // the Device panel).
@@ -6553,6 +6576,7 @@ function openMorePanel(name){
   var _panel = document.getElementById('sp-'+name);
   if(!_panel){ console.warn('openMorePanel: no panel #sp-'+name); return; }
   _panel.classList.add('open');
+  _syncPanelOpenClass();
   if(name==='devices' && typeof renderCarts==='function') renderCarts();
   if(name==='cloud') updateCloudPanel();
   if(name==='remision'){
@@ -6581,6 +6605,7 @@ function openMorePanel(name){
 function closeMorePanel(name){
   var _p = document.getElementById('sp-'+name);
   if(_p) _p.classList.remove('open');
+  _syncPanelOpenClass();
   if(name==='devices') syncTabBarActive();
 }
 
@@ -9224,6 +9249,7 @@ async function connectRealDevice(device){
 
       if(!_cartPairingInProgress){
         document.querySelectorAll('.sub-panel.open').forEach(function(p){ p.classList.remove('open'); });
+        if(typeof _syncPanelOpenClass === 'function') _syncPanelOpenClass();
         showTab('weigh');
       }
       document.getElementById('btn-log').disabled    = false;
@@ -9329,6 +9355,7 @@ async function connectRealDevice(device){
       // and save — don't close the panel or jump to the Weigh tab.
       if(!_cartPairingInProgress){
         document.querySelectorAll('.sub-panel.open').forEach(function(p){ p.classList.remove('open'); });
+        if(typeof _syncPanelOpenClass === 'function') _syncPanelOpenClass();
         showTab('weigh');
       }
       document.getElementById('btn-log').disabled    = false;
