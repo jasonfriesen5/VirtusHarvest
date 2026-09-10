@@ -10782,6 +10782,9 @@ function saveTxSheet(){
     var idx = logs.findIndex(function(l){ return l.id===editId; });
     if(idx===-1){ showToast('Transaction not found','error'); return; }
     var txMoistureVal = parseFloat(document.getElementById('tx-moisture').value)||0;
+    // Read before the assignment below overwrites it — the stamp depends on
+    // whether this edit moved the number, not on the sheet being saved.
+    var _prevWeight = Number(logs[idx].weight);
     logs[idx].weight = parseFloat(weightVal.toFixed(2));
     logs[idx].wetWeight = parseFloat(weightVal.toFixed(2));
     logs[idx].dryWeight = parseFloat(calcDryWeight(weightVal, txMoistureVal, logs[idx].crop).toFixed(2));
@@ -10797,11 +10800,18 @@ function saveTxSheet(){
     if(newDest) logs[idx].deliveredTo = newDest; // update delivery link too
     logs[idx].notes = document.getElementById('tx-notes').value.trim();
     var txOpSave = document.getElementById('tx-operator'); if(txOpSave && txOpSave.value) logs[idx].worker = txOpSave.value;
-    // Changed by hand after the fact, so the row says so. Set on any save from
-    // this sheet: the operator pressed Save on a load, and which field they
-    // touched does not change that the number is no longer purely the scale's.
-    logs[idx].edited = true;
-    logs[idx].editedAt = dt.toISOString();
+    // Only a changed WEIGHT earns the stamp. It exists to say the recorded
+    // amount is no longer purely what the scale reported — correcting which
+    // truck carried it, or which buyer it went to, fixes the attribution and
+    // leaves the measurement untouched, so it is not the same claim.
+    //
+    // Never cleared: a load whose weight was edited once stays edited, even if
+    // a later save only moves it to another destination.
+    var _weightChanged = Math.abs(_prevWeight - logs[idx].weight) > 0.005;
+    if(_weightChanged){
+      logs[idx].edited = true;
+      logs[idx].editedAt = dt.toISOString();
+    }
     logs[idx].timestamp = dt.toISOString();
     logs[idx].date = dt.toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'});
     logs[idx].time = dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
