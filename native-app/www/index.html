@@ -1856,13 +1856,13 @@ body.panel-open #tl-fab{display:none;}
   position:absolute;right:14px;bottom:16px;z-index:600;
   display:flex;flex-direction:column;align-items:flex-end;gap:12px;
 }
-.fmap-round-btn{
-  width:56px;height:56px;border-radius:28px;
-  display:flex;align-items:center;justify-content:center;
-  color:#2A7AE2;border:1px solid rgba(255,255,255,0.7);
-  /* Solid colour under the gradient: the WebView can
-     show the button for a frame before the gradient layer composites, and with
-     appearance:none that frame renders transparent. */
+/* The glossy shell the round buttons, the zoom pill and the map-type pill all
+   share, so the three read as one family against the satellite imagery.
+   Solid colour under the gradient: the WebView can show the control for a
+   frame before the gradient layer composites, and with appearance:none that
+   frame renders transparent. */
+.fmap-round-btn,.fmap-zoom,.fmap-mt-btn{
+  border:1px solid rgba(255,255,255,0.7);
   background-color:var(--surface);
   background-image:linear-gradient(180deg,#FFFFFF 0%,#F4F1E9 55%,#E9E4D8 100%);
   box-shadow:
@@ -1870,12 +1870,73 @@ body.panel-open #tl-fab{display:none;}
     inset 0 -2px 3px rgba(120,100,60,0.13),
     0 3px 10px rgba(0,0,0,0.26),
     0 1px 2px rgba(0,0,0,0.18);
+}
+
+/* ── Zoom ── */
+.fmap-zoom{
+  position:absolute;left:14px;bottom:16px;z-index:600;
+  width:56px;border-radius:18px;overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.fmap-zoom-btn{
+  height:52px;border:none;background:transparent;
+  font-family:'Inter',sans-serif;font-size:26px;font-weight:400;line-height:1;
+  color:var(--text2);cursor:pointer;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+/* A hairline between the halves, not a border on each — a seam either side
+   would read as two stacked buttons rather than one control. */
+.fmap-zoom-btn + .fmap-zoom-btn{border-top:1px solid rgba(120,100,60,0.18);}
+.fmap-zoom-btn:active{background:rgba(120,100,60,0.10);}
+.fmap-zoom-btn.disabled{opacity:0.38;pointer-events:none;}
+
+/* ── Map type ── */
+.fmap-maptype{position:absolute;left:14px;top:14px;z-index:600;}
+.fmap-mt-btn{
+  display:flex;align-items:center;gap:8px;
+  height:44px;padding:0 14px;border-radius:22px;
+  font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
+  color:var(--text);cursor:pointer;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+.fmap-mt-btn:active{filter:brightness(0.96);}
+.fmap-mt-btn svg{color:var(--text3);flex-shrink:0;}
+.fmap-mt-chev{color:var(--text3);font-size:11px;line-height:1;}
+.fmap-mt-menu{
+  position:absolute;left:0;top:52px;min-width:186px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:6px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.16);
+  opacity:0;pointer-events:none;transform:translateY(-6px) scale(.97);
+  transition:opacity .16s ease, transform .16s ease;
+}
+.fmap-maptype.open .fmap-mt-menu{opacity:1;pointer-events:auto;transform:none;}
+.fmap-mt-item{
+  display:block;width:100%;text-align:left;
+  padding:11px 12px;border:none;background:transparent;border-radius:9px;
+  font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
+  color:var(--text);cursor:pointer;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+.fmap-mt-item:active{background:var(--surface2);}
+/* The tick marks the live view. Reserving the gutter on every row keeps the
+   labels from shifting sideways as the choice moves. */
+.fmap-mt-item::before{content:'\2713';display:inline-block;width:18px;opacity:0;color:#2D9D5C;}
+.fmap-mt-item.active::before{opacity:1;}
+.fmap-mt-item.active{color:#1A6B3C;}
+
+.fmap-round-btn{
+  width:56px;height:56px;border-radius:28px;
+  display:flex;align-items:center;justify-content:center;
+  color:#2A7AE2;
   cursor:pointer;appearance:none;-webkit-appearance:none;
   -webkit-tap-highlight-color:transparent;
   transition:transform .09s ease, filter .09s ease;
 }
 .fmap-round-btn:active{transform:scale(0.94);filter:brightness(0.95);}
-[data-theme="dark"] .fmap-round-btn{
+[data-theme="dark"] .fmap-round-btn,
+[data-theme="dark"] .fmap-zoom,
+[data-theme="dark"] .fmap-mt-btn{
   background-color:#2E2E31;
   background-image:linear-gradient(180deg,#3C3C40 0%,#333337 55%,#2A2A2D 100%);
   border-color:rgba(255,255,255,0.14);
@@ -1883,8 +1944,10 @@ body.panel-open #tl-fab{display:none;}
     inset 0 1px 1px rgba(255,255,255,0.10),
     inset 0 -2px 3px rgba(0,0,0,0.30),
     0 3px 10px rgba(0,0,0,0.45);
-  color:#6FA8F0;
 }
+[data-theme="dark"] .fmap-round-btn{color:#6FA8F0;}
+[data-theme="dark"] .fmap-zoom-btn + .fmap-zoom-btn{border-top-color:rgba(255,255,255,0.12);}
+[data-theme="dark"] .fmap-mt-item.active{color:#7DD6A0;}
 
 /* The map's + matches the round button's gloss rather than the flat gold of
    the Remisión tab, so the two controls beside each other read as a set. */
@@ -3909,6 +3972,29 @@ function _openPasswordResetWhenReady(){
              element over and replaces its children, so anything nested inside
              is gone the moment the map initialises. These sit over it instead,
              stacked down the right edge the way every map app puts them. -->
+        <!-- Map type, top-left. A pill showing the current view; tapping it
+             opens the list. Same gloss as the round controls opposite. -->
+        <div class="fmap-maptype" id="fmap-maptype">
+          <button class="fmap-mt-btn" onclick="fmapMapTypeToggle()" aria-haspopup="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2.5 22,7.5 12,12.5 2,7.5"/><polyline points="2,12.5 12,17.5 22,12.5"/><polyline points="2,17 12,22 22,17"/></svg>
+            <span id="fmap-mt-label">Satellite</span>
+            <span class="fmap-mt-chev">&#9662;</span>
+          </button>
+          <div class="fmap-mt-menu" id="fmap-mt-menu">
+            <button class="fmap-mt-item" data-mt="hybrid"    onclick="fmapSetMapType('hybrid')"    data-en="Satellite">Satellite</button>
+            <button class="fmap-mt-item" data-mt="roadmap"   onclick="fmapSetMapType('roadmap')"   data-en="Map">Map</button>
+            <button class="fmap-mt-item" data-mt="terrain"   onclick="fmapSetMapType('terrain')"   data-en="Terrain">Terrain</button>
+            <button class="fmap-mt-item" data-mt="satellite" onclick="fmapSetMapType('satellite')" data-en="Satellite only">Satellite only</button>
+          </div>
+        </div>
+
+        <!-- Zoom, bottom-left, opposite the action column. One joined pill so
+             the two halves read as a single control. -->
+        <div class="fmap-zoom">
+          <button class="fmap-zoom-btn" onclick="fmapZoom(1)"  id="fmap-zoom-in"  title="Zoom in"  aria-label="Zoom in">+</button>
+          <button class="fmap-zoom-btn" onclick="fmapZoom(-1)" id="fmap-zoom-out" title="Zoom out" aria-label="Zoom out">&#8722;</button>
+        </div>
+
         <!-- Sibling of the control column, not a child of the +: inset:0 has to
              resolve against .fmap-body so the dim covers the map. Inside the
              fab wrap it resolved against the 56px button and painted a dark
@@ -4168,7 +4254,7 @@ function _openPasswordResetWhenReady(){
     </div>
     <div class="tx-sheet-footer">
       <button class="tx-btn-cancel" onclick="closeTxSheet()">Cancel</button>
-      <button class="tx-btn-save" onclick="saveTxSheet()">Save Transaction</button>
+      <button class="tx-btn-save" onclick="saveTxSheet()">Save</button>
     </div>
   </div>
 </div>
@@ -5647,6 +5733,8 @@ const _i18n = {
   // ── Field Map ──
   'All Fields':'Todos los Campos','Current Field':'Campo Actual',
   'Select a field first':'Selecciona un campo primero',
+  'Satellite':'Satélite','Map':'Mapa','Terrain':'Terreno',
+  'Satellite only':'Solo satélite','Zoom in':'Acercar','Zoom out':'Alejar',
   'No boundaries drawn yet':'Aún no hay límites dibujados',
   'No boundary drawn for this field':'Este campo no tiene límite dibujado',
   'Logged Entries':'Entradas Registradas','Draw Boundary':'Añadir Límite','My Location':'Mi Ubicación',
@@ -6633,12 +6721,17 @@ function applyLanguage() {
   // handled by the generic sweep.
   [['fmap-btn-locate','My Location'],
    ['fmap-btn-field','Current Field'],
-   ['fmap-btn-all','All Fields']].forEach(function(pair){
+   ['fmap-btn-all','All Fields'],
+   ['fmap-zoom-in','Zoom in'],
+   ['fmap-zoom-out','Zoom out']].forEach(function(pair){
     var el = document.getElementById(pair[0]);
     if(!el) return;
     el.title = T(pair[1]);
     el.setAttribute('aria-label', T(pair[1]));
   });
+  // The pill's label is a live value, not static markup, so the generic
+  // data-en sweep never sees it.
+  if (typeof _fmapPaintMapType === 'function') _fmapPaintMapType(fmapSavedMapType());
   var fmEmpty = document.getElementById('fmap-empty');
   if (fmEmpty) fmEmpty.textContent = T('No GPS data found for any field or transaction yet.');
   var fmPts = document.getElementById('fmap-draw-pts');
@@ -6736,8 +6829,7 @@ function applyLanguage() {
   // ── Various save/cancel buttons ──
   document.querySelectorAll('.tx-btn-save').forEach(function(btn) {
     var txt = btn.textContent.trim();
-    var map = {'Save Transaction':'Save Transaction','Guardar Transacción':'Save Transaction',
-      'Save Truck':'Save Truck','Guardar Cami��n':'Save Truck',
+    var map = {'Save Truck':'Save Truck','Guardar Cami��n':'Save Truck',
       'Save Field':'Save Field','Guardar Campo':'Save Field',
       'Save Settings':'Save Settings','Guardar Configuración':'Save Settings',
       'Save':'Save','Guardar':'Save','Add':'Add','Agregar':'Add'};
@@ -14246,23 +14338,19 @@ function _fmapInit(){
   _fmap = new google.maps.Map(container, {
     zoom: 4,
     center: {lat: 39.5, lng: -98.35}, // centre of USA
-    mapTypeId: 'hybrid',               // satellite + labels
-    mapTypeControl: true,
-    mapTypeControlOptions: {
-      style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-      mapTypeIds: ['roadmap','satellite','hybrid','terrain']
-    },
+    mapTypeId: fmapSavedMapType(),     // hybrid (satellite + labels) by default
+    // Google's own dropdown and zoom box are replaced by app-styled controls
+    // in .fmap-body — see .fmap-maptype and .fmap-zoom. Restyling Google's
+    // markup means depending on its private class names, which change without
+    // notice; driving setMapTypeId/setZoom ourselves does not.
+    mapTypeControl: false,
     fullscreenControl: false,
     streetViewControl: false,
     // The tilt/rotate puck the Maps JS API added defaults to RIGHT_BOTTOM,
     // directly under the app's own locate button and +. Nothing here needs a
     // tilted camera to draw a field boundary, so it goes rather than moves.
     cameraControl: false,
-    zoomControl: true,
-    // Google puts zoom bottom-right by default, which is where the app's own
-    // controls now live. Moved rather than hidden — pinch is not the only way
-    // people zoom, and a gloved hand in a cab is worse at it.
-    zoomControlOptions: { position: google.maps.ControlPosition.LEFT_BOTTOM },
+    zoomControl: false,
     // Hide business/POI names (e.g. "Ward Landscape & Excavating") cluttering
     // the satellite view — keep road/place labels since hybrid mode needs them.
     styles: [
@@ -14272,6 +14360,14 @@ function _fmapInit(){
   });
 
   _fmapInfoWindow = new google.maps.InfoWindow();
+
+  _fmapPaintMapType(fmapSavedMapType());
+  _fmapPaintZoom();
+  // Pinch, double-tap and fitBounds all change zoom without going through the
+  // buttons, so the enabled state follows the map rather than the taps.
+  _fmap.addListener('zoom_changed', _fmapPaintZoom);
+  // Tapping the map is how you dismiss an open menu everywhere else.
+  _fmap.addListener('click', function(){ fmapMapTypeClose(); });
 
   // Click on map to add draw points
   _fmap.addListener('click', function(e){
@@ -14451,12 +14547,69 @@ var _fmapBoundaries  = true;  // flag only — Google Maps draws direct
 var _fimpFieldId = null;
 var _fimpRings   = null;   // [[{lat,lng}, …], …] ready to save
 
+// ── Map type and zoom ──
+// The operator's choice sticks: a farm that works in plain Map view should not
+// be handed satellite again every time the panel opens.
+var LS_FMAP_TYPE = 'vh_fmap_type';
+var FMAP_TYPE_LABELS = {
+  hybrid:'Satellite', roadmap:'Map', terrain:'Terrain', satellite:'Satellite only'
+};
+
+function fmapSavedMapType(){
+  var t = localStorage.getItem(LS_FMAP_TYPE);
+  return FMAP_TYPE_LABELS[t] ? t : 'hybrid';
+}
+
+function fmapMapTypeToggle(){
+  var el = document.getElementById('fmap-maptype');
+  if(el) el.classList.toggle('open');
+}
+function fmapMapTypeClose(){
+  var el = document.getElementById('fmap-maptype');
+  if(el) el.classList.remove('open');
+}
+
+function fmapSetMapType(id){
+  if(!FMAP_TYPE_LABELS[id]) id = 'hybrid';
+  localStorage.setItem(LS_FMAP_TYPE, id);
+  if(_fmap) _fmap.setMapTypeId(id);
+  _fmapPaintMapType(id);
+  fmapMapTypeClose();
+}
+
+/** Reflect the live view in the pill's label and the menu's tick. */
+function _fmapPaintMapType(id){
+  var lbl = document.getElementById('fmap-mt-label');
+  if(lbl) lbl.textContent = T(FMAP_TYPE_LABELS[id] || 'Satellite');
+  document.querySelectorAll('#fmap-mt-menu .fmap-mt-item').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-mt') === id);
+  });
+}
+
+function fmapZoom(delta){
+  if(!_fmap) return;
+  _fmap.setZoom((_fmap.getZoom() || 4) + delta);
+  _fmapPaintZoom();
+}
+
+/** Grey out whichever half has nothing left to do at the imagery's limits. */
+function _fmapPaintZoom(){
+  if(!_fmap) return;
+  var z = _fmap.getZoom();
+  var min = 2, max = 21;
+  var zin = document.getElementById('fmap-zoom-in');
+  var zout = document.getElementById('fmap-zoom-out');
+  if(zin)  zin.classList.toggle('disabled',  z >= max);
+  if(zout) zout.classList.toggle('disabled', z <= min);
+}
+
 function fmapClosePopup(){
   if(_fmapInfoWindow) _fmapInfoWindow.close();
 }
 function fmapFabToggle(){
   var el = document.getElementById('fmap-fab');
   if(!el) return;
+  fmapMapTypeClose();   // two open menus over one map is one too many
   var open = el.classList.toggle('open');
   var sc = document.getElementById('fmap-scrim');
   if(sc) sc.classList.toggle('open', open);
