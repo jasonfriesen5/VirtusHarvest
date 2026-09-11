@@ -411,7 +411,7 @@ body{
 .btn-scan,.btn-logout,.btn-small-green,.btn-conn,.fdp-tx-edit,.fdp-tx-del,.crop-modal-btn,.confirm-btn-cancel,
 .mode-btn:not(.active),
 .log-gps-btn,.fdp-tx-gps,.field-picker-btn,.tlb-empty-btn,.seg-btn.active,
-.fmap-locate-btn,.fmap-draw-btn,.fdp-edit-btn,
+.fmap-locate-btn,.fmap-draw-btn,.fdp-edit-btn,.fdp-crop-btn,
 .cal-calc-btn,.btn-sel,.btn-edit-sm,.tx-btn-cancel,.etb-cancel,
 #dev-ota-btn,#tdp-edit-btn,#profile-auth-btn,#lp-skip-btn{
   background:linear-gradient(180deg,rgba(255,255,255,0.92),rgba(252,248,241,0.80))!important;
@@ -2147,20 +2147,16 @@ body.panel-open #tl-fab{display:none;}
 .fdp-edit-btn:active{background:rgba(196,125,14,0.2);}
 .fdp-crop-btn{
   padding:7px 14px;margin-right:8px;
-  background:rgba(45,157,92,0.10);
-  border:1px solid rgba(45,157,92,0.28);
   border-radius:20px;
   font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
-  color:#1A6B3C;cursor:pointer;flex-shrink:0;
+  cursor:pointer;flex-shrink:0;
   max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  transition:background 0.12s;
+  transition:filter 0.12s;
 }
-.fdp-crop-btn:active{background:rgba(45,157,92,0.20);}
-/* No crop yet is a prompt, not a value — say so rather than showing a dash. */
-.fdp-crop-btn.unset{
-  background:var(--surface2);border-color:var(--border2);color:var(--text3);
-}
-[data-theme="dark"] .fdp-crop-btn{color:#7DD6A0;}
+.fdp-crop-btn:active{filter:brightness(0.96);}
+/* No crop yet is a prompt, not a value. The glassy rule sets colour with
+   !important, so matching it is the only way to mute this state. */
+.fdp-crop-btn.unset{color:var(--text3)!important;font-weight:600;}
 
 /* kg/ha display in field detail stats */
 .fdp-kgha{
@@ -2598,7 +2594,7 @@ body.panel-open #tl-fab{display:none;}
 [data-theme="dark"] .btn-scan,[data-theme="dark"] .btn-logout,[data-theme="dark"] .btn-small-green,[data-theme="dark"] .crop-modal-btn,[data-theme="dark"] .confirm-btn-cancel,
 [data-theme="dark"] .btn-conn,[data-theme="dark"] .fdp-tx-edit,[data-theme="dark"] .fdp-tx-del,[data-theme="dark"] .mode-btn:not(.active),
 [data-theme="dark"] .log-gps-btn,[data-theme="dark"] .fdp-tx-gps,[data-theme="dark"] .field-picker-btn,[data-theme="dark"] .tlb-empty-btn,[data-theme="dark"] .seg-btn.active,
-[data-theme="dark"] .fmap-locate-btn,[data-theme="dark"] .fmap-draw-btn,[data-theme="dark"] .fdp-edit-btn,
+[data-theme="dark"] .fmap-locate-btn,[data-theme="dark"] .fmap-draw-btn,[data-theme="dark"] .fdp-edit-btn,[data-theme="dark"] .fdp-crop-btn,
 [data-theme="dark"] .cal-calc-btn,[data-theme="dark"] .btn-sel,[data-theme="dark"] .btn-edit-sm,[data-theme="dark"] .tx-btn-cancel,[data-theme="dark"] .etb-cancel,
 [data-theme="dark"] #dev-ota-btn,[data-theme="dark"] #tdp-edit-btn,[data-theme="dark"] #profile-auth-btn,[data-theme="dark"] #lp-skip-btn{
   background:linear-gradient(180deg,rgba(58,58,61,0.92),rgba(48,48,51,0.85))!important;
