@@ -1857,7 +1857,7 @@ body.panel-open #tl-fab{display:none;}
   display:flex;flex-direction:column;align-items:flex-end;gap:12px;
 }
 .fmap-round-btn{
-  width:48px;height:48px;border-radius:24px;
+  width:56px;height:56px;border-radius:28px;
   display:flex;align-items:center;justify-content:center;
   color:#2A7AE2;border:1px solid rgba(255,255,255,0.7);
   /* Solid colour under the gradient: the WebView can
@@ -1914,11 +1914,16 @@ body.panel-open #tl-fab{display:none;}
    Remisión list; switching to relative without resetting those turns them into
    OFFSETS, which lifts the + up and left out of the column and on top of the
    locate button. */
-.fmap-fab{position:relative;right:auto;bottom:auto;}
+.fab-wrap.fmap-fab{position:relative;right:auto;bottom:auto;}
 .fmap-fab .fab-items{position:absolute;right:0;bottom:62px;}
-/* The fan sits inside the map, so its scrim covers the map only — not the
-   panel header or the tab bar, which stay usable. */
-.fmap-fab .fab-scrim{position:absolute;}
+/* The fan's scrim covers the map only — not the panel header or the tab bar,
+   which stay usable. */
+.fmap-scrim{
+  position:absolute;inset:0;z-index:590;
+  background:rgba(0,0,0,.34);
+  opacity:0;pointer-events:none;transition:opacity .18s ease;
+}
+.fmap-scrim.open{opacity:1;pointer-events:auto;}
 .fimp-drop{
   border:2px dashed var(--border2);border-radius:14px;
   padding:26px 18px;text-align:center;cursor:pointer;
@@ -1936,10 +1941,52 @@ body.panel-open #tl-fab{display:none;}
 /* Leaflet popup override */
 .leaflet-popup-content-wrapper{border-radius:12px!important;box-shadow:0 4px 20px rgba(0,0,0,0.15)!important;}
 .leaflet-popup-content{margin:12px 16px!important;font-family:'Inter',sans-serif!important;}
-.fmap-popup-title{font-family:'Inter',sans-serif;font-size:15px;font-weight:700;color:#1A1A1A;margin-bottom:6px;}
-.fmap-popup-row{font-size:12px;color:#555;margin-bottom:3px;}
-.fmap-popup-row strong{color:#1A1A1A;}
-.fmap-popup-gps{font-size:11px;color:#2A7AE2;margin-top:6px;cursor:pointer;text-decoration:underline;}
+/* Google's InfoWindow ships its own white bubble, its own close button and a
+   fixed padding box. Left alone it reads as a stray piece of Maps chrome
+   sitting on top of the app. These rules strip the bubble back to a surface
+   the app's own cards can be drawn on — including in dark mode, where the
+   stock white was the giveaway. */
+.gm-style .gm-style-iw-c{
+  padding:0 !important;
+  border-radius:16px;
+  background:var(--surface);
+  box-shadow:0 8px 28px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.16);
+  max-width:none !important;
+}
+.gm-style .gm-style-iw-d{
+  overflow:hidden !important;
+  padding:0 !important;
+  max-width:none !important;
+}
+/* The pointer below the bubble is its own element and keeps its own colour. */
+.gm-style .gm-style-iw-tc::after{background:var(--surface);}
+/* Google's header strip and close ✕ — replaced by the card's own. */
+.gm-style .gm-style-iw-chr{display:none !important;}
+
+.fmap-popup{
+  font-family:'Inter',sans-serif;
+  padding:14px 16px 13px;
+  min-width:196px;
+}
+.fmap-popup-head{display:flex;align-items:flex-start;gap:10px;}
+.fmap-popup-title{
+  font-size:15px;font-weight:800;color:var(--text);
+  line-height:1.25;flex:1;
+}
+.fmap-popup-sub{
+  font-size:12px;font-weight:600;color:var(--text3);
+  margin-top:3px;
+}
+.fmap-popup-x{
+  flex-shrink:0;width:26px;height:26px;border-radius:13px;border:none;
+  background:var(--surface2);color:var(--text3);
+  font-size:16px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+.fmap-popup-x:active{filter:brightness(0.94);}
+.fmap-popup-acts{display:flex;gap:8px;margin-top:12px;}
+.fmap-popup-acts button{flex:1;}
 
 
 /* ══ BOUNDARY DRAWING ══ */
@@ -2674,8 +2721,16 @@ body.panel-open #tl-fab{display:none;}
     left:max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px));
     right:max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px));
   }
-  .fab-wrap{
+  /* Not the map's + — that one is a flex child of .fmap-ctrls, and nudging it
+     for the safe area pulls it 16px off the locate button beneath it. The
+     column itself already carries the inset. */
+  .fab-wrap:not(.fmap-fab){
     right:calc(16px + max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px)));
+  }
+  /* The map column carries the inset for both of its buttons at once, which is
+     what keeps them on one centre line. */
+  .fmap-ctrls{
+    right:calc(14px + max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px)));
   }
   .remision-pdf-header{
     padding-left:calc(12px + max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px)));
@@ -3854,12 +3909,16 @@ function _openPasswordResetWhenReady(){
              element over and replaces its children, so anything nested inside
              is gone the moment the map initialises. These sit over it instead,
              stacked down the right edge the way every map app puts them. -->
+        <!-- Sibling of the control column, not a child of the +: inset:0 has to
+             resolve against .fmap-body so the dim covers the map. Inside the
+             fab wrap it resolved against the 56px button and painted a dark
+             square behind the + itself. -->
+        <div class="fmap-scrim" id="fmap-scrim" onclick="fmapFabClose()"></div>
         <div class="fmap-ctrls">
             <!-- Same fan-out as the Remisión tab's add button. Draw and Upload
                  both create a boundary; they belong behind one control rather
                  than as two more bars competing with the map. -->
             <div class="fab-wrap fmap-fab" id="fmap-fab">
-              <div class="fab-scrim" onclick="fmapFabClose()"></div>
               <div class="fab-items">
                 <button class="fab-item" onclick="fmapFabAction('upload')" data-en="Upload file">Upload file</button>
                 <button class="fab-item" onclick="fmapFabAction('draw')" data-en="Draw boundary">Draw boundary</button>
@@ -3871,7 +3930,7 @@ function _openPasswordResetWhenReady(){
                  locate button on top the two Draw/Upload items landed on it.
                  Bottom-most also matches where every map app puts locate. -->
           <button class="fmap-round-btn" id="fmap-btn-locate" onclick="fmapLocateMe()" title="My location" aria-label="My location">
-              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="3.5"/><line x1="12" y1="20.5" x2="12" y2="23"/><line x1="1" y1="12" x2="3.5" y2="12"/><line x1="20.5" y1="12" x2="23" y2="12"/></svg>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="3.5"/><line x1="12" y1="20.5" x2="12" y2="23"/><line x1="1" y1="12" x2="3.5" y2="12"/><line x1="20.5" y1="12" x2="23" y2="12"/></svg>
             </button>
         </div>
       </div>
@@ -14335,13 +14394,21 @@ var _fmapBoundaries  = true;  // flag only — Google Maps draws direct
 var _fimpFieldId = null;
 var _fimpRings   = null;   // [[{lat,lng}, …], …] ready to save
 
+function fmapClosePopup(){
+  if(_fmapInfoWindow) _fmapInfoWindow.close();
+}
 function fmapFabToggle(){
   var el = document.getElementById('fmap-fab');
-  if(el) el.classList.toggle('open');
+  if(!el) return;
+  var open = el.classList.toggle('open');
+  var sc = document.getElementById('fmap-scrim');
+  if(sc) sc.classList.toggle('open', open);
 }
 function fmapFabClose(){
   var el = document.getElementById('fmap-fab');
   if(el) el.classList.remove('open');
+  var sc = document.getElementById('fmap-scrim');
+  if(sc) sc.classList.remove('open');
 }
 function fmapFabAction(what){
   fmapFabClose();
@@ -14790,11 +14857,24 @@ function _fmapRenderBoundaries(){
         var label = (farm ? farm.name+' › ' : '') + field.name + (list.length>1 ? ' ('+(bIdx+1)+'/'+list.length+')' : '');
         (function(fid, bid, lbl){
           poly.addListener('click', function(e){
+            // The field's own size, which is the thing you actually want to
+            // read off a boundary you just tapped.
+            var sub = (field.area > 0)
+              ? Number(field.area).toFixed(1)+' '+(field.areaUnit || getUnits().area || 'ha')
+              : '';
             _fmapInfoWindow.setContent(
-              '<div class="fmap-popup-title">'+esc(lbl)+'</div>'+
-              '<div class="fmap-popup-row" style="display:flex;gap:8px;margin-top:6px;">'+
-                '<span class="fmap-popup-gps" onclick="fmapEditBoundary(\''+fid+'\',\''+bid+'\')">Edit</span>'+
-                '<span class="fmap-popup-gps" style="color:#B03020;" onclick="fmapDeleteBoundaryConfirm(\''+fid+'\',\''+bid+'\')">Delete</span>'+
+              '<div class="fmap-popup">'+
+                '<div class="fmap-popup-head">'+
+                  '<div>'+
+                    '<div class="fmap-popup-title">'+esc(lbl)+'</div>'+
+                    (sub ? '<div class="fmap-popup-sub">'+esc(sub)+'</div>' : '')+
+                  '</div>'+
+                  '<button class="fmap-popup-x" onclick="fmapClosePopup()" aria-label="'+esc(T('Close'))+'">✕</button>'+
+                '</div>'+
+                '<div class="fmap-popup-acts">'+
+                  '<button class="btn-gold btn-gold-sm" onclick="fmapEditBoundary(\''+fid+'\',\''+bid+'\')">'+esc(T('Edit'))+'</button>'+
+                  '<button class="btn-small-red" onclick="fmapDeleteBoundaryConfirm(\''+fid+'\',\''+bid+'\')">'+esc(T('Delete'))+'</button>'+
+                '</div>'+
               '</div>'
             );
             _fmapInfoWindow.setPosition(e.latLng);
