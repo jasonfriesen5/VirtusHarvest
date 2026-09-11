@@ -4747,14 +4747,13 @@ function _openPasswordResetWhenReady(){
         </select>
       </div>
       <div class="tx-field-group">
-        <label><span id="fes-crop-lbl">Primary Crop</span> <span id="fes-crop-opt" style="font-size:11px;color:var(--text3);">(optional)</span></label>
+        <label><span id="fes-crop-lbl">Crop this season</span> <span id="fes-crop-opt" style="font-size:11px;color:var(--text3);">(optional)</span></label>
         <select id="fes-crop" style="width:100%;padding:11px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;font-size:15px;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
           <option value="" id="fes-crop-none">No crop assigned</option>
         </select>
-      </div>
-      <div class="tx-field-group">
-        <label id="fes-notes-lbl">Notes</label>
-        <textarea id="fes-notes" rows="2" style="resize:none;"></textarea>
+        <!-- "Primary Crop" told you nothing about what to put in the box. This
+             says what to pick and why it is worth picking. -->
+        <div id="fes-crop-hint" style="font-size:11px;color:var(--text3);margin-top:5px;">What is planted here now — loads from this field will use it</div>
       </div>
     </div>
     <div class="tx-sheet-footer">
@@ -5874,6 +5873,9 @@ const _i18n = {
   'Address':'Dirección','Department':'Departamento','District':'Distrito','City':'Ciudad',
   'Yes':'Sí','No':'No','updated':'actualizado',
   'Save Field':'Guardar Campo','Primary Crop':'Cultivo Principal',
+  'Crop this season':'Cultivo de esta temporada',
+  'What is planted here now — loads from this field will use it':
+    'Lo que está sembrado aquí ahora — las cargas de este campo lo usarán',
   'No crop assigned':'Sin cultivo asignado','optional':'opcional',
   'Auto-calculated from drawn boundary':'Calculado automáticamente del límite dibujado',
   'See Location':'Ver Ubicación',
@@ -6396,7 +6398,7 @@ function applyLanguage() {
     'season-name-input':'',
     'new-crop-input':'',
     'new-field-modal-input':'',
-    'fes-name':T('Field name...'),'fes-notes':'',
+    'fes-name':T('Field name...'),
   };
   Object.keys(phMap).forEach(function(id) {
     var el = document.getElementById(id); if (el) el.placeholder = phMap[id];
@@ -6807,9 +6809,9 @@ function applyLanguage() {
   var fesT = document.getElementById('fes-title');      if (fesT) fesT.textContent = T('Edit Field');
   var fesN = document.getElementById('fes-name-lbl');   if (fesN) fesN.textContent = T('Field Name');
   var fesA = document.getElementById('fes-area-lbl');   if (fesA) fesA.textContent = T('Area');
-  var fesC = document.getElementById('fes-crop-lbl');   if (fesC) fesC.textContent = T('Primary Crop');
+  var fesC = document.getElementById('fes-crop-lbl');   if (fesC) fesC.textContent = T('Crop this season');
+  var fesCh= document.getElementById('fes-crop-hint');  if (fesCh) fesCh.textContent = T('What is planted here now — loads from this field will use it');
   var fesO = document.getElementById('fes-crop-opt');   if (fesO) fesO.textContent = '('+T('optional')+')';
-  var fesNo= document.getElementById('fes-notes-lbl');  if (fesNo) fesNo.textContent = T('Notes');
   var fesCn= document.getElementById('fes-crop-none');  if (fesCn) fesCn.textContent = T('No crop assigned');
 
   // State-driven labels: these aren't static text, so the data-en pass can't
@@ -15425,7 +15427,6 @@ function openFieldEditSheet(fieldId){
   // Show note if area came from boundary
   var areaNote = document.getElementById('fes-area-note');
   if(areaNote) areaNote.textContent = boundaryArea ? T('Auto-calculated from drawn boundary') : '';
-  document.getElementById('fes-notes').value     = field.notes||'';
 
   // Default area unit to settings preference
   var unit = getUnits().area || 'ha';
@@ -15510,7 +15511,6 @@ function saveFieldEditSheet(){
   var name     = document.getElementById('fes-name').value.trim();
   var area     = parseFloat(document.getElementById('fes-area').value)||0;
   var areaUnit = document.getElementById('fes-area-unit').value;
-  var notes    = document.getElementById('fes-notes').value.trim();
 
   if(!name){ showToast('Field name required','error'); return; }
 
@@ -15522,7 +15522,6 @@ function saveFieldEditSheet(){
   fields[idx].name     = name;
   fields[idx].area     = area;
   fields[idx].areaUnit = areaUnit;
-  fields[idx].notes    = notes;
   if(fesCropEl) fields[idx].crop = fesCropEl.value || null;
   saveFields(fields);
 
@@ -16471,7 +16470,7 @@ var _INFO_TEXTS = {
   language: {title:'Language',
     msg:'The display language for the app interface. Your data is unaffected.'},
   fieldcrop: {title:'Field Crop',
-    msg:'Each field can have a crop assigned to it, which is what the app expects loads from that field to be.\n\nTo change it: go to the Fields tab, tap the field, tap Edit, and set Primary Crop. Saving there updates the field itself, so future loads stop asking.\n\nChanging the crop on a load only affects that load — it does not change what the field is assigned to.'},
+    msg:'Each field can have a crop assigned to it, which is what the app expects loads from that field to be.\n\nTo change it: go to the Fields tab, tap the field, tap Edit, and set "Crop this season". Saving there updates the field itself, so future loads stop asking.\n\nChanging the crop on a load only affects that load — it does not change what the field is assigned to.'},
   droptrigger: {title:'Drop Trigger',
     msg:'How much weight must come off the cart before an unload is auto-detected. The averaged weight drop must hold for 4 seconds before unloading starts, which filters bumps and brief scale movement. Set to 0 to turn auto-unload off.'},
   idletimeout: {title:'Scale Power Saving',
@@ -23323,37 +23322,12 @@ function handleCropChange(sel){
   }
   var newCrop = sel.value;
 
-  // ── Check season crop mismatch ──
-  if(currentSeason && newCrop){
-    var seasonLogs = getSeasonLogs().filter(function(l){ return !l.isTruckEmpty && l.crop && l.crop !== newCrop; });
-    if(seasonLogs.length > 0){
-      var prevCrop = seasonLogs[0].crop;
-      showConfirm({
-        
-        title: T('Change Crop?'),
-        msg: T('This season already has')+' '+seasonLogs.length+' '+T('load')+(seasonLogs.length!==1?'s':'')+' '+T('recorded as')+' '+T(prevCrop)+'. '+_ask(T('Switch to')+' '+T(newCrop)),
-        okLabel: T('Yes, switch'),
-        okColor: '#D4930A'
-      }).then(function(ok){
-        if(!ok){
-          // Revert to previous crop
-          sel.value = prevCrop;
-          var cropSub=document.getElementById('ir-crop-sub');
-          if(cropSub) cropSub.textContent=prevCrop;
-          updateCropDisplay();
-          _saveSelection();
-        } else {
-          var cropSub=document.getElementById('ir-crop-sub');
-          if(cropSub) cropSub.textContent=newCrop;
-          updateCropDisplay();
-          _saveSelection();
-          // Check field crop mismatch too
-          _checkFieldCropMismatch(newCrop);
-        }
-      });
-      return;
-    }
-  }
+  // No season-wide crop check. A season is a block of time, not a single crop:
+  // chia and maize in the same Fall is ordinary farming, and asking "this season
+  // already has 40 loads of maize, switch to chia?" on every change trained
+  // people to tap through the dialog without reading it. The field-level checks
+  // below still run, because two crops off ONE field is the case worth a
+  // question.
 
   var cropSub=document.getElementById('ir-crop-sub');
   if(cropSub) cropSub.textContent=newCrop;
