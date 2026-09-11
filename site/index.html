@@ -17741,14 +17741,20 @@ async function pullConfig(){
     if(trucksRes.data && (trucksRes.data.length || authoritative)){
       // The pull takes the cloud row wholesale for anything the cloud knows
       // about, so a purely local setting is erased by the next sync unless it is
-      // carried across here. alertBeforeFullKg has no column yet; until it does,
-      // this is what keeps it from vanishing the first time the device syncs.
+      // carried across here. The alarm now has a column, but a truck last
+      // written by an older build still has NULL there — falling back to the
+      // local value keeps that device's alarm alive until something uploads it.
+      // The cost is that clearing an alarm on one device does not silence it on
+      // another until that truck is saved again; a stale alarm is the safer way
+      // to be wrong than one that goes quiet without being asked.
       var _localTrucksById = {};
       getTrucks().forEach(function(t){ _localTrucksById[t.id] = t; });
       var trucks = _reconcileConfig('ht_trucks', trucksRes.data.map(function(r){
         var keep = _localTrucksById[r.id] || {};
         return {id:r.id, name:r.name, plate:r.plate||'', driver:r.driver||'', capacity:r.capacity||0, makeModel:r.make_model||'', notes:r.notes||'',
-                alertAtKg:         keep.alertAtKg,
+                alertAtKg:         (r.alert_at_kg === null || r.alert_at_kg === undefined)
+                                     ? keep.alertAtKg
+                                     : Number(r.alert_at_kg),
                 alertBeforeFullKg: keep.alertBeforeFullKg || 0,
                 vehicleType:r.vehicle_type||'', driverCi:r.driver_ci||'', driverAddress:r.driver_address||'',
                 transportistaName:r.transportista_name||'', transportistaRuc:r.transportista_ruc||'', transportistaAddress:r.transportista_address||''};
@@ -18141,6 +18147,12 @@ function syncTruck(truck){
   // Marking here means the row survives that merge and syncQueue() uploads it.
   if(!currentWorker||!currentWorker.id){ _markDirty('ht_trucks', truck.id); return; }
   var row = {id:truck.id, user_id:currentWorker.id, name:truck.name, plate:truck.plate||null, driver:truck.driver||null, capacity:truck.capacity||null, make_model:_truckMakeModel(truck)||null, notes:truck.notes||null};
+  // Read through _truckAlertAt so a truck still carrying the old
+  // alertBeforeFullKg uploads the weight it actually sounds at, not the margin.
+  // NULL rather than 0 for "no alarm", so the column reads the same as a row
+  // written before it existed.
+  var _alertAt = _truckAlertAt(truck);
+  row.alert_at_kg = _alertAt > 0 ? _alertAt : null;
   // The SIFEN columns are added only when the feature is on. An upsert writes
   // exactly the keys it is given, so leaving them out means a non-Paraguayan
   // install can never null out data the web console put there.
