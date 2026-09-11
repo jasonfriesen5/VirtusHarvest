@@ -3927,10 +3927,22 @@ function _openPasswordResetWhenReady(){
             </div>
 
             <!-- Below the +, not above it: the fan opens upward, and with the
-                 locate button on top the two Draw/Upload items landed on it.
-                 Bottom-most also matches where every map app puts locate. -->
+                 locate button on top the two Draw/Upload items landed on it. -->
           <button class="fmap-round-btn" id="fmap-btn-locate" onclick="fmapLocateMe()" title="My location" aria-label="My location">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="3.5"/><line x1="12" y1="20.5" x2="12" y2="23"/><line x1="1" y1="12" x2="3.5" y2="12"/><line x1="20.5" y1="12" x2="23" y2="12"/></svg>
+            </button>
+
+            <!-- The two filters that used to be a toolbar across the top. As
+                 round buttons they cost no map. Field above All, All at the
+                 bottom, which is where the thumb lands. -->
+            <button class="fmap-round-btn" id="fmap-btn-field" onclick="fmapFitField()" title="Current Field" aria-label="Current Field">
+              <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="3,5 21,3 22,19 2,21"/><line x1="3.2" y1="9" x2="21.6" y2="7.4"/><line x1="3.4" y1="13" x2="21.8" y2="11.4"/><line x1="3.6" y1="17" x2="21.9" y2="15.4"/></svg>
+            </button>
+
+            <!-- Corner brackets: the standard "fit everything in view" mark,
+                 and nothing like the field polygon above it at a glance. -->
+            <button class="fmap-round-btn" id="fmap-btn-all" onclick="fmapFitAll()" title="All Fields" aria-label="All Fields">
+              <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,8.5 3,3 8.5,3"/><polyline points="15.5,3 21,3 21,8.5"/><polyline points="21,15.5 21,21 15.5,21"/><polyline points="8.5,21 3,21 3,15.5"/></svg>
             </button>
         </div>
       </div>
@@ -5634,6 +5646,9 @@ const _i18n = {
 
   // ── Field Map ──
   'All Fields':'Todos los Campos','Current Field':'Campo Actual',
+  'Select a field first':'Selecciona un campo primero',
+  'No boundaries drawn yet':'Aún no hay límites dibujados',
+  'No boundary drawn for this field':'Este campo no tiene límite dibujado',
   'Logged Entries':'Entradas Registradas','Draw Boundary':'Añadir Límite','My Location':'Mi Ubicación',
   'Undo':'Deshacer','Cancel':'Cancelar',
   'No GPS data found for any field or transaction yet.':'No se encontraron datos GPS para ningún campo o transacción.',
@@ -6616,8 +6631,14 @@ function applyLanguage() {
   // aria-label — setting textContent would throw the icon away and leave the
   // words in a 48px circle. Draw and Upload are .fab-items carrying data-en,
   // handled by the generic sweep.
-  var fmLoc = document.getElementById('fmap-btn-locate');
-  if (fmLoc){ fmLoc.title = T('My Location'); fmLoc.setAttribute('aria-label', T('My Location')); }
+  [['fmap-btn-locate','My Location'],
+   ['fmap-btn-field','Current Field'],
+   ['fmap-btn-all','All Fields']].forEach(function(pair){
+    var el = document.getElementById(pair[0]);
+    if(!el) return;
+    el.title = T(pair[1]);
+    el.setAttribute('aria-label', T(pair[1]));
+  });
   var fmEmpty = document.getElementById('fmap-empty');
   if (fmEmpty) fmEmpty.textContent = T('No GPS data found for any field or transaction yet.');
   var fmPts = document.getElementById('fmap-draw-pts');
@@ -14280,6 +14301,42 @@ function fmapLocateMe(){
   } else {
     showToast('GPS not available','warn');
   }
+}
+
+/**
+ * Collect every drawn boundary point for the given fields into one bounds.
+ * Boundaries with fewer than three points are part-drawn and would drag the
+ * camera to a stray tap, so they are skipped.
+ */
+function _fmapBoundsFor(fields){
+  var boundaries = getBoundaries();
+  var b = new google.maps.LatLngBounds();
+  var any = false;
+  fields.forEach(function(field){
+    (boundaries[field.id] || []).forEach(function(bd){
+      if(!bd.points || bd.points.length < 3) return;
+      bd.points.forEach(function(p){ b.extend({lat:p.lat, lng:p.lng}); });
+      any = true;
+    });
+  });
+  return any ? b : null;
+}
+
+/** Pull back until every field boundary in the account is on screen. */
+function fmapFitAll(){
+  if(!_fmap || !window.google) return;
+  var b = _fmapBoundsFor(getFields());
+  if(!b){ showToast(T('No boundaries drawn yet'),'warn'); return; }
+  _fmap.fitBounds(b, 60);
+}
+
+/** Centre on the field the operator is currently weighing into. */
+function fmapFitField(){
+  if(!_fmap || !window.google) return;
+  if(!selectedField){ showToast(T('Select a field first'),'warn'); return; }
+  var b = _fmapBoundsFor([selectedField]);
+  if(!b){ showToast(T('No boundary drawn for this field'),'warn'); return; }
+  _fmap.fitBounds(b, 80);
 }
 
 function _fmapClearMarkers(){
