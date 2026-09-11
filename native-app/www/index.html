@@ -5651,7 +5651,7 @@ const _i18n = {
   'Update available: v':'Actualización disponible: v',
   'Grain Carts':'Tolvas','Add Cart':'Agregar Tolva',
   'Add Grain Cart':'Agregar Tolva','Edit Grain Cart':'Editar Tolva',
-  'Cart Name':'Nombre de la Tolva','Scale':'Báscula',
+  'Cart Name':'Nombre de la Tolva','Save Cart':'Guardar Tolva','Scale':'Báscula',
   'Scan & Connect Scale':'Buscar y Conectar Báscula',
   'No scale connected yet — tap Scan.':'Aún no hay báscula conectada — toca Buscar.',
   'Searching for a Virtus module…':'Buscando un módulo Virtus…',
@@ -6823,7 +6823,8 @@ function applyLanguage() {
   // ── Various save/cancel buttons ──
   document.querySelectorAll('.tx-btn-save').forEach(function(btn) {
     var txt = btn.textContent.trim();
-    var map = {'Save Truck':'Save Truck','Guardar Cami��n':'Save Truck',
+    var map = {'Save Truck':'Save Truck',
+      'Save Cart':'Save Cart','Guardar Tolva':'Save Cart','Guardar Cami��n':'Save Truck',
       'Save Field':'Save Field','Guardar Campo':'Save Field',
       'Save Settings':'Save Settings','Guardar Configuración':'Save Settings',
       'Save':'Save','Guardar':'Save','Add':'Add','Agregar':'Add'};
