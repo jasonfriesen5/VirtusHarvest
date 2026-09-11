@@ -1693,8 +1693,10 @@ body.rm-on button.rm-only{display:inline-flex !important;}
   transition:transform .22s cubic-bezier(.2,.8,.3,1);
 }
 .fab-wrap.open .fab-main{transform:rotate(45deg);}
-/* Anything covering the tab page hides the button with it. */
-body.panel-open .fab-wrap{display:none;}
+/* Anything covering the tab page hides the truckload button with it. Scoped to
+   that one button: the field map is itself a sub-panel, so a blanket rule would
+   hide the map's own controls exactly when they are needed. */
+body.panel-open #tl-fab{display:none;}
 .fab-scrim{
   position:fixed;inset:0;background:rgba(0,0,0,.34);
   opacity:0;pointer-events:none;transition:opacity .18s ease;
@@ -1882,6 +1884,80 @@ body.panel-open .fab-wrap{display:none;}
   display:flex;align-items:center;gap:5px;
   appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
 }
+/* The map fills .fmap-body below the toolbar; the controls are positioned
+   against that, not against the map element Google owns. */
+.fmap-body{position:relative;}
+.fmap-ctrls{
+  position:absolute;right:14px;bottom:16px;z-index:600;
+  display:flex;flex-direction:column;align-items:flex-end;gap:12px;
+}
+.fmap-round-btn{
+  width:48px;height:48px;border-radius:24px;
+  display:flex;align-items:center;justify-content:center;
+  color:#2A7AE2;border:1px solid rgba(255,255,255,0.7);
+  /* Solid colour under the gradient, as .fmap-filter-btn does: the WebView can
+     show the button for a frame before the gradient layer composites, and with
+     appearance:none that frame renders transparent. */
+  background-color:var(--surface);
+  background-image:linear-gradient(180deg,#FFFFFF 0%,#F4F1E9 55%,#E9E4D8 100%);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255,255,255,0.95),
+    inset 0 -2px 3px rgba(120,100,60,0.13),
+    0 3px 10px rgba(0,0,0,0.26),
+    0 1px 2px rgba(0,0,0,0.18);
+  cursor:pointer;appearance:none;-webkit-appearance:none;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .09s ease, filter .09s ease;
+}
+.fmap-round-btn:active{transform:scale(0.94);filter:brightness(0.95);}
+[data-theme="dark"] .fmap-round-btn{
+  background-color:#2E2E31;
+  background-image:linear-gradient(180deg,#3C3C40 0%,#333337 55%,#2A2A2D 100%);
+  border-color:rgba(255,255,255,0.14);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.10),
+    inset 0 -2px 3px rgba(0,0,0,0.30),
+    0 3px 10px rgba(0,0,0,0.45);
+  color:#6FA8F0;
+}
+
+/* The map's + matches the round button's gloss rather than the flat gold of
+   the Remisión tab, so the two controls beside each other read as a set. */
+.fmap-fab .fab-main{
+  background-color:#F5C842;
+  background-image:linear-gradient(180deg,#F9D667 0%,#F5C842 55%,#EDB828 100%);
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255,255,255,0.80),
+    inset 0 -2px 3px rgba(140,95,5,0.22),
+    0 3px 10px rgba(0,0,0,0.28),
+    0 1px 2px rgba(150,105,20,0.22);
+}
+.fmap-fab .fab-item{
+  background-image:linear-gradient(180deg,#FFFFFF 0%,#F4F1E9 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.9),
+    0 3px 10px rgba(0,0,0,0.24);
+}
+[data-theme="dark"] .fmap-fab .fab-item{
+  background-image:linear-gradient(180deg,#3C3C40 0%,#2F2F33 100%);
+}
+/* The fan is absolutely placed so its hidden items do not push the locate
+   button up the screen while closed. */
+.fmap-fab{position:relative;}
+.fmap-fab .fab-items{position:absolute;right:0;bottom:62px;}
+/* The fan sits inside the map, so its scrim covers the map only — not the
+   panel header or the tab bar, which stay usable. */
+.fmap-fab .fab-scrim{position:absolute;}
+.fimp-drop{
+  border:2px dashed var(--border2);border-radius:14px;
+  padding:26px 18px;text-align:center;cursor:pointer;
+  background:var(--surface2);transition:border-color .15s, background .15s;
+}
+.fimp-drop.over{border-color:#2D9D5C;background:rgba(45,157,92,0.08);}
+.fimp-drop-icon{font-size:26px;color:var(--text3);line-height:1;}
+.fimp-drop-title{margin-top:8px;font-size:14px;font-weight:700;color:var(--text);}
+.fimp-drop-sub{margin-top:4px;font-size:12px;color:var(--text3);}
 .fmap-empty{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   text-align:center;color:var(--text3);font-size:13px;
@@ -3027,7 +3103,6 @@ function _openPasswordResetWhenReady(){
           <div class="tlb-gauge">
             <div class="tlb-track"><div class="tlb-fill" id="tlb-fill" style="width:0%"></div></div>
             <div class="tlb-labels">
-              <span id="tlb-capacity-lbl">Capacity not set</span>
               <span class="tlb-pct" id="tlb-pct">—</span>
             </div>
           </div>
@@ -3790,8 +3865,6 @@ function _openPasswordResetWhenReady(){
         <div class="fmap-toolbar">
           <button class="fmap-filter-btn active" id="fmap-btn-all" onclick="fmapFilter('all',this)">All Fields</button>
           <button class="fmap-filter-btn" id="fmap-btn-farm" onclick="fmapFilter('farm',this)">Current Field</button>
-          <button class="fmap-locate-btn" id="fmap-btn-locate" onclick="fmapLocateMe()">My Location</button>
-          <button class="fmap-locate-btn" id="fmap-btn-draw" style="border-color:rgba(45,157,92,0.35);background:rgba(45,157,92,0.08);color:#1A6B3C;" onclick="fmapStartDraw()">Draw Boundary</button>
         </div>
         <!-- Draw mode bar (shown when drawing) -->
         <div class="fmap-draw-bar" id="fmap-draw-bar">
@@ -3809,6 +3882,28 @@ function _openPasswordResetWhenReady(){
         </div>
         <div id="fmap-container">
           <div class="fmap-empty" id="fmap-empty" style="display:none;">No GPS data found for any field or transaction yet.</div>
+        </div>
+
+        <!-- OUTSIDE #fmap-container on purpose: google.maps.Map() takes that
+             element over and replaces its children, so anything nested inside
+             is gone the moment the map initialises. These sit over it instead,
+             stacked down the right edge the way every map app puts them. -->
+        <div class="fmap-ctrls">
+          <button class="fmap-round-btn" id="fmap-btn-locate" onclick="fmapLocateMe()" title="My location" aria-label="My location">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.5"/><line x1="12" y1="1.5" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22.5" y2="12"/></svg>
+            </button>
+
+            <!-- Same fan-out as the Remisión tab's add button. Draw and Upload
+                 both create a boundary; they belong behind one control rather
+                 than as two more bars competing with the map. -->
+            <div class="fab-wrap fmap-fab" id="fmap-fab">
+              <div class="fab-scrim" onclick="fmapFabClose()"></div>
+              <div class="fab-items">
+                <button class="fab-item" onclick="fmapFabAction('upload')" data-en="Upload file">Upload file</button>
+                <button class="fab-item" onclick="fmapFabAction('draw')" data-en="Draw boundary">Draw boundary</button>
+              </div>
+              <button class="fab-main" onclick="fmapFabToggle()" aria-label="Add">+</button>
+            </div>
         </div>
       </div>
     </div>
@@ -4245,6 +4340,39 @@ function _openPasswordResetWhenReady(){
     <div class="tx-sheet-footer">
       <button class="tx-btn-cancel" onclick="ntlClose()" data-en="Cancel">Cancel</button>
       <button class="tx-btn-save" onclick="ntlCreate()" id="ntl-create-btn" data-en="Create truckload">Create truckload</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BOUNDARY IMPORT SHEET ══
+     A drop zone and a file picker for the same thing. Drag works on the tablet
+     with a file manager beside the app and on the web console; the picker is
+     what a phone actually uses. -->
+<div class="tx-sheet-overlay" id="fimp-overlay" style="z-index:930;" onclick="if(event.target===this)fimpClose()">
+  <div class="tx-sheet">
+    <div class="tx-sheet-header">
+      <div class="tx-sheet-title" data-en="Upload boundary">Upload boundary</div>
+      <button class="tx-sheet-close" onclick="fimpClose()">×</button>
+    </div>
+    <div class="tx-sheet-body">
+      <div class="tx-field-group">
+        <label data-en="Field">Field</label>
+        <div class="fx-pick" onclick="fimpPickField()"><span id="fimp-field-name">—</span><span class="fx-pick-chev">›</span></div>
+      </div>
+
+      <div class="fimp-drop" id="fimp-drop" onclick="document.getElementById('fimp-file').click()">
+        <div class="fimp-drop-icon">⬆</div>
+        <div class="fimp-drop-title" data-en="Drop a file here, or tap to choose">Drop a file here, or tap to choose</div>
+        <div class="fimp-drop-sub" data-en="KML, KMZ, GeoJSON, or a zipped shapefile">KML, KMZ, GeoJSON, or a zipped shapefile</div>
+      </div>
+      <input type="file" id="fimp-file" style="display:none;" accept=".kml,.kmz,.json,.geojson,.zip,.shp"
+             onchange="fimpHandleFiles(this.files)">
+
+      <div id="fimp-result" class="fx-issues"></div>
+    </div>
+    <div class="tx-sheet-footer">
+      <button class="tx-btn-cancel" onclick="fimpClose()" data-en="Cancel">Cancel</button>
+      <button class="tx-btn-save" onclick="fimpApply()" id="fimp-apply" data-en="Save boundary" disabled>Save boundary</button>
     </div>
   </div>
 </div>
@@ -5120,6 +5248,64 @@ document.addEventListener('DOMContentLoaded', _initNativeBle);
 // Skipped entirely during a firmware flash (the scale is in its bootloader under
 // a different identity) and when BLE permission has never been granted, since
 // initialize() cannot raise its dialog while the app is still booting.
+// Reconnecting after the link drops on its own.
+//
+// A cab loses Bluetooth for ordinary reasons — the cart pulls away, the scale
+// sleeps, the tablet's radio stutters — and until now every one of those ended
+// with a toast and a scale that stayed disconnected until somebody noticed and
+// tapped Connect. Weighing quietly stops working in the meantime.
+//
+// Backs off rather than hammering: a radio that is out of range is not helped
+// by being asked ten times a second, and each attempt costs battery on both
+// ends. Gives up after roughly two minutes, by which point the cart has
+// genuinely gone.
+var _bleRetryTimer    = null;
+var _bleRetryAttempts = 0;
+var _bleUserQuit      = false;   // a disconnect the operator asked for
+
+var _BLE_RETRY_MS = [3000, 5000, 10000, 20000, 30000, 30000];
+
+function cancelScaleAutoReconnect(){
+  if(_bleRetryTimer){ clearTimeout(_bleRetryTimer); _bleRetryTimer = null; }
+  _bleRetryAttempts = 0;
+}
+
+function scheduleScaleAutoReconnect(){
+  if(_bleUserQuit) return;                         // they asked for this
+  if(btDevice) return;                             // already back
+  if(_otaInProgress || _otaJustCompleted) return;  // the OTA path owns this
+  if(_bleRetryTimer) return;                       // one loop only
+  if(_bleRetryAttempts >= _BLE_RETRY_MS.length){
+    logEvent('scale', 'Auto-reconnect: giving up after '+_bleRetryAttempts+' tries');
+    _bleRetryAttempts = 0;
+    return;
+  }
+  var wait = _BLE_RETRY_MS[_bleRetryAttempts++];
+  _bleRetryTimer = setTimeout(async function(){
+    _bleRetryTimer = null;
+    if(btDevice || _bleUserQuit) return;
+    logEvent('scale', 'Auto-reconnect: attempt '+_bleRetryAttempts);
+    try{ await _autoConnectSavedScale(); }catch(e){}
+    if(btDevice){
+      _bleRetryAttempts = 0;
+      // 'warn' is the only toast type that actually surfaces (see showToast),
+      // and coming back from a dropped link is worth telling the operator.
+      showToast(T('Scale reconnected'),'warn');
+    } else {
+      scheduleScaleAutoReconnect();
+    }
+  }, wait);
+}
+
+// Coming back to the app is the most likely moment for it to work again — the
+// operator has usually just driven back into range.
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && !btDevice && !_bleUserQuit){
+    cancelScaleAutoReconnect();
+    scheduleScaleAutoReconnect();
+  }
+});
+
 async function _autoConnectSavedScale(){
   try{
     if(!_isCapacitor || !_capBLE) return;
@@ -5569,6 +5755,27 @@ const _i18n = {
   // ── Transaction sheet ──
   'Add Transaction':'Agregar Transacción','Weight *':'Peso *','Crop *':'Cultivo *',
   'Add load':'Añadir carga','Manual':'Manual','Edited':'Editada',
+  'is already full':'ya está lleno',
+  'Waiting for scale to restart…':'Esperando que la balanza reinicie…',
+  'Update installed — please reconnect scale':'Actualización instalada — reconectá la balanza',
+  'Firmware installed — please reconnect scale':'Firmware instalado — reconectá la balanza',
+  'Firmware installed — scale reconnected':'Firmware instalado — balanza reconectada',
+  'Update installed — restarting…':'Actualización instalada — reiniciando…',
+  'Reconnecting…':'Reconectando…','Scale reconnected':'Balanza reconectada',
+  'Upload boundary':'Subir límite','Upload file':'Subir archivo','Draw boundary':'Dibujar límite',
+  'Drop a file here, or tap to choose':'Arrastrá un archivo acá, o tocá para elegir',
+  'KML, KMZ, GeoJSON, or a zipped shapefile':'KML, KMZ, GeoJSON o un shapefile comprimido',
+  'Save boundary':'Guardar límite','boundary imported':'límite importado',
+  'Add a field first':'Agregá un campo primero','Reading':'Leyendo',
+  'boundary':'límite','boundaries':'límites','points':'puntos',
+  'No boundary found in that file.':'No se encontró ningún límite en ese archivo.',
+  'Unsupported file type.':'Tipo de archivo no admitido.',
+  'That file could not be read.':'No se pudo leer ese archivo.',
+  'That is not a shapefile.':'Ese archivo no es un shapefile.',
+  'That zip could not be read.':'No se pudo leer ese zip.',
+  'This device cannot open zip files.':'Este dispositivo no puede abrir archivos zip.',
+  'Those coordinates are not latitude and longitude — the file may use a projected system.':
+    'Esas coordenadas no son latitud y longitud — el archivo puede usar un sistema proyectado.',
   'Field':'Campo','Dry Weight':'Peso Seco','Optional notes...':'Notas opcionales...',
   'Save Transaction':'Guardar Transacción','Tap to select':'Toca para seleccionar',
 
@@ -6083,8 +6290,6 @@ function applyLanguage() {
     if (txt === 'Unload' || txt === 'Descargar') btn.textContent = T('Unload');
     if (txt === 'Save' || txt === 'Guardar') btn.textContent = T('Save');
   });
-  var tlbCap = document.getElementById('tlb-capacity-lbl');
-  if (tlbCap && (tlbCap.textContent === 'Capacity not set' || tlbCap.textContent === 'Capacidad no configurada')) tlbCap.textContent = T('Capacity not set');
   var tlbEmpty = document.getElementById('tlb-empty-btn');
   if (tlbEmpty) tlbEmpty.innerHTML = T('Empty Truck');
 
@@ -7471,20 +7676,36 @@ function _scheduleOtaReconnect(delayMs){
   if(!_otaReconnectDevice && btDevice) _otaReconnectDevice = btDevice;
   _otaReconnectAttempts = 0;
   var sub = document.getElementById('dev-update-sub');
-  if(sub){ sub.textContent='Waiting for scale to restart…'; sub.style.color='var(--text3)'; }
+  if(sub){ sub.textContent=T('Waiting for scale to restart…'); sub.style.color='var(--text3)'; }
   setTimeout(_tryOtaReconnect, delayMs || 6000);
 }
 async function _tryOtaReconnect(){
   var sub = document.getElementById('dev-update-sub');
   _otaReconnectAttempts++;
   if(_otaReconnectAttempts > 8){
-    if(sub){ sub.textContent='Update installed — please reconnect scale'; sub.style.color='var(--text3)'; }
     _otaJustCompleted = false;
     _otaReconnectDevice = null;
-    showToast('Firmware installed — please reconnect scale','success');
+    // One last try by SAVED ID rather than by the device reference held from
+    // before the update. A scale that has rebooted can present a new connection
+    // handle, which makes the old reference dead while a fresh connect to the
+    // same id succeeds — so this is a different attempt, not a ninth identical
+    // one. Only if that also fails is the operator asked to do it by hand.
+    if(sub){ sub.textContent=T('Reconnecting…'); sub.style.color='var(--text3)'; }
+    _autoConnectSavedScale().then(function(){
+      if(btDevice){
+        if(sub){ sub.textContent=T('Scale reconnected'); sub.style.color='#2D9D5C'; }
+        showToast(T('Firmware installed — scale reconnected'),'success');
+        return;
+      }
+      if(sub){ sub.textContent=T('Update installed — please reconnect scale'); sub.style.color='var(--text3)'; }
+      showToast(T('Firmware installed — please reconnect scale'),'success');
+    }).catch(function(){
+      if(sub){ sub.textContent=T('Update installed — please reconnect scale'); sub.style.color='var(--text3)'; }
+      showToast(T('Firmware installed — please reconnect scale'),'success');
+    });
     return;
   }
-  if(sub){ sub.textContent='Reconnecting… ('+_otaReconnectAttempts+'/8)'; }
+  if(sub){ sub.textContent=T('Reconnecting…')+' ('+_otaReconnectAttempts+'/8)'; }
   try{
     var dev = _otaReconnectDevice;
     if(!dev){ throw new Error('no device ref'); }
@@ -7681,7 +7902,7 @@ function handleOtaResponse(msg){
         _otaInProgress = false;
         _otaJustCompleted = true;
         var sub2 = document.getElementById('dev-update-sub');
-        if(sub2){ sub2.textContent='✓ Update installed — restarting…'; sub2.style.color='#2D9D5C'; }
+        if(sub2){ sub2.textContent='✓ '+T('Update installed — restarting…'); sub2.style.color='#2D9D5C'; }
         showToast('Firmware installed — reconnecting…','success');
         _scheduleOtaReconnect(2000);
       }
@@ -7690,7 +7911,7 @@ function handleOtaResponse(msg){
     _otaInProgress = false;
     _otaJustCompleted = true;
     if(_otaVerifyTimeout){ clearTimeout(_otaVerifyTimeout); _otaVerifyTimeout = null; }
-    if(sub){ sub.textContent='✓ Update installed — restarting…'; sub.style.color='#2D9D5C'; }
+    if(sub){ sub.textContent='✓ '+T('Update installed — restarting…'); sub.style.color='#2D9D5C'; }
     if(btn) btn.style.display='none';
     showToast('Firmware updated! Scale restarting…','success');
     // Scale will disconnect and restart — try to auto-reconnect after boot (~5s)
@@ -9862,6 +10083,9 @@ function handleDeviceBtn(devId){
 
 // ── Connect to a real BLE device ──
 async function connectRealDevice(device){
+  // Connecting again — whatever the last disconnect was, they want it back on.
+  _bleUserQuit = false;
+  cancelScaleAutoReconnect();
   showToast('Connecting…', '');
 
   // ── Native path ──
@@ -9889,7 +10113,10 @@ async function connectRealDevice(device){
           }
           _scheduleOtaReconnect(6000);
         } else {
-          showToast('Scale disconnected','error');
+          showToast(T('Scale disconnected'),'warn');
+          // Not an error the operator has to act on any more — the app goes and
+          // gets it back.
+          scheduleScaleAutoReconnect();
         }
       });
 
@@ -9973,12 +10200,13 @@ async function connectRealDevice(device){
           _otaJustCompleted = true;
           if(_otaVerifyTimeout){ clearTimeout(_otaVerifyTimeout); _otaVerifyTimeout = null; }
           var sub = document.getElementById('dev-update-sub');
-          if(sub){ sub.textContent='✓ Update installed — restarting…'; sub.style.color='#2D9D5C'; }
+          if(sub){ sub.textContent='✓ '+T('Update installed — restarting…'); sub.style.color='#2D9D5C'; }
           showToast('Firmware updated! Scale restarting…','success');
         }
         _scheduleOtaReconnect(6000);
       } else {
-        showToast('Scale disconnected', 'error');
+        showToast(T('Scale disconnected'),'warn');
+        scheduleScaleAutoReconnect();
       }
     });
 
@@ -10057,6 +10285,9 @@ async function connectRealDevice(device){
 
 // ── Disconnect ──
 function disconnectBt(){
+  // Asked for, so the retry loop stays out of it until the next connect.
+  _bleUserQuit = true;
+  cancelScaleAutoReconnect();
   _stopBackgroundScaleMonitor();
   if(btDevice && btDevice.isCapDevice && _isCapacitor && _capBLE){
     try{ _capBLE.stopNotifications(btDevice.id, BLE_UART_SERVICE, BLE_UART_TX).catch(function(){}); }catch(e){}
@@ -12631,7 +12862,6 @@ function _tlbRender(loaded, capacity){
 
   var fill = document.getElementById('tlb-fill');
   var pct = document.getElementById('tlb-pct');
-  var capLbl = document.getElementById('tlb-capacity-lbl');
 
   if(capacity > 0){
     var pctVal = (loaded/capacity)*100; // no cap — can exceed 100%
@@ -12650,7 +12880,6 @@ function _tlbRender(loaded, capacity){
     var remaining = capacity - loaded;
     var over = remaining < 0;
     pct.textContent = over ? '+' + fmtWt(-remaining,'') : fmtWt(remaining,'');
-    capLbl.textContent = fmtWt(loaded,'')+' / '+fmtWt(capacity,'');
     fill.className = 'tlb-fill';
     pct.className = 'tlb-pct';
     // Red once there is nothing left to load, amber on the approach.
@@ -12663,7 +12892,6 @@ function _tlbRender(loaded, capacity){
     pct.className = 'tlb-pct';
     pct.style.color = 'var(--text3)';
     pct.style.fontWeight = '500';
-    capLbl.textContent = fmtWt(loaded,'')+' loaded';
   }
 }
 
@@ -13980,6 +14208,10 @@ function _fmapInit(){
     fullscreenControl: false,
     streetViewControl: false,
     zoomControl: true,
+    // Google puts zoom bottom-right by default, which is where the app's own
+    // controls now live. Moved rather than hidden — pinch is not the only way
+    // people zoom, and a gloved hand in a cab is worse at it.
+    zoomControlOptions: { position: google.maps.ControlPosition.LEFT_BOTTOM },
     // Hide business/POI names (e.g. "Ward Landscape & Excavating") cluttering
     // the satellite view — keep road/place labels since hybrid mode needs them.
     styles: [
@@ -14130,6 +14362,315 @@ var _drawPoints      = [];
 var _drawPreviewPoly = null;  // google.maps.Polygon preview
 var _drawPolylines   = [];    // google.maps.Polyline lines
 var _fmapBoundaries  = true;  // flag only — Google Maps draws direct
+
+// ══ BOUNDARY IMPORT ══════════════════════════════════════════════════════
+//
+// Agronomy software exports field boundaries as KML, as GeoJSON, or as a
+// shapefile — and a shapefile is really three or four files, so it arrives
+// zipped. All four are read here without a library: KML and GeoJSON are text,
+// .shp is a documented binary format, and the zip is unpacked with the
+// platform's own DecompressionStream rather than shipping an inflate.
+
+var _fimpFieldId = null;
+var _fimpRings   = null;   // [[{lat,lng}, …], …] ready to save
+
+function fmapFabToggle(){
+  var el = document.getElementById('fmap-fab');
+  if(el) el.classList.toggle('open');
+}
+function fmapFabClose(){
+  var el = document.getElementById('fmap-fab');
+  if(el) el.classList.remove('open');
+}
+function fmapFabAction(what){
+  fmapFabClose();
+  if(what === 'draw')   { fmapStartDraw(); return; }
+  if(what === 'upload') { fimpOpen(); return; }
+}
+
+/**
+ * Drag-and-drop, bound once the first time the sheet opens.
+ *
+ * dragover must be cancelled or the browser navigates to the file instead of
+ * handing it over — the classic way a drop zone silently "does nothing".
+ */
+function _fimpBindDrop(){
+  var zone = document.getElementById('fimp-drop');
+  if(!zone || zone._dropBound) return;
+  zone._dropBound = true;
+  ['dragenter','dragover'].forEach(function(ev){
+    zone.addEventListener(ev, function(e){
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.add('over');
+    });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    zone.addEventListener(ev, function(e){
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.remove('over');
+    });
+  });
+  zone.addEventListener('drop', function(e){
+    var dt = e.dataTransfer;
+    if(dt && dt.files && dt.files.length) fimpHandleFiles(dt.files);
+  });
+}
+
+function fimpOpen(){
+  _fimpBindDrop();
+  if(!getFields().length){ showToast(T('Add a field first'),'warn'); return; }
+  _fimpRings = null;
+  // Whatever the map is focused on is the likely target.
+  var pre = (selectedField && selectedField.id) || getFields()[0].id;
+  _fimpFieldId = pre;
+  _fimpPaintField();
+  document.getElementById('fimp-result').innerHTML = '';
+  document.getElementById('fimp-apply').disabled = true;
+  document.getElementById('fimp-file').value = '';
+  document.getElementById('fimp-overlay').classList.add('open');
+}
+function fimpClose(){
+  document.getElementById('fimp-overlay').classList.remove('open');
+  _fimpRings = null;
+}
+function _fimpPaintField(){
+  var f = getFields().find(function(z){ return z.id === _fimpFieldId; });
+  var farm = f && getFarms().find(function(x){ return x.id === f.farmId; });
+  var el = document.getElementById('fimp-field-name');
+  if(el) el.textContent = f ? ((farm ? farm.name + ' › ' : '') + f.name) : '—';
+}
+function fimpPickField(){
+  var fields = getFields(), farms = getFarms();
+  var labels = fields.map(function(z){
+    var fm = farms.find(function(x){ return x.id===z.farmId; });
+    return (fm ? fm.name + ' › ' : '') + z.name;
+  });
+  var cur = fields.findIndex(function(z){ return z.id === _fimpFieldId; });
+  _wheelOpen({
+    title: T('Field'), items: labels, selected: cur >= 0 ? labels[cur] : null,
+    onConfirm: function(label){
+      var i = labels.indexOf(label);
+      if(i >= 0){ _fimpFieldId = fields[i].id; _fimpPaintField(); }
+    }
+  });
+}
+
+/** Unzip with the platform's own inflate — no library shipped for this. */
+async function _fimpUnzip(buf){
+  var dv = new DataView(buf), u8 = new Uint8Array(buf);
+  // Find the end-of-central-directory record by scanning back for its signature;
+  // it is last in the file but followed by a variable-length comment.
+  var eocd = -1;
+  for(var i = u8.length - 22; i >= 0 && i > u8.length - 66000; i--){
+    if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  }
+  if(eocd < 0) throw new Error(T('That zip could not be read.'));
+  var count = dv.getUint16(eocd + 10, true);
+  var dirAt = dv.getUint32(eocd + 16, true);
+
+  var out = {};
+  var p = dirAt;
+  for(var n = 0; n < count; n++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    var method  = dv.getUint16(p + 10, true);
+    var csize   = dv.getUint32(p + 20, true);
+    var nameLen = dv.getUint16(p + 28, true);
+    var extraLen= dv.getUint16(p + 30, true);
+    var cmtLen  = dv.getUint16(p + 32, true);
+    var lhOff   = dv.getUint32(p + 42, true);
+    var name    = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + extraLen + cmtLen;
+
+    // The local header repeats the name and extra lengths, and only its copies
+    // are trustworthy for locating the data.
+    var lhNameLen  = dv.getUint16(lhOff + 26, true);
+    var lhExtraLen = dv.getUint16(lhOff + 28, true);
+    var dataAt = lhOff + 30 + lhNameLen + lhExtraLen;
+    var raw = u8.subarray(dataAt, dataAt + csize);
+
+    if(method === 0){ out[name] = raw.slice(); continue; }
+    if(method !== 8) continue;                       // only stored and deflate
+    if(typeof DecompressionStream === 'undefined')
+      throw new Error(T('This device cannot open zip files.'));
+    var ds = new DecompressionStream('deflate-raw');
+    var blob = new Blob([raw]).stream().pipeThrough(ds);
+    out[name] = new Uint8Array(await new Response(blob).arrayBuffer());
+  }
+  return out;
+}
+
+/** Rings from a KML document — every Polygon's outer boundary. */
+function _fimpParseKml(text){
+  var doc = new DOMParser().parseFromString(text, 'application/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error(T('That file could not be read.'));
+  var rings = [];
+  // outerBoundaryIs only, deliberately: an inner ring is a hole, and the app's
+  // boundary model has no way to represent one.
+  var outers = doc.getElementsByTagName('outerBoundaryIs');
+  var nodes = outers.length ? outers : doc.getElementsByTagName('LinearRing');
+  for(var i = 0; i < nodes.length; i++){
+    var c = nodes[i].getElementsByTagName('coordinates')[0];
+    if(!c) continue;
+    var pts = String(c.textContent).trim().split(/\s+/).map(function(tok){
+      var a = tok.split(',');
+      // KML is lon,lat — the opposite order to everything else here.
+      return { lat: parseFloat(a[1]), lng: parseFloat(a[0]) };
+    }).filter(function(pt){ return isFinite(pt.lat) && isFinite(pt.lng); });
+    if(pts.length >= 3) rings.push(pts);
+  }
+  return rings;
+}
+
+/** Rings from GeoJSON — Polygon and MultiPolygon, at any nesting. */
+function _fimpParseGeoJson(text){
+  var g = JSON.parse(text);
+  var rings = [];
+  var toPts = function(coords){
+    return coords.map(function(c){ return { lat:+c[1], lng:+c[0] }; })
+                 .filter(function(p){ return isFinite(p.lat) && isFinite(p.lng); });
+  };
+  var walk = function(node){
+    if(!node) return;
+    if(Array.isArray(node)){ node.forEach(walk); return; }
+    if(node.type === 'FeatureCollection'){ (node.features||[]).forEach(walk); return; }
+    if(node.type === 'Feature'){ walk(node.geometry); return; }
+    if(node.type === 'Polygon'){
+      var pts = toPts((node.coordinates||[])[0] || []);
+      if(pts.length >= 3) rings.push(pts);
+      return;
+    }
+    if(node.type === 'MultiPolygon'){
+      (node.coordinates||[]).forEach(function(poly){
+        var p2 = toPts(poly[0] || []);
+        if(p2.length >= 3) rings.push(p2);
+      });
+    }
+  };
+  walk(g);
+  return rings;
+}
+
+/**
+ * Rings from an ESRI .shp.
+ *
+ * Only the geometry file is read. The .dbf holds the attribute table and the
+ * .prj the projection — neither is needed to place a polygon, and assuming
+ * WGS84 is safe because that is what every GPS-derived export uses. A file in
+ * a projected system would land in the sea, which the coordinate check below
+ * catches rather than saving nonsense.
+ */
+function _fimpParseShp(buf){
+  var dv = new DataView(buf);
+  if(dv.getInt32(0, false) !== 9994) throw new Error(T('That is not a shapefile.'));
+  var rings = [], pos = 100;                      // 100-byte header
+  while(pos + 8 <= dv.byteLength){
+    var lenWords = dv.getInt32(pos + 4, false);   // record header is big-endian
+    var rec = pos + 8;
+    var type = dv.getInt32(rec, true);            // contents are little-endian
+    if(type === 5){                               // 5 = Polygon
+      var nParts  = dv.getInt32(rec + 36, true);
+      var nPoints = dv.getInt32(rec + 40, true);
+      var partsAt = rec + 44;
+      var ptsAt   = partsAt + nParts * 4;
+      for(var pi = 0; pi < nParts; pi++){
+        var start = dv.getInt32(partsAt + pi * 4, true);
+        var end   = (pi + 1 < nParts) ? dv.getInt32(partsAt + (pi + 1) * 4, true) : nPoints;
+        var pts = [];
+        for(var k = start; k < end; k++){
+          var o = ptsAt + k * 16;
+          pts.push({ lng: dv.getFloat64(o, true), lat: dv.getFloat64(o + 8, true) });
+        }
+        if(pts.length >= 3) rings.push(pts);
+      }
+    }
+    pos = rec + lenWords * 2;
+  }
+  return rings;
+}
+
+/** Anything outside these is not a latitude and longitude. */
+function _fimpPlausible(rings){
+  return rings.filter(function(r){
+    return r.every(function(p){
+      return isFinite(p.lat) && isFinite(p.lng) &&
+             Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180;
+    });
+  });
+}
+
+async function fimpHandleFiles(files){
+  var file = files && files[0];
+  if(!file) return;
+  var box = document.getElementById('fimp-result');
+  var name = (file.name || '').toLowerCase();
+  box.innerHTML = '<div class="box">' + esc(T('Reading')) + ' ' + esc(file.name) + '…</div>';
+  try{
+    var rings = [];
+    if(/\.kml$/.test(name)){
+      rings = _fimpParseKml(await file.text());
+    } else if(/\.(json|geojson)$/.test(name)){
+      rings = _fimpParseGeoJson(await file.text());
+    } else if(/\.shp$/.test(name)){
+      rings = _fimpParseShp(await file.arrayBuffer());
+    } else if(/\.(zip|kmz)$/.test(name)){
+      var entries = await _fimpUnzip(await file.arrayBuffer());
+      var keys = Object.keys(entries);
+      var kml = keys.find(function(k){ return /\.kml$/i.test(k); });
+      var shp = keys.find(function(k){ return /\.shp$/i.test(k); });
+      var gj  = keys.find(function(k){ return /\.(json|geojson)$/i.test(k); });
+      if(kml)      rings = _fimpParseKml(new TextDecoder().decode(entries[kml]));
+      else if(shp) rings = _fimpParseShp(entries[shp].buffer.slice(entries[shp].byteOffset, entries[shp].byteOffset + entries[shp].byteLength));
+      else if(gj)  rings = _fimpParseGeoJson(new TextDecoder().decode(entries[gj]));
+      else throw new Error(T('No boundary found in that file.'));
+    } else {
+      throw new Error(T('Unsupported file type.'));
+    }
+
+    var before = rings.length;
+    rings = _fimpPlausible(rings);
+    if(!rings.length){
+      throw new Error(before
+        ? T('Those coordinates are not latitude and longitude — the file may use a projected system.')
+        : T('No boundary found in that file.'));
+    }
+
+    _fimpRings = rings;
+    var pts = rings.reduce(function(n, r){ return n + r.length; }, 0);
+    var ha  = rings.reduce(function(a, r){ return a + calcPolygonAreaHa(r); }, 0);
+    box.innerHTML = '<div class="box ok">' +
+      esc(rings.length + ' ' + T(rings.length === 1 ? 'boundary' : 'boundaries') +
+          ' · ' + pts + ' ' + T('points') + ' · ' + ha.toFixed(2) + ' ha') + '</div>';
+    document.getElementById('fimp-apply').disabled = false;
+  }catch(e){
+    _fimpRings = null;
+    document.getElementById('fimp-apply').disabled = true;
+    box.innerHTML = '<div class="box bad">' + esc((e && e.message) || T('That file could not be read.')) + '</div>';
+  }
+}
+
+/**
+ * Write the parsed rings onto the chosen field.
+ *
+ * Replaces rather than appends: an import is the whole shape of that field as
+ * the other system knows it, and merging it with what was drawn before would
+ * leave a field with two boundaries and double its area.
+ */
+function fimpApply(){
+  if(!_fimpRings || !_fimpFieldId) return;
+  var all = getBoundaries();
+  all[_fimpFieldId] = _fimpRings.map(function(r){ return { id: uid(), points: r }; });
+  saveBoundaries(all);
+  // One row per FIELD holding the whole list — not one call per boundary,
+  // which would leave the cloud with only the last one.
+  try{ syncBoundary(_fimpFieldId, all[_fimpFieldId]); }catch(e){}
+  _syncFieldAreaFromBoundaries(_fimpFieldId, all);
+
+  var f = getFields().find(function(z){ return z.id === _fimpFieldId; });
+  fimpClose();
+  if(typeof _fmapRender === 'function') _fmapRender(_fmapFilter);
+  if(typeof renderFields === 'function') renderFields();
+  showToast((f ? f.name + ' — ' : '') + T('boundary imported'), 'success');
+}
 
 function fmapStartDraw(preferredFieldId){
   if(!_fmap){ showToast('Open Field Map first','warn'); return; }
@@ -22554,10 +23095,20 @@ function _truckFullConflict(pendingKg){
   var capacity = parseFloat(truck.capacity) || 0;
   if(capacity <= 0) return null;                 // no capacity set — nothing to exceed
   var loaded = _truckActiveLoads(truck).reduce(function(sum,l){ return sum + (l.weight||0); }, 0);
-  var after  = loaded + (pendingKg || 0);
-  if(after <= capacity) return null;
+
+  // The question is whether the truck was ALREADY full when this unload began,
+  // not whether this unload will fill it.
+  //
+  // A cart tipping into a truck at 60% takes it to 90%, or to 105% — either
+  // way the grain is already moving and there is nowhere else for it to go.
+  // Stopping to ask mid-transfer strands it in the cart. So a load that crosses
+  // the line simply fills the truck, and only the NEXT unload — started against
+  // a truck with no room left — is worth interrupting for.
+  if(loaded < capacity) return null;
+
+  var after = loaded + (pendingKg || 0);
   return { truck: truck, loaded: loaded, capacity: capacity, after: after,
-           pct: (after/capacity)*100 };
+           pct: (loaded/capacity)*100 };
 }
 
 // Resolves 'anyway' | 'empty' | null. Its own chooser because showConfirm only
@@ -22566,8 +23117,9 @@ function showTruckFullChoice(c){
   return new Promise(function(resolve){
     var ov = document.getElementById('truck-full-overlay');
     document.getElementById('tf-msg').textContent =
-      '"'+c.truck.name+'" '+T('would be at')+' '+c.pct.toFixed(0)+'% ('+
-      fmtWt(c.after,'')+' / '+fmtWt(c.capacity,'')+').';
+      '"'+c.truck.name+'" '+T('is already full')+' — '+
+      fmtWt(c.loaded,'')+' / '+fmtWt(c.capacity,'')+
+      ' ('+c.pct.toFixed(0)+'%).';
     var done = function(v){
       ov.classList.remove('open');
       document.getElementById('tf-anyway').onclick = null;
