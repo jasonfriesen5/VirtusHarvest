@@ -4571,6 +4571,16 @@ function _openPasswordResetWhenReady(){
         </div>
       </div>
 
+      <!-- Field only, and creation only. The same control the edit sheet has —
+           asking at creation saves opening the field again just to set it. -->
+      <div class="tx-field-group" id="asheet-crop-group" style="display:none;">
+        <label><span id="asheet-crop-lbl">Crop this season</span> <span style="font-size:11px;color:var(--text3);" data-en="(optional)">(optional)</span></label>
+        <select id="asheet-crop" style="width:100%;padding:11px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;font-size:15px;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+          <option value="">No crop assigned</option>
+        </select>
+        <div id="asheet-crop-hint" style="font-size:11px;color:var(--text3);margin-top:5px;">What is planted here now — loads from this field will use it</div>
+      </div>
+
       <!-- Remisión blocks. Both are .rm-only AND shown only for their own
            entity type, so adding a field never picks up a farm's address boxes. -->
       <div id="asheet-rm-farm" style="display:none;">
@@ -6810,6 +6820,8 @@ function applyLanguage() {
   var fesN = document.getElementById('fes-name-lbl');   if (fesN) fesN.textContent = T('Field Name');
   var fesA = document.getElementById('fes-area-lbl');   if (fesA) fesA.textContent = T('Area');
   var fesC = document.getElementById('fes-crop-lbl');   if (fesC) fesC.textContent = T('Crop this season');
+  var asC  = document.getElementById('asheet-crop-lbl');  if (asC)  asC.textContent  = T('Crop this season');
+  var asCh = document.getElementById('asheet-crop-hint'); if (asCh) asCh.textContent = T('What is planted here now — loads from this field will use it');
   var fesCh= document.getElementById('fes-crop-hint');  if (fesCh) fesCh.textContent = T('What is planted here now — loads from this field will use it');
   var fesO = document.getElementById('fes-crop-opt');   if (fesO) fesO.textContent = '('+T('optional')+')';
   var fesCn= document.getElementById('fes-crop-none');  if (fesCn) fesCn.textContent = T('No crop assigned');
@@ -11858,8 +11870,14 @@ function addField(){
     newF.area = parseFloat(typedArea.toFixed(2));
     newF.areaUnit = getUnits().area || 'ha';
   }
+  // Picked on the add sheet, if they picked one. Left unset otherwise, which
+  // is what "No crop assigned" has always meant.
+  var cropEl2 = document.getElementById('asheet-crop');
+  if(cropEl2 && cropEl2.value) newF.crop = cropEl2.value;
+
   fields.push(newF); saveFields(fields); input.value='';
   if(areaEl) areaEl.value='';
+  if(cropEl2) cropEl2.value='';
   document.getElementById('add-field-form').classList.remove('open');
   syncField(newF); // push to Supabase immediately
   renderFields();
@@ -12258,6 +12276,21 @@ function openAddNameSheet(type, editId){
     if(au) au.textContent = getUnits().area || 'ha';
     var ai = document.getElementById('asheet-area');
     if(ai) ai.value = '';
+  }
+  // Crop, same visibility rule as area.
+  var cropGroup = document.getElementById('asheet-crop-group');
+  if(cropGroup){
+    cropGroup.style.display = (type === 'field' && !editId) ? '' : 'none';
+    var cropSel = document.getElementById('asheet-crop');
+    if(cropSel){
+      cropSel.innerHTML = '<option value="">' + esc(T('No crop assigned')) + '</option>';
+      getCrops().forEach(function(c){
+        var opt = document.createElement('option');
+        opt.value = c; opt.textContent = T(c);
+        cropSel.appendChild(opt);
+      });
+      cropSel.value = '';
+    }
   }
   _addSheetType = type;
   _addSheetEditId = editId || null;
