@@ -1475,6 +1475,39 @@ body{
 .tlb-pct.warn{color:#A85E00;}
 .tlb-pct.full{color:#B03020;}
 
+/* ── Truck alarm threshold ── */
+.tka-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px;}
+.tka-head label{margin:0;}
+.tka-entry{display:flex;align-items:center;gap:6px;}
+/* Sized to five digits rather than stretching: the bar underneath is the wide
+   element, and a full-width box above it competes with that. */
+.tka-entry input{width:104px;text-align:right;}
+.tka-unit{font-size:13px;font-weight:700;color:var(--text3);}
+.tka-bar{
+  position:relative;height:22px;border-radius:11px;overflow:hidden;
+  background:linear-gradient(90deg,#3A8A20,#7DC050);
+  border:1px solid rgba(0,0,0,0.10);
+}
+/* Everything past the mark is the alarm zone. Painted over the green rather
+   than beside it, so the two always meet exactly at the mark. */
+.tka-red{
+  position:absolute;top:0;bottom:0;right:0;left:100%;
+  background:linear-gradient(90deg,#C0392B,#E05030);
+  transition:left .18s ease;
+}
+.tka-mark{
+  position:absolute;top:-1px;bottom:-1px;left:100%;width:3px;margin-left:-1.5px;
+  background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,0.28);
+  transition:left .18s ease;
+}
+.tka-bar.off{background:var(--surface2);}
+.tka-bar.off .tka-red,.tka-bar.off .tka-mark{opacity:0;}
+.tka-scale{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin-top:6px;font-size:11px;font-weight:700;color:var(--text3);
+}
+.tka-hint{font-weight:600;text-align:center;flex:1;}
+
 /* Capacity input on truck rows in Trucks tab */
 .truck-capacity-row{display:flex;align-items:center;gap:8px;padding:8px 14px 12px;border-top:1px solid var(--border);}
 .truck-capacity-lbl{font-size:12px;color:var(--text2);white-space:nowrap;}
@@ -4328,15 +4361,31 @@ function _openPasswordResetWhenReady(){
         </div>
         <div class="tx-field-group">
           <label>Capacity (kg)</label>
-          <input type="number" id="nt-capacity" min="0" step="100">
+          <input type="number" id="nt-capacity" min="0" step="100" oninput="_tkaPaint()">
         </div>
-        <!-- Expressed as room left rather than a total, because that is how the
-             gauge reads and how the driver thinks: "tell me when there is a
-             tonne to go" survives a change of capacity, "sound at 32000" does
-             not. Blank or zero means no alert. -->
-        <div class="tx-field-group">
-          <label><span data-en="Alert this far from full">Alert this far from full</span> (kg)</label>
-          <input type="number" id="nt-alert-kg" min="0" step="100" placeholder="0">
+      </div>
+
+      <!-- "Alert this far from full" asked the driver to do the subtraction
+           themselves, and most did not. The weight they type is now the weight
+           the alarm sounds at, shown on a bar of the truck's own capacity so
+           the red zone makes the meaning obvious without reading anything.
+           Blank or zero means no alert. -->
+      <div class="tx-field-group">
+        <div class="tka-head">
+          <label><span data-en="Sound the alarm at">Sound the alarm at</span></label>
+          <div class="tka-entry">
+            <input type="number" id="nt-alert-kg" min="0" step="100" placeholder="0" oninput="_tkaPaint()">
+            <span class="tka-unit">kg</span>
+          </div>
+        </div>
+        <div class="tka-bar" id="tka-bar">
+          <div class="tka-red" id="tka-red"></div>
+          <div class="tka-mark" id="tka-mark"></div>
+        </div>
+        <div class="tka-scale">
+          <span>0</span>
+          <span class="tka-hint" id="tka-hint"></span>
+          <span id="tka-cap">—</span>
         </div>
       </div>
       <div class="tx-field-group">
@@ -5964,7 +6013,9 @@ const _i18n = {
   'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
-  'Alert this far from full':'Avisar a esta distancia de lleno','to full':'para llenar',
+  'Sound the alarm at':'Sonar la alarma a','to full':'para llenar',
+  'No alarm':'Sin alarma','Set the capacity first':'Primero indica la capacidad',
+  'Never sounds — over capacity':'Nunca suena — supera la capacidad',
   'Preparing the PDF…':'Preparando el PDF…','Open or send the remisión':'Abrir o enviar la remisión',
   'Campo':'Campo','has no fields yet — add one first.':'todavía no tiene campos — agregá uno primero.',
   'Which field?':'¿De qué campo?','Pick the field each load came off.':'Elegí el campo de cada carga.',
@@ -12915,7 +12966,28 @@ function _tlbBeep(){
 var _tlbAudio = null;
 
 /**
- * Sound once when the truck comes within the driver's chosen margin of full.
+ * The weight this truck's alarm sounds at, in kg. 0 means no alarm.
+ *
+ * The setting used to be alertBeforeFullKg — how far BELOW capacity to sound —
+ * which asked the driver to do the subtraction. Trucks saved under the old
+ * scheme are converted here rather than in a migration pass, so a truck that
+ * has not been edited since keeps sounding at exactly the same weight.
+ */
+function _truckAlertAt(truck){
+  if(!truck) return 0;
+  var at = parseFloat(truck.alertAtKg);
+  if(isFinite(at) && at > 0) return at;
+  if(truck.alertAtKg !== undefined) return 0;   // explicitly cleared
+  var margin = parseFloat(truck.alertBeforeFullKg);
+  var cap    = parseFloat(truck.capacity);
+  if(isFinite(margin) && margin > 0 && isFinite(cap) && cap > 0){
+    return Math.max(0, cap - margin);
+  }
+  return 0;
+}
+
+/**
+ * Sound once when the truck reaches the driver's chosen weight.
  *
  * Fires on the way UP only, and once per load: a cart trickling across the
  * threshold would otherwise beep on every packet. Emptying the truck rearms it,
@@ -12923,10 +12995,9 @@ var _tlbAudio = null;
  */
 function _tlbCheckAlert(loaded, capacity){
   var truck = selectedTruck && getTrucks().find(function(t){ return t.id===selectedTruck.id; });
-  var margin = truck ? parseFloat(truck.alertBeforeFullKg) : NaN;
-  if(!truck || !isFinite(margin) || margin <= 0 || !(capacity > 0)) return;
+  var trigger = _truckAlertAt(truck);
+  if(!truck || !(trigger > 0)) return;
 
-  var trigger = capacity - margin;
   if(loaded >= trigger){
     if(!_tlbAlerted){
       _tlbAlerted = true;
@@ -13497,10 +13568,12 @@ function openAddTruckSheet(truckId){
     document.getElementById('nt-plate').value    = truck.plate||'';
     document.getElementById('nt-driver').value   = truck.driver||'';
     document.getElementById('nt-capacity').value = truck.capacity||'';
-    document.getElementById('nt-alert-kg').value = truck.alertBeforeFullKg||'';
+    var _at = _truckAlertAt(truck);
+    document.getElementById('nt-alert-kg').value = _at > 0 ? _at : '';
     document.getElementById('nt-model').value    = _truckMakeModel(truck);
     document.getElementById('nt-notes').value    = truck.notes||'';
     _ntSetRm(truck);
+    _tkaPaint();
   } else {
     titleEl.textContent = 'Add New Truck';
     editId.value = '';
@@ -13512,6 +13585,7 @@ function openAddTruckSheet(truckId){
     document.getElementById('nt-model').value    = '';
     document.getElementById('nt-notes').value    = '';
     _ntSetRm({});
+    _tkaPaint();
   }
   _rmApplyFlag();
   document.getElementById('add-truck-sheet-overlay').classList.add('open');
@@ -13705,6 +13779,46 @@ async function ntPickHaulerGeo(level){
   });
 }
 
+/**
+ * Draw the alarm threshold onto the capacity bar.
+ *
+ * The bar is the whole truck, the white mark is where the alarm sounds, and
+ * everything past it is red. Typing a number moves the mark, which is the
+ * entire explanation the setting needs.
+ */
+function _tkaPaint(){
+  var bar  = document.getElementById('tka-bar');
+  if(!bar) return;
+  var red  = document.getElementById('tka-red');
+  var mark = document.getElementById('tka-mark');
+  var hint = document.getElementById('tka-hint');
+  var capL = document.getElementById('tka-cap');
+
+  var cap = parseFloat(document.getElementById('nt-capacity').value) || 0;
+  var at  = parseFloat(document.getElementById('nt-alert-kg').value) || 0;
+
+  capL.textContent = cap > 0 ? fmtWt(cap,'') : '—';
+
+  // Nothing to show without both numbers: an empty box means no alarm, and a
+  // truck with no capacity has no bar to place one on.
+  if(!(cap > 0) || !(at > 0)){
+    bar.classList.add('off');
+    hint.textContent = (cap > 0) ? T('No alarm') : T('Set the capacity first');
+    return;
+  }
+  bar.classList.remove('off');
+
+  var pct = Math.min(100, (at / cap) * 100);
+  red.style.left  = pct.toFixed(1)+'%';
+  mark.style.left = pct.toFixed(1)+'%';
+
+  // Past capacity the alarm can never sound, so say so rather than showing a
+  // mark pinned at the end that looks like it would.
+  hint.textContent = (at >= cap)
+    ? T('Never sounds — over capacity')
+    : fmtWt(cap - at,'') + ' ' + T('to full');
+}
+
 function closeAddTruckSheet(){
   document.getElementById('add-truck-sheet-overlay').classList.remove('open');
 }
@@ -13745,7 +13859,8 @@ function saveAddTruckSheet(){
     // Only written while the feature is on. With it off the sheet's remisión
     // inputs are hidden and therefore empty, and blindly copying them would
     // wipe SIFEN data that was entered on the web console.
-    trucks[idx].alertBeforeFullKg = alertKg;
+    trucks[idx].alertAtKg = alertKg;
+    delete trucks[idx].alertBeforeFullKg;   // superseded by the absolute weight
     if(remisionEnabled()) Object.assign(trucks[idx], _ntGetRm());
     saveTrucks(trucks);
     syncTruck(trucks[idx]);
@@ -13763,7 +13878,7 @@ function saveAddTruckSheet(){
     updateTruckLoadBar();
     showToast(name+' updated','success');
   } else {
-    var newTruck = {id:uid(), name:name, plate:plate, driver:driver, capacity:capacity, alertBeforeFullKg:alertKg, makeModel:model, notes:notes};
+    var newTruck = {id:uid(), name:name, plate:plate, driver:driver, capacity:capacity, alertAtKg:alertKg, makeModel:model, notes:notes};
     if(remisionEnabled()) Object.assign(newTruck, _ntGetRm());
     trucks.push(newTruck);
     saveTrucks(trucks);
@@ -17632,6 +17747,7 @@ async function pullConfig(){
       var trucks = _reconcileConfig('ht_trucks', trucksRes.data.map(function(r){
         var keep = _localTrucksById[r.id] || {};
         return {id:r.id, name:r.name, plate:r.plate||'', driver:r.driver||'', capacity:r.capacity||0, makeModel:r.make_model||'', notes:r.notes||'',
+                alertAtKg:         keep.alertAtKg,
                 alertBeforeFullKg: keep.alertBeforeFullKg || 0,
                 vehicleType:r.vehicle_type||'', driverCi:r.driver_ci||'', driverAddress:r.driver_address||'',
                 transportistaName:r.transportista_name||'', transportistaRuc:r.transportista_ruc||'', transportistaAddress:r.transportista_address||''};
