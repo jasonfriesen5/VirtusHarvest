@@ -1794,16 +1794,6 @@ body.panel-open #tl-fab{display:none;}
   width:100%;
   min-height:0;
 }
-.fmap-toolbar{
-  display:flex;align-items:center;gap:8px;
-  padding:8px 14px;
-  background:rgba(255,254,245,0.97);
-  border-bottom:1px solid rgba(180,130,0,0.12);
-  flex-shrink:0;
-  flex-wrap:wrap;
-}
-/* Was inline padding/font-size on the two buttons, which no stylesheet rule could
-   override — moved here so the tablet type scale can raise them. */
 /* Primary/Remote is a mode selector, so only the current mode is gold — the
    unselected one falls through to the shared neutral-button look (light glassy
    / dark glassy) via .mode-btn:not(.active) in those groups. */
@@ -1845,34 +1835,6 @@ body.panel-open #tl-fab{display:none;}
    space-between then pushed the control to the bottom of the (now taller) row,
    leaving a gap. Keep the control tucked under its label. */
 #sp-settings .setting-row[style*="flex-direction:column"]{justify-content:flex-start;}
-.fmap-filter-btn{
-  padding:9px 18px;
-  border-radius:20px;
-  /* Solid gold underneath the gradient. These two are the only toolbar buttons
-     painted with a gradient rather than a flat colour, and they were the only
-     ones reported as rendering white on the first opens after a fresh install —
-     the WebView showed the button before it had composited the gradient layer,
-     and with appearance:none that reads as transparent. Any repaint fixed it,
-     which is why tapping one turned it gold. A base colour means the worst case
-     is a flat gold button for a frame instead of a white one.
-     Longhands, not the `background` shorthand — the shorthand resets
-     background-color to transparent, which would throw the fallback away. */
-  background-color:#F5C842;
-  /* Same gold as the tab bar's active pill and .btn-gold. */
-  background-image:linear-gradient(180deg,#F9D667 0%,#F5C842 55%,#EDB828 100%);
-  border:1px solid rgba(255,255,255,0.55);
-  box-shadow:
-    inset 0 1px 1.5px rgba(255,255,255,0.80),
-    inset 0 -2px 3px rgba(140,95,5,0.22),
-    0 3px 9px rgba(150,105,20,0.30),
-    0 1px 2px rgba(150,105,20,0.22);
-  font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
-  color:#3A2A00;cursor:pointer;transition:all 0.15s;
-  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
-}
-/* Both filter buttons stay gold — each one just commits its own action when
-   pressed, so there is no selected/unselected look to convey. */
-.fmap-filter-btn:active{opacity:0.8;}
 .fmap-locate-btn{
   margin-left:auto;
   padding:9px 18px;
@@ -1885,8 +1847,11 @@ body.panel-open #tl-fab{display:none;}
   appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
 }
 /* The map fills .fmap-body below the toolbar; the controls are positioned
-   against that, not against the map element Google owns. */
-.fmap-body{position:relative;}
+   against that, not against the map element Google owns.
+   .fmap-body is already position:absolute above, which makes it a containing
+   block on its own — do NOT add position:relative here. Doing so overwrites
+   the absolute positioning, the body collapses to zero height at the top of
+   the panel, and both the map and these controls go with it. */
 .fmap-ctrls{
   position:absolute;right:14px;bottom:16px;z-index:600;
   display:flex;flex-direction:column;align-items:flex-end;gap:12px;
@@ -1895,7 +1860,7 @@ body.panel-open #tl-fab{display:none;}
   width:48px;height:48px;border-radius:24px;
   display:flex;align-items:center;justify-content:center;
   color:#2A7AE2;border:1px solid rgba(255,255,255,0.7);
-  /* Solid colour under the gradient, as .fmap-filter-btn does: the WebView can
+  /* Solid colour under the gradient: the WebView can
      show the button for a frame before the gradient layer composites, and with
      appearance:none that frame renders transparent. */
   background-color:var(--surface);
@@ -1943,8 +1908,13 @@ body.panel-open #tl-fab{display:none;}
   background-image:linear-gradient(180deg,#3C3C40 0%,#2F2F33 100%);
 }
 /* The fan is absolutely placed so its hidden items do not push the locate
-   button up the screen while closed. */
-.fmap-fab{position:relative;}
+   button up the screen while closed.
+   right/bottom must be cleared too. .fab-wrap is position:fixed with
+   right:16px and bottom:calc(tabbar + safe-area + 16px) to park it over the
+   Remisión list; switching to relative without resetting those turns them into
+   OFFSETS, which lifts the + up and left out of the column and on top of the
+   locate button. */
+.fmap-fab{position:relative;right:auto;bottom:auto;}
 .fmap-fab .fab-items{position:absolute;right:0;bottom:62px;}
 /* The fan sits inside the map, so its scrim covers the map only — not the
    panel header or the tab bar, which stay usable. */
@@ -2406,7 +2376,7 @@ body.panel-open #tl-fab{display:none;}
 [data-theme="dark"] body{ background:linear-gradient(180deg,#19191A 0%,#141415 55%,#101011 100%)!important; }
 /* Match body exactly in dark mode too. */
 [data-theme="dark"] #s-login{ background:linear-gradient(180deg,#19191A 0%,#141415 55%,#101011 100%)!important; }
-[data-theme="dark"] .topbar,[data-theme="dark"] .sp-header,[data-theme="dark"] .tabbar,[data-theme="dark"] .fdp-header,[data-theme="dark"] .fmap-toolbar{
+[data-theme="dark"] .topbar,[data-theme="dark"] .sp-header,[data-theme="dark"] .tabbar,[data-theme="dark"] .fdp-header{
   background:linear-gradient(180deg,rgba(46,46,49,0.94) 0%,rgba(38,38,41,0.90) 100%)!important;
   border-color:rgba(255,255,255,0.09)!important;
 }
@@ -2615,8 +2585,8 @@ body.panel-open #tl-fab{display:none;}
   /* Zero (Device tab), Sync and account actions — same metrics as + Add Cart
      so the action buttons all read at one size. */
   .btn-small-green,.btn-small-red,.btn-conn{padding:10px 20px;font-size:15px;border-radius:12px;}
-  /* Field Map controls — toolbar, draw bar and its field picker. */
-  .fmap-filter-btn,.fmap-locate-btn,.fmap-draw-btn,
+  /* Field Map controls — draw bar and its field picker. */
+  .fmap-locate-btn,.fmap-draw-btn,
   .fmap-field-select{font-size:18px;padding:14px 26px;}
   .fmap-draw-pts{font-size:13px;}
   .fmap-field-select{max-width:220px;}
@@ -3862,10 +3832,6 @@ function _openPasswordResetWhenReady(){
         <div class="sp-title">Field Map</div>
       </div>
       <div class="fmap-body">
-        <div class="fmap-toolbar">
-          <button class="fmap-filter-btn active" id="fmap-btn-all" onclick="fmapFilter('all',this)">All Fields</button>
-          <button class="fmap-filter-btn" id="fmap-btn-farm" onclick="fmapFilter('farm',this)">Current Field</button>
-        </div>
         <!-- Draw mode bar (shown when drawing) -->
         <div class="fmap-draw-bar" id="fmap-draw-bar">
           <select class="fmap-field-select" id="fmap-draw-field-sel"></select>
@@ -3889,10 +3855,6 @@ function _openPasswordResetWhenReady(){
              is gone the moment the map initialises. These sit over it instead,
              stacked down the right edge the way every map app puts them. -->
         <div class="fmap-ctrls">
-          <button class="fmap-round-btn" id="fmap-btn-locate" onclick="fmapLocateMe()" title="My location" aria-label="My location">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.5"/><line x1="12" y1="1.5" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22.5" y2="12"/></svg>
-            </button>
-
             <!-- Same fan-out as the Remisión tab's add button. Draw and Upload
                  both create a boundary; they belong behind one control rather
                  than as two more bars competing with the map. -->
@@ -3904,6 +3866,13 @@ function _openPasswordResetWhenReady(){
               </div>
               <button class="fab-main" onclick="fmapFabToggle()" aria-label="Add">+</button>
             </div>
+
+            <!-- Below the +, not above it: the fan opens upward, and with the
+                 locate button on top the two Draw/Upload items landed on it.
+                 Bottom-most also matches where every map app puts locate. -->
+          <button class="fmap-round-btn" id="fmap-btn-locate" onclick="fmapLocateMe()" title="My location" aria-label="My location">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="3.5"/><line x1="12" y1="20.5" x2="12" y2="23"/><line x1="1" y1="12" x2="3.5" y2="12"/><line x1="20.5" y1="12" x2="23" y2="12"/></svg>
+            </button>
         </div>
       </div>
     </div>
@@ -6584,13 +6553,12 @@ function applyLanguage() {
   if (abPlatSweep && abPlatSweep.textContent.trim()) abPlatSweep.textContent = getRuntimePlatformLabel();
 
   // ── Field map ──
-  var fmBtns = {
-    'fmap-btn-all':'All Fields','fmap-btn-farm':'Current Field',
-    'fmap-btn-locate':'My Location','fmap-btn-draw':'Draw Boundary'
-  };
-  Object.keys(fmBtns).forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.textContent = T(fmBtns[id]);
-  });
+  // The locate button holds an SVG, so it is translated through title and
+  // aria-label — setting textContent would throw the icon away and leave the
+  // words in a 48px circle. Draw and Upload are .fab-items carrying data-en,
+  // handled by the generic sweep.
+  var fmLoc = document.getElementById('fmap-btn-locate');
+  if (fmLoc){ fmLoc.title = T('My Location'); fmLoc.setAttribute('aria-label', T('My Location')); }
   var fmEmpty = document.getElementById('fmap-empty');
   if (fmEmpty) fmEmpty.textContent = T('No GPS data found for any field or transaction yet.');
   var fmPts = document.getElementById('fmap-draw-pts');
@@ -14091,7 +14059,6 @@ var _fmap = null;           // Google Maps instance
 var _fmapMarkers = [];      // array of google.maps.Marker
 var _fmapPolygons = [];     // array of google.maps.Polygon
 var _fmapInfoWindow = null; // shared InfoWindow
-var _fmapFilter = 'all';
 var _fmapBoundaries = true; // always rendered via _fmapRenderBoundaries
 
 
@@ -14127,7 +14094,7 @@ function openFieldMap(){
   setTimeout(function(){
     _fmapWhenMapsReady(function(){
     _fmapInit();
-    _fmapRender(_fmapFilter);
+    _fmapRender('all');
     var mapFocusField = selectedField;
     if(_fmapPendingDrawFieldId && _fmap){
       var drawFieldId = _fmapPendingDrawFieldId;
@@ -14207,6 +14174,10 @@ function _fmapInit(){
     },
     fullscreenControl: false,
     streetViewControl: false,
+    // The tilt/rotate puck the Maps JS API added defaults to RIGHT_BOTTOM,
+    // directly under the app's own locate button and +. Nothing here needs a
+    // tilted camera to draw a field boundary, so it goes rather than moves.
+    cameraControl: false,
     zoomControl: true,
     // Google puts zoom bottom-right by default, which is where the app's own
     // controls now live. Moved rather than hidden — pinch is not the only way
@@ -14230,16 +14201,6 @@ function _fmapInit(){
   });
 
   _fmapRenderBoundaries();
-}
-
-function fmapFilter(type, btn){
-  _fmapFilter = type;
-  // Reflect the choice — this used to leave 'active' on whichever button carried
-  // it in the markup, so the highlight never moved.
-  document.querySelectorAll('.fmap-filter-btn').forEach(function(b){
-    b.classList.toggle('active', b === btn);
-  });
-  _fmapRender(type);
 }
 
 function fmapLocateMe(){
@@ -14667,7 +14628,7 @@ function fimpApply(){
 
   var f = getFields().find(function(z){ return z.id === _fimpFieldId; });
   fimpClose();
-  if(typeof _fmapRender === 'function') _fmapRender(_fmapFilter);
+  if(typeof _fmapRender === 'function') _fmapRender('all');
   if(typeof renderFields === 'function') renderFields();
   showToast((f ? f.name + ' — ' : '') + T('boundary imported'), 'success');
 }
