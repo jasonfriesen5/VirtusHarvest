@@ -1023,6 +1023,14 @@ body{
 .confirm-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:600;color:var(--text);text-align:center;margin-bottom:6px;}
 .confirm-msg{font-size:13px;color:var(--text2);text-align:center;line-height:1.5;margin-bottom:20px;}
 .confirm-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+/* Three choices do not fit side by side at 13px on a phone, so they stack.
+   Stacked, the DOM order (cancel, alt, ok) reads backwards — the way out ends
+   up above the two real answers. Reorder so the actions come first and the
+   escape is last, which is where a thumb expects it. */
+.confirm-btns.three{grid-template-columns:1fr;}
+.confirm-btns.three #confirm-ok-btn{order:1;}
+.confirm-btns.three #confirm-alt-btn{order:2;}
+.confirm-btns.three #confirm-btn-cancel{order:3;}
 .confirm-btn-cancel{
   padding:13px;border:1.5px solid var(--border2);background:transparent;
   border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;
@@ -2137,6 +2145,22 @@ body.panel-open #tl-fab{display:none;}
   transition:background 0.12s;
 }
 .fdp-edit-btn:active{background:rgba(196,125,14,0.2);}
+.fdp-crop-btn{
+  padding:7px 14px;margin-right:8px;
+  background:rgba(45,157,92,0.10);
+  border:1px solid rgba(45,157,92,0.28);
+  border-radius:20px;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  color:#1A6B3C;cursor:pointer;flex-shrink:0;
+  max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  transition:background 0.12s;
+}
+.fdp-crop-btn:active{background:rgba(45,157,92,0.20);}
+/* No crop yet is a prompt, not a value — say so rather than showing a dash. */
+.fdp-crop-btn.unset{
+  background:var(--surface2);border-color:var(--border2);color:var(--text3);
+}
+[data-theme="dark"] .fdp-crop-btn{color:#7DD6A0;}
 
 /* kg/ha display in field detail stats */
 .fdp-kgha{
@@ -4130,6 +4154,9 @@ function _openPasswordResetWhenReady(){
                   font-family:'Inter',sans-serif;color:var(--text);outline:none;text-align:center;">
     <div class="confirm-btns">
       <button class="confirm-btn-cancel" id="confirm-btn-cancel" onclick="confirmResolve(false)">Cancel</button>
+      <!-- Optional third choice, for questions with two real answers plus a way
+           out. Hidden unless showConfirm() is given an altLabel. -->
+      <button class="confirm-btn-ok" id="confirm-alt-btn" style="display:none;" onclick="confirmResolve('alt')">Alt</button>
       <button class="confirm-btn-ok" id="confirm-ok-btn" onclick="confirmResolve(true)">Delete</button>
     </div>
   </div>
@@ -4144,6 +4171,10 @@ function _openPasswordResetWhenReady(){
       <div class="fdp-title" id="fdp-title">Field Name</div>
       <div class="fdp-farm" id="fdp-farm">Farm</div>
     </div>
+    <!-- What this field is growing, and a one-tap way to change it. Green
+         rather than the gold of Edit so the two do not read as a pair of
+         equivalent actions. -->
+    <button class="fdp-crop-btn" id="fdp-crop-btn" onclick="openFieldCropPicker()">—</button>
     <button class="fdp-edit-btn" id="fdp-edit-btn" onclick="openFieldEditSheet()">Edit</button>
   </div>
   <div class="fdp-body" id="fdp-body">
@@ -5883,6 +5914,10 @@ const _i18n = {
   'Address':'Dirección','Department':'Departamento','District':'Distrito','City':'Ciudad',
   'Yes':'Sí','No':'No','updated':'actualizado',
   'Save Field':'Guardar Campo','Primary Crop':'Cultivo Principal',
+  'Different crop':'Cultivo diferente','You are weighing':'Estás pesando',
+  'is set to':'está configurado con','this season':'esta temporada',
+  'Change crop':'Cambiar cultivo','Change field crop':'Cambiar cultivo del campo',
+  'Leave both':'Dejar ambos','Set crop':'Elegir cultivo',
   'Crop this season':'Cultivo de esta temporada',
   'What is planted here now — loads from this field will use it':
     'Lo que está sembrado aquí ahora — las cargas de este campo lo usarán',
@@ -11299,6 +11334,58 @@ function deleteTxById(logId, fieldId){
 
 
 // ══ FIELD DETAIL PANEL ══
+/** Show the field's crop on the detail header, or an invitation to set one. */
+function _fdpPaintCropBtn(field){
+  var btn = document.getElementById('fdp-crop-btn');
+  if(!btn) return;
+  btn.textContent = field && field.crop ? T(field.crop) : T('Set crop');
+  btn.classList.toggle('unset', !(field && field.crop));
+}
+
+/**
+ * Change what THIS FIELD is growing — not the crop the current load is being
+ * weighed as. The two are separate on purpose, and the wheel is the same one
+ * used everywhere else so the gesture is familiar.
+ */
+function openFieldCropPicker(fieldId){
+  // Same lookup openFieldEditSheet() uses when called from the header.
+  var panel = document.getElementById('field-detail-panel');
+  var id = fieldId || (panel && panel.dataset.fid);
+  var field = id && getFields().find(function(z){ return z.id===id; });
+  if(!field){ showToast(T('Select a field first'),'warn'); return; }
+
+  var crops = getCrops();
+  // Crops are stored by their English name everywhere, so translate for
+  // display and map the chosen label back before saving.
+  var labels = crops.map(function(c){ return T(c); });
+  _wheelOpen({
+    title: T('Crop this season'),
+    items: labels,
+    selected: field.crop ? T(field.crop) : (labels[0] || null),
+    onAdd: function(){ openCropModal(); },
+    onConfirm: function(label){
+      if(!label) return;
+      var idx = labels.indexOf(label);
+      setFieldCrop(field.id, idx>=0 ? crops[idx] : label);
+    }
+  });
+}
+
+/** Write a field's crop, push it, and refresh everything showing it. */
+function setFieldCrop(fieldId, crop){
+  var fields = getFields();
+  var idx = fields.findIndex(function(z){ return z.id===fieldId; });
+  if(idx === -1) return;
+  fields[idx].crop = crop || null;
+  saveFields(fields);
+  syncField(fields[idx]);
+  if(selectedField && selectedField.id === fieldId) selectedField = fields[idx];
+  _fdpPaintCropBtn(fields[idx]);
+  if(typeof renderFields === 'function') renderFields();
+  if(typeof updateWeighDisplay === 'function') updateWeighDisplay();
+  showToast(fields[idx].name + ' — ' + T('crop updated to') + ' ' + T(crop), 'warn');
+}
+
 function openFieldDetail(fieldId){
   var field = getFields().find(function(z){ return z.id===fieldId; });
   if(!field) return;
@@ -11307,6 +11394,7 @@ function openFieldDetail(fieldId){
 
   document.getElementById('fdp-title').textContent = field.name;
   document.getElementById('fdp-farm').textContent = farm ? farm.name : '';
+  _fdpPaintCropBtn(field);
 
   // Get all logs for this field
   var allLogs = getSeasonLogs();
@@ -11961,6 +12049,20 @@ function showConfirm(opts){
     okBtn.textContent = opts.okLabel || T('Delete');
     okBtn.style.background = opts.okColor || '#B03020';
     okBtn.style.flex = opts.singleButton ? '1' : '';
+    // Third action: resolves 'alt' rather than true/false, so a caller that
+    // does not use it is unaffected.
+    var altBtn = document.getElementById('confirm-alt-btn');
+    var btnWrap = document.querySelector('.confirm-btns');
+    if(altBtn){
+      if(opts.altLabel){
+        altBtn.style.display = '';
+        altBtn.textContent = opts.altLabel;
+        altBtn.style.background = opts.altColor || '#D4930A';
+      } else {
+        altBtn.style.display = 'none';
+      }
+    }
+    if(btnWrap) btnWrap.classList.toggle('three', !!opts.altLabel && !opts.singleButton);
     document.getElementById('confirm-overlay').classList.add('open');
   });
 }
@@ -23539,20 +23641,32 @@ function _checkCropOnFieldSelect(field){
   if(!currentCrop) return;
 
   if(field.crop && field.crop !== currentCrop){
+    // Two things disagree and either one could be the stale one: they might be
+    // weighing the wrong crop, or the field might still be set to last
+    // season's. So offer both repairs rather than guessing, and open the
+    // matching picker so the choice is theirs either way.
     showConfirm({
-      title: T('Switch Crop?'),
-      msg: '"'+field.name+'" '+T('is assigned to')+' '+T(field.crop)+'. '+_ask(T('Switch crop from')+' '+T(currentCrop)+' '+T('to')+' '+T(field.crop)),
-      okLabel: T('Switch to')+' '+T(field.crop),
+      title: T('Different crop'),
+      msg: T('You are weighing')+' '+T(currentCrop)+'. "'+field.name+'" '+
+           T('is set to')+' '+T(field.crop)+' '+T('this season')+'.',
+      okLabel: T('Change crop'),
       okColor: '#2D9D5C',
-      cancelLabel: T('Keep')+' '+T(currentCrop),
-      // The likely cause is a stale assignment on the field, not a wrong load —
-      // so point at how to fix the field rather than leaving them to hunt.
+      altLabel: T('Change field crop'),
+      altColor: '#D4930A',
+      cancelLabel: T('Leave both'),
       infoKey: 'fieldcrop',
       infoLabel: T('How do I change the field\'s crop?')
-    }).then(function(ok){
-      if(ok && cropEl){
-        cropEl.value = field.crop;
-        handleCropChange(cropEl);
+    }).then(function(choice){
+      // The load's crop — opens on the field's crop, since that is the likely
+      // answer, but they can wheel to anything.
+      if(choice === true){
+        if(cropEl){ cropEl.value = field.crop; }
+        openCropPicker();
+        return;
+      }
+      // The field's crop.
+      if(choice === 'alt'){
+        openFieldCropPicker(field.id);
       }
     });
     return;
