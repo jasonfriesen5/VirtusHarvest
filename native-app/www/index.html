@@ -2336,6 +2336,10 @@ body.panel-open #tl-fab{display:none;}
 .pw-eye.on{opacity:0.95;}
 .pw-wrap input{padding-right:42px!important;}
 .signin-field{margin-bottom:16px;}
+/* The one field on this form that is a control rather than a box, so the label
+   sits beside it instead of above. */
+.signup-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.signup-switch-row label{margin-bottom:0;}
 .signin-field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;letter-spacing:0.03em;}
 .signin-field input{
   width:100%;box-sizing:border-box;
@@ -2631,12 +2635,6 @@ body.panel-open #tl-fab{display:none;}
 [data-theme="dark"] #dev-ota-btn,[data-theme="dark"] #tdp-edit-btn,[data-theme="dark"] #profile-auth-btn,[data-theme="dark"] #lp-skip-btn{
   background:linear-gradient(180deg,rgba(58,58,61,0.92),rgba(48,48,51,0.85))!important;
   border-color:rgba(255,255,255,0.16)!important;
-}
-/* Sync is a primary action and remains green inside the dark Settings panel. */
-[data-theme="dark"] #settings-sync-btn{
-  background:linear-gradient(180deg,#58C982 0%,#2D9D5C 58%,#238A4E 100%)!important;
-  border-color:rgba(160,240,185,0.70)!important;
-  color:#fff!important;
 }
 [data-theme="dark"] .seg-btn.active{ color:#ECECEC!important; }
 [data-theme="dark"] .info-row:active{ background:rgba(255,255,255,0.08)!important; }
@@ -3115,6 +3113,19 @@ function _openPasswordResetWhenReady(){
           </button>
         </div>
       </div>
+      <!-- Asked here because this is the one moment the answer is known and
+           cheap: a Paraguayan farm says yes once instead of hunting for the
+           switch, and everyone else never sees the feature at all. The country
+           is in the label rather than a line underneath — at sign-up the word
+           "Remisión" alone means nothing to a Brazilian buyer. -->
+      <div class="signin-field signup-switch-row">
+        <label for="sw-signup-remision" id="signup-rm-lbl" data-en="Nota de Remisión (Paraguay)">Nota de Remisión (Paraguay)</label>
+        <button type="button" class="ios-switch" id="sw-signup-remision" role="switch"
+                aria-checked="false" aria-labelledby="signup-rm-lbl" onclick="toggleSignupRemision()">
+          <span class="ios-switch-knob"></span>
+        </button>
+      </div>
+
       <button class="signin-btn" id="signup-btn" onclick="doSignUp()">Create Account</button>
       <button class="signin-forgot" onclick="showForgotPassword()">Forgot password? Reset password</button>
     </div>
@@ -3822,9 +3833,12 @@ function _openPasswordResetWhenReady(){
              omitted; record deletion is not part of the customer app UI. -->
         <div class="card" id="settings-cloud-card">
           <div class="sp-section-lbl" data-en="Cloud Sync">Cloud Sync</div>
+          <!-- No Sync button here. Syncing is the circle in the top bar, on
+               every screen; a second one buried in Settings was a different
+               answer to the same question. This row now reports state and
+               nothing else, like the two beneath it. -->
           <div class="setting-row">
             <div><div class="sr-label" data-en="Pending Records">Pending Records</div><div class="sr-sub" id="cloud-pending">0 records</div></div>
-            <button class="btn-small-green" id="settings-sync-btn" onclick="fullSync()" data-en="Sync">Sync</button>
           </div>
           <div class="setting-row">
             <div><div class="sr-label" data-en="Last Synced">Last Synced</div><div class="sr-sub" id="cloud-last-sync">Never</div></div>
@@ -3856,7 +3870,7 @@ function _openPasswordResetWhenReady(){
         <div class="card">
           <div class="sp-section-lbl" data-en="Account">Account</div>
           <div class="setting-row" style="border-bottom:none;">
-            <div><div class="sr-label"><span data-en="Delete Account">Delete Account</span></div><div class="sr-sub" data-en="Permanently deletes your account and all its data">Permanently deletes your account and all its data</div></div>
+            <div><div class="sr-label"><span data-en="Delete Account">Delete Account</span></div></div>
             <button class="btn-small-red btn-danger-glass" id="btn-delete-account" onclick="deleteAccount()" data-en="Delete">Delete</button>
           </div>
         </div>
@@ -4899,7 +4913,11 @@ function _openPasswordResetWhenReady(){
       <div class="cal-result-row">
         <div style="flex:1;">
           <div class="sr-label" id="cal-lbl-factor">Calibration Factor <span class="info-ico" onclick="showInfoDialog('factor')">ⓘ</span></div>
-          <div class="sr-sub" id="cal-result-note">Edit below to override</div>
+          <!-- The sub-line under here is gone by request. It carried both
+               "Edit below to override" and, after a calibration, how far the
+               scale reads out ("Scale reads LOW by 2.3%"). The three places
+               that wrote it are all guarded with if(el), so they are harmless
+               no-ops now; restoring the line is enough to bring it back. -->
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <input type="number" id="cal-factor-direct-input" step="0.0001"
@@ -5769,7 +5787,7 @@ const _i18n = {
 
   // ── Cloud Sync ──
   'Pending Records':'Registros Pendientes','Last Synced':'Última Sincronización',
-  'Connection':'Conexión','Never':'Nunca','All synced ✓':'Todo sincronizado ✓',
+  'Connection':'Conexión','Never':'Nunca','All synced':'Todo sincronizado',
   'Sync':'Sincronizar',
 
   // ── Devices ──
@@ -7397,7 +7415,7 @@ function syncTabBarActive(){
 function updateCloudPanel(){
   var q  = getQueue();
   var el = document.getElementById('cloud-pending');
-  if(el) el.textContent = q.length ? q.length+' '+T(q.length!==1?'records':'record')+' '+T('pending') : T('All synced ✓');
+  if(el) el.textContent = q.length ? q.length+' '+T(q.length!==1?'records':'record')+' '+T('pending') : T('All synced');
 
   var ce = document.getElementById('cloud-conn');
   if(ce) ce.textContent = isOnline ? T('Online') : T('Offline');
@@ -9659,6 +9677,23 @@ function remisionEnabled(){
 }
 
 /**
+ * The same switch on the sign-up form. Writes the preference immediately, so
+ * the app is already configured when they come back to sign in after
+ * confirming their email — and _rmSyncAccountSetting() carries it to the
+ * account on that first sign-in, where a session finally exists.
+ */
+function toggleSignupRemision(){
+  _actionHaptic();
+  setRemisionEnabled(!remisionEnabled());
+  var sw = document.getElementById('sw-signup-remision');
+  if(sw){
+    var on = remisionEnabled();
+    sw.classList.toggle('on', on);
+    sw.setAttribute('aria-checked', on ? 'true' : 'false');
+  }
+}
+
+/**
  * Flip it. No _actionHaptic() here on purpose — Settings has one delegated
  * listener that already fires on every button inside the panel, so calling it
  * here too buzzed twice for one tap.
@@ -9670,6 +9705,17 @@ function toggleRemision(){
 function setRemisionEnabled(on){
   try{ localStorage.setItem(LS_REMISION_ON, on ? '1' : '0'); }catch(e){}
   _rmApplyFlag();
+  // Record the choice on the account when there is a session to record it
+  // against, so the next device adopts the most recent deliberate answer.
+  // Best effort: offline, it stays local and is seeded on the next sign-in.
+  try{
+    var _sb = getSupabase();
+    if(_sb && currentWorker && currentWorker.id){
+      _sb.from('ht_emisor').upsert(
+        {user_id:currentWorker.id, remision_enabled:on, updated_at:new Date().toISOString()},
+        {onConflict:'user_id'}).then(function(){}, function(){});
+    }
+  }catch(e){}
   // Standing on a tab that just disappeared leaves the operator looking at a
   // page they can no longer navigate back to.
   if(!on){
@@ -9684,44 +9730,63 @@ function setRemisionEnabled(on){
 function _rmApplyFlag(){
   var on = remisionEnabled();
   document.body.classList.toggle('rm-on', on);
-  // Reflect the live value on the Settings switch.
-  var sw = document.getElementById('sw-remision');
-  if(sw){
+  // Reflect the live value on both switches — Settings, and the one on the
+  // sign-up form.
+  ['sw-remision','sw-signup-remision'].forEach(function(id){
+    var sw = document.getElementById(id);
+    if(!sw) return;
     sw.classList.toggle('on', on);
     sw.setAttribute('aria-checked', on ? 'true' : 'false');
-  }
+  });
   _updateUnitSifenNote();
 }
 
 // Keep the shared account flag aligned with the always-on app. This is best
 // effort because Remisión must stay available offline too.
 /**
- * Take the account's Remisión setting on a device that has never expressed one.
+ * Settle this device and the account on one answer for Remisión.
  *
- * Only when the local key is absent — that is a fresh install, which has no
- * opinion, so the account's answer is the best one available and saves a
- * Paraguayan operator hunting for the switch on every new tablet.
+ * Two directions, never a fight:
+ *   - device has no stored value  -> take the account's, so a second tablet
+ *     does not have to be told again what this farm does.
+ *   - account has no row yet      -> seed it from this device, which is how a
+ *     sign-up choice reaches the cloud: there is no session at sign-up, so the
+ *     answer waits in local storage until the first real sign-in.
  *
- * Deliberately NOT "cloud wins". Once someone has touched the switch on this
- * device, '0' is an opinion and a stale true from another device must not
- * overrule it — otherwise turning it off here would keep undoing itself.
+ * When both already have a value, neither is touched. Deliberately not "cloud
+ * wins": once someone has used the switch here, a stale value from another
+ * tablet must not keep undoing them.
  */
-async function _rmAdoptAccountSetting(){
-  var neverSet = true;
-  try{ neverSet = localStorage.getItem(LS_REMISION_ON) === null; }catch(e){}
-  if(!neverSet) return;
-
+async function _rmSyncAccountSetting(){
   var sb = getSupabase();
   if(!sb || !currentWorker || !currentWorker.id) return;
+
+  var local = null;
+  try{ local = localStorage.getItem(LS_REMISION_ON); }catch(e){}
+
   try{
     var r = await sb.from('ht_emisor')
       .select('remision_enabled').eq('user_id', currentWorker.id).maybeSingle();
-    if(r && !r.error && r.data && r.data.remision_enabled === true){
-      try{ localStorage.setItem(LS_REMISION_ON, '1'); }catch(e){}
-      _rmApplyFlag();
-      logEvent('sync', 'Remisión enabled from account setting');
+    if(!r || r.error) return;                       // offline or blocked: leave both alone
+    var cloud = r.data ? r.data.remision_enabled : null;   // null = no row yet
+
+    if(local === null){
+      if(cloud === true){
+        try{ localStorage.setItem(LS_REMISION_ON, '1'); }catch(e){}
+        _rmApplyFlag();
+        logEvent('sync', 'Remisión enabled from account setting');
+      }
+      return;
     }
-  }catch(e){ /* offline or no row — stays off, switch is one tap away */ }
+
+    if(cloud === null || cloud === undefined){
+      await sb.from('ht_emisor').upsert(
+        {user_id:currentWorker.id, remision_enabled: local === '1',
+         updated_at:new Date().toISOString()},
+        {onConflict:'user_id'});
+      logEvent('sync', 'Remisión setting seeded on the account: ' + (local === '1'));
+    }
+  }catch(e){ /* offline — the switch is still one tap away */ }
 }
 
 async function _rmPullEnabled(){
@@ -18020,7 +18085,7 @@ async function pullConfig(){
   // A second tablet on the same account should not have to be told again that
   // this farm issues remisiones. Runs here rather than from the Remisión panel,
   // which is hidden precisely when the setting still needs adopting.
-  await _rmAdoptAccountSetting();
+  await _rmSyncAccountSetting();
   try{ localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker)); }catch(e){}
 
   try{
