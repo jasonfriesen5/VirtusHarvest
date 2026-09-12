@@ -4841,7 +4841,7 @@ function _openPasswordResetWhenReady(){
     </div>
     <div class="tx-sheet-footer">
       <button class="tx-btn-cancel" onclick="closeFieldEditSheet()">Cancel</button>
-      <button class="tx-btn-save" onclick="saveFieldEditSheet()">Save Field</button>
+      <button class="tx-btn-save" onclick="saveFieldEditSheet()">Save</button>
     </div>
   </div>
 </div>
@@ -6918,7 +6918,6 @@ function applyLanguage() {
   document.querySelectorAll('.tx-btn-save').forEach(function(btn) {
     var txt = btn.textContent.trim();
     var map = {'Save Cart':'Save Cart','Guardar Tolva':'Save Cart',
-      'Save Field':'Save Field','Guardar Campo':'Save Field',
       'Save Settings':'Save Settings','Guardar Configuración':'Save Settings',
       'Save':'Save','Guardar':'Save','Add':'Add','Agregar':'Add'};
     var key = map[txt]; if (key) btn.textContent = T(key);
