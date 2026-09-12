@@ -1635,6 +1635,10 @@ body{
 body.rm-on .rm-only{display:block !important;}
 body.rm-on .tx-row.rm-only{display:flex !important;}
 body.rm-on button.rm-only{display:inline-flex !important;}
+/* The tab button and the More row are flex, not inline-flex or block — without
+   these they would come back as the wrong shape when the feature is on. */
+body.rm-on .tab-btn.rm-only{display:flex !important;}
+body.rm-on .more-row.rm-only{display:flex !important;}
 .rm-sect{
   margin:14px 0 9px;padding-top:13px;border-top:1px solid var(--border);
   font-size:11px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;
@@ -3523,7 +3527,7 @@ function _openPasswordResetWhenReady(){
           <div class="more-row-chevron">›</div>
         </div>
 
-        <div class="more-row" onclick="openMorePanel('remision')">
+        <div class="more-row rm-only" onclick="openMorePanel('remision')">
           <div class="more-row-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A7AE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
           </div>
@@ -3737,6 +3741,23 @@ function _openPasswordResetWhenReady(){
         <!-- hidden for JS compat -->
         <div style="display:none;"><div id="set-sync-status"></div><input id="api-url-input"><div id="device-role-sub"></div><div id="seg-role"></div></div>
 
+
+        <!-- Remisión on/off. Lives in Settings rather than in the Remisión
+             panel itself, because turning it off hides that panel — a switch
+             inside the thing it hides can only be found once. -->
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Paraguay">Paraguay</div>
+          <div class="setting-row">
+            <div>
+              <div class="sr-label" data-en="Nota de Remisión">Nota de Remisión</div>
+              <div class="sr-sub" data-en="SIFEN electronic dispatch notes. Paraguay only — leave off elsewhere.">SIFEN electronic dispatch notes. Paraguay only — leave off elsewhere.</div>
+            </div>
+            <div class="seg-ctrl" id="seg-remision">
+              <button class="seg-btn" data-rm="off" onclick="setRemisionEnabled(false)" data-en="Off">Off</button>
+              <button class="seg-btn" data-rm="on"  onclick="setRemisionEnabled(true)"  data-en="On">On</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Language -->
         <div class="card">
@@ -4066,7 +4087,7 @@ function _openPasswordResetWhenReady(){
       </div>
       <div class="tab-label">Dest</div>
     </button>
-    <button class="tab-btn" id="tab-truckloads" onclick="_actionHaptic();showTab('truckloads')">
+    <button class="tab-btn rm-only" id="tab-truckloads" onclick="_actionHaptic();showTab('truckloads')">
       <div class="tab-icon-svg">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><line x1="8.5" y1="12" x2="15.5" y2="12"/><line x1="8.5" y1="15.5" x2="13" y2="15.5"/></svg>
       </div>
@@ -5644,6 +5665,10 @@ const _i18n = {
   'Capacity (kg)':'Capacidad (kg)','Make / Model':'Marca / Modelo',
   'Truck':'Camión','Save Truck':'Guardar Camión','Capacity:':'Capacidad:',
   'Alarm at:':'Alarma a:','Alarm at':'Alarma a',
+  'Remisión on':'Remisión activada','Remisión off':'Remisión desactivada',
+  'Nota de Remisión':'Nota de Remisión','Paraguay':'Paraguay','On':'Activado','Off':'Desactivado',
+  'SIFEN electronic dispatch notes. Paraguay only — leave off elsewhere.':
+    'Notas de remisión electrónicas SIFEN. Solo Paraguay — déjalo desactivado en otros países.',
   'Edit Truck':'Editar Camión',
 
   // ── Destinations ──
@@ -9589,16 +9614,67 @@ async function _tlLoadRemisiones(retried){
 // up later means replacing three bodies, not restructuring the screen.
 
 var LS_REMISION_PROFILES = 'vh_remision_profiles';
-var LS_REMISION_ON       = 'vh_remision_enabled'; // retained only to migrate older installs
+var LS_REMISION_ON       = 'vh_remision_enabled'; // '1' on, '0' off, unset = guess from region
 
 // Remisión is part of the app rather than an optional feature. Keeping this
 // function lets the existing call sites state their intent while guaranteeing
 // that a device or account which previously saved "off" cannot hide the flow.
-function remisionEnabled(){ return true; }
+/**
+ * Is the Nota de Remisión half of the app switched on?
+ *
+ * A preference, not an entitlement: users buy their Fenex account from Fenex,
+ * so there is nothing here to protect — only clutter to keep off the screens of
+ * farms outside Paraguay, where the document does not exist.
+ *
+ * Defaults on for anyone already using it, and for a device set to Paraguay.
+ * Everywhere else starts off and switches on in Settings.
+ */
+function remisionEnabled(){
+  try{
+    var v = localStorage.getItem(LS_REMISION_ON);
+    if(v === '1') return true;
+    if(v === '0') return false;
+  }catch(e){}
+  return _rmDefaultForRegion();
+}
+
+/** First-run guess only — the switch in Settings overrides it for good. */
+function _rmDefaultForRegion(){
+  try{
+    var tags = [];
+    if(navigator.languages) tags = tags.concat(navigator.languages);
+    if(navigator.language) tags.push(navigator.language);
+    for(var i=0;i<tags.length;i++){
+      if(/[-_]PY\b/i.test(tags[i])) return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+function setRemisionEnabled(on){
+  try{ localStorage.setItem(LS_REMISION_ON, on ? '1' : '0'); }catch(e){}
+  _rmApplyFlag();
+  // Standing on a tab that just disappeared leaves the operator looking at a
+  // page they can no longer navigate back to.
+  if(!on){
+    var openPanel = document.getElementById('sp-remision');
+    if(openPanel) openPanel.classList.remove('open');
+    var tab = document.getElementById('tab-truckloads');
+    if(tab && tab.classList.contains('active')) showTab('weigh');
+  }
+  showToast(on ? T('Remisión on') : T('Remisión off'), 'warn');
+}
 
 function _rmApplyFlag(){
-  try{ localStorage.setItem(LS_REMISION_ON,'1'); }catch(e){}
-  document.body.classList.add('rm-on');
+  var on = remisionEnabled();
+  document.body.classList.toggle('rm-on', on);
+  // Reflect the live value on the Settings switch.
+  var seg = document.getElementById('seg-remision');
+  if(seg){
+    seg.querySelectorAll('.seg-btn').forEach(function(b){
+      b.classList.toggle('active', (b.getAttribute('data-rm') === 'on') === on);
+    });
+  }
   _updateUnitSifenNote();
 }
 
@@ -9609,8 +9685,10 @@ async function _rmPullEnabled(){
   var sb = getSupabase();
   if(!sb || !currentWorker || !currentWorker.id) return;
   try{
+    // The real value, so the web console shows what this account actually uses
+    // rather than true for everyone.
     await sb.from('ht_emisor').upsert(
-      {user_id:currentWorker.id,remision_enabled:true,updated_at:new Date().toISOString()},
+      {user_id:currentWorker.id,remision_enabled:remisionEnabled(),updated_at:new Date().toISOString()},
       {onConflict:'user_id'});
   }catch(e){}
 }
