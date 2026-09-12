@@ -4468,7 +4468,7 @@ function _openPasswordResetWhenReady(){
     </div>
     <div class="tx-sheet-footer">
       <button class="tx-btn-cancel" onclick="closeAddTruckSheet()">Cancel</button>
-      <button class="tx-btn-save" onclick="saveAddTruckSheet()">Save Truck</button>
+      <button class="tx-btn-save" onclick="saveAddTruckSheet()">Save</button>
     </div>
   </div>
 </div>
@@ -6868,8 +6868,7 @@ function applyLanguage() {
   // ── Various save/cancel buttons ──
   document.querySelectorAll('.tx-btn-save').forEach(function(btn) {
     var txt = btn.textContent.trim();
-    var map = {'Save Truck':'Save Truck',
-      'Save Cart':'Save Cart','Guardar Tolva':'Save Cart','Guardar Cami��n':'Save Truck',
+    var map = {'Save Cart':'Save Cart','Guardar Tolva':'Save Cart',
       'Save Field':'Save Field','Guardar Campo':'Save Field',
       'Save Settings':'Save Settings','Guardar Configuración':'Save Settings',
       'Save':'Save','Guardar':'Save','Add':'Add','Agregar':'Add'};
