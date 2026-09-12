@@ -3201,7 +3201,9 @@ function _openPasswordResetWhenReady(){
             <div style="flex:1;"></div>
 <!-- aub-state-lbl removed -->
             <div class="scale-mode-lbl">Remote</div>
-            <div class="scale-mode-lbl active-mode">Net</div>
+            <!-- updateScaleModeLabel() deliberately skips this one, so it had no
+                 translation path at all and read "Net" in every language. -->
+            <div class="scale-mode-lbl active-mode" data-en="Net">Net</div>
           </div>
           <div class="scale-main-weight" id="scale-weight"><span id="scale-weight-val">- -</span></div>
           <div class="scale-sub-row">
@@ -3325,7 +3327,7 @@ function _openPasswordResetWhenReady(){
         <div class="info-row info-row-split">
           <div class="ir-tap ir-tap-left" onclick="openWorkerPicker()">
             <div class="info-row-main">
-              <div class="info-row-sub" style="font-size:11px;color:var(--text);font-weight:600;letter-spacing:0.03em;text-transform:uppercase;">Operator</div>
+              <div class="info-row-sub" style="font-size:11px;color:var(--text);font-weight:600;letter-spacing:0.03em;text-transform:uppercase;" data-en="Operator">Operator</div>
               <div class="info-row-title" id="ir-worker" style="color:var(--text);">No Operator Selected</div>
             </div>
           </div>
@@ -3680,11 +3682,11 @@ function _openPasswordResetWhenReady(){
     <div class="sub-panel" id="sp-diagnostics">
       <div class="sp-header">
         <button class="sp-back" onclick="closeMorePanel('diagnostics')">‹ More</button>
-        <div class="sp-title">Diagnostics</div>
+        <div class="sp-title" data-en="Diagnostics">Diagnostics</div>
       </div>
       <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
         <div class="card">
-          <div class="sp-section-lbl">Diagnostics Terminal</div>
+          <div class="sp-section-lbl" data-en="Diagnostics Terminal">Diagnostics Terminal</div>
 
           <div class="diag-layout">
             <!-- Terminal display -->
@@ -3700,8 +3702,8 @@ function _openPasswordResetWhenReady(){
               overflow-y:auto;
               line-height:1.6;
             ">
-              <span style="color:#58A6FF;">Virtus Diagnostics v1.0</span><br>
-              <span style="color:#6E7681;">Tap "Run Diagnostics" to collect report...</span>
+              <span style="color:#58A6FF;" data-en="Virtus Diagnostics v1.0">Virtus Diagnostics v1.0</span><br>
+              <span style="color:#6E7681;" data-en="Tap &quot;Run Diagnostics&quot; to collect report...">Tap "Run Diagnostics" to collect report...</span>
             </div>
 
             <!-- Buttons -->
@@ -3786,6 +3788,7 @@ function _openPasswordResetWhenReady(){
               <button class="seg-btn" data-lang="auto" onclick="setLanguage('auto')" data-en="Auto">Auto</button>
               <button class="seg-btn" data-lang="en" onclick="setLanguage('en')">English</button>
               <button class="seg-btn" data-lang="es" onclick="setLanguage('es')">Español</button>
+              <button class="seg-btn" data-lang="pt" onclick="setLanguage('pt')">Português</button>
             </div>
           </div>
           <div class="setting-row" style="border-bottom:none;">
@@ -3992,7 +3995,11 @@ function _openPasswordResetWhenReady(){
       <div id="season-tx-view" style="display:none;">
         <div class="sp-header">
           <button onclick="seasonGoBack()" style="background:none;border:none;font-size:20px;color:var(--text2);cursor:pointer;padding:0 6px;">‹</button>
-          <div class="sp-title" id="season-tx-title">Transactions</div>
+          <!-- data-en, not the text-matching sweep: Portuguese renders both
+               "Transactions" and "Truckloads" as Cargas, so the reverse lookup
+               cannot tell which English word this was and rightly refuses to
+               guess. That left it stuck reading Cargas in every language. -->
+          <div class="sp-title" id="season-tx-title" data-en="Transactions">Transactions</div>
         </div>
         <div style="padding:0;">
           <div id="season-tx-card" style="display:block;">
@@ -5635,7 +5642,9 @@ const LS_LANG = 'ht_lang';
 const LS_LANG_EXPLICIT = 'ht_lang_explicit';   // set once the user manually picks a language
 function _deviceLangCode() {
   var d = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
-  return d.startsWith('es') ? 'es' : 'en';
+  if (d.startsWith('es')) return 'es';
+  if (d.startsWith('pt')) return 'pt';   // pt-BR and pt-PT both land here
+  return 'en';
 }
 // Two separate things, deliberately: _langPref is what the user picked
 // ('auto' | 'en' | 'es') and drives which Settings button is lit; _lang is what
@@ -5654,7 +5663,7 @@ window.addEventListener('languagechange', function() {
   if (_langPref === 'auto' && _lang !== _deviceLangCode()) setLanguage('auto');
 });
 
-const _i18n = {
+const _i18n_es = {
   // ── Auth ──
   'Sign In':'Iniciar Sesión','Create Account':'Crear Cuenta',
   'Forgot password?':'¿Olvidaste tu contraseña?',
@@ -6405,14 +6414,966 @@ const _i18n = {
   'records':'registros','record':'registro','pending':'pendientes',
 };
 
+// English is the key set, so it needs no table of its own. A language with no
+// table, or a string missing from one, falls through to the English — visibly
+// untranslated rather than blank, which is the failure mode you can actually
+// spot and fix.
+// ── Portuguese (pt-BR) ──
+// Brazilian grain-farming vocabulary, not a literal rendering of the Spanish:
+// a field is a talhão, a season is a safra, a crop is a cultura, a grain cart
+// is a graneleiro. Those are the words an operator in Mato Grosso uses; campo,
+// temporada and cultivo would all be understood but would read as imported.
+const _i18n_pt = {
+  'Sign In':'Entrar',
+  'Create Account':'Criar Conta',
+  'Forgot password?':'Esqueceu a senha?',
+  'Forgot password? Reset password':'Esqueceu a senha? Redefinir senha',
+  'Email Address':'E-mail',
+  'Your password':'Sua senha',
+  'Min. 8 characters':'Mín. 8 caracteres',
+  'Full Name':'Nome Completo',
+  'Send Reset Link':'Enviar Link',
+  '← Back to Sign In':'← Voltar para Entrar',
+  'New Password':'Nova Senha',
+  'Confirm Password':'Confirmar Senha',
+  'Set New Password':'Definir Nova Senha',
+  'Password':'Senha',
+  'Repeat password':'Repetir senha',
+  'Enter your email address and we\'ll send you a link to reset your password.':'Digite seu e-mail e enviaremos um link para redefinir sua senha.',
+  'Enter your new password below.':'Digite sua nova senha abaixo.',
+  'Online':'Conectado',
+  'Offline':'Sem Conexão',
+  'REMOTE':'REMOTO',
+  'Tare':'Tara',
+  'Clear':'Limpar',
+  'Unload':'Descarregar',
+  'Save':'Salvar',
+  'Waiting':'Aguardando',
+  'Stable':'Estável',
+  'Stabilising...':'Estabilizando...',
+  'spread':'variação',
+  'Gross':'Bruto',
+  'Net':'Líquido',
+  'Auto-unload ready':'Descarga automática pronta',
+  'Auto-unload not ready':'Descarga automática não pronta',
+  'Remote':'Remoto',
+  'UNLOADING':'DESCARREGANDO',
+  'On Scale':'Na Balança',
+  'No Field':'Sem Talhão',
+  'No Farm':'Sem Fazenda',
+  'No Zone':'Sem Zona',
+  'Default':'Padrão',
+  'No Truck':'Sem Caminhão',
+  'No Crop':'Sem Cultura',
+  'Select Destination':'Selecionar Destino',
+  'No Destination':'Sem Destino',
+  'Unloaded':'Descarregado',
+  'Operator':'Operador',
+  'No Operator Selected':'Nenhum Operador Selecionado',
+  'No Devices':'Sem Dispositivos',
+  'Capacity not set':'Capacidade não definida',
+  'Empty Truck':'Esvaziar Caminhão',
+  'Crop':'Cultura',
+  'Moisture %':'Umidade %',
+  'Season':'Safra',
+  'Canola':'Canola',
+  'Chia':'Chia',
+  'Corn':'Milho',
+  'Cotton':'Algodão',
+  'Oats':'Aveia',
+  'Peanuts':'Amendoim',
+  'Rice':'Arroz',
+  'Soybeans':'Soja',
+  'Sorghum':'Sorgo',
+  'Sunflower':'Girassol',
+  'Wheat':'Trigo',
+  '+ Add new crop...':'+ Adicionar nova cultura...',
+  'No custom crops added yet':'Nenhuma cultura personalizada adicionada',
+  'No Season':'Sem Safra',
+  'Notes':'Observações',
+  'Farms':'Fazendas',
+  '+ Farm':'+ Fazenda',
+  'Farm name...':'Nome da fazenda...',
+  'Add':'Adicionar',
+  '+ Field':'+ Talhão',
+  'Field name...':'Nome do talhão...',
+  'Farm':'Fazenda',
+  'Total Harvested':'Total Colhido',
+  'Total Area':'Área Total',
+  'Trucks':'Caminhões',
+  '+ Truck':'+ Caminhão',
+  'No trucks added yet':'Nenhum caminhão cadastrado',
+  'Add New Truck':'Adicionar Caminhão',
+  'Truck Name *':'Nome do Caminhão *',
+  'Licence Plate *':'Placa *',
+  'Driver Name':'Nome do Motorista',
+  'Capacity (kg)':'Capacidade (kg)',
+  'Make / Model':'Marca / Modelo',
+  'Truck':'Caminhão',
+  'Save Truck':'Salvar Caminhão',
+  'Capacity:':'Capacidade:',
+  'Alarm at:':'Alarme em:',
+  'Alarm at':'Alarme em',
+  'Remisión on':'Remissão ativada',
+  'Remisión off':'Remissão desativada',
+  'Nota de Remisión':'Nota de Remisión',
+  'Paraguay':'Paraguai',
+  'Edit Truck':'Editar Caminhão',
+  'Destinations / Bins':'Destinos / Silos',
+  '+ Destination':'+ Destino',
+  'No destinations added yet':'Nenhum destino cadastrado',
+  'Destination':'Destino',
+  'More':'Mais',
+  'Connection Mode':'Modo de Conexão',
+  'Primary (BLE)':'Principal (BLE)',
+  'Remote (WiFi read-only)':'Remoto (WiFi somente leitura)',
+  'Primary':'Principal',
+  'Local':'Local',
+  'Primary device — controls the scale':'Dispositivo principal — controla a balança',
+  'Remote device — receives data from primary':'Dispositivo remoto — recebe dados do principal',
+  'Operators':'Operadores',
+  'Devices':'Dispositivos',
+  'Settings':'Configurações',
+  'Cloud Sync':'Sincronização na Nuvem',
+  'Field Map':'Mapa de Talhões',
+  'About':'Sobre',
+  'Not signed in':'Não conectado',
+  'Sign Out':'Sair',
+  'Tap to sign in or create account':'Toque para entrar ou criar conta',
+  'Signed in as':'Conectado como',
+  'Dest':'Destino',
+  'Device':'Balança',
+  'Diagnostics':'Diagnóstico',
+  'Units':'Unidades',
+  'Weight':'Peso',
+  'Scale display unit':'Unidade de exibição',
+  'Temperature':'Temperatura',
+  'Weather & conditions':'Clima e condições',
+  'Area':'Área',
+  'Field measurements':'Medições do talhão',
+  'Auto-Unload Detection':'Detecção de Descarga Automática',
+  'Drop Trigger':'Queda Mínima',
+  'Data':'Dados',
+  'Auto-unload off':'Descarga automática desligada',
+  'Waiting for GPS':'Aguardando GPS',
+  'GPS accuracy too low':'Precisão do GPS insuficiente',
+  'Scale-only auto-unload ready':'Descarga automática só pela balança pronta',
+  'scale-only in':'só balança em',
+  'Paused — device moving':'Pausado — dispositivo em movimento',
+  'Stopped — arming auto-unload…':'Parado — preparando descarga automática…',
+  'GPS ready for auto-unload':'GPS pronto para descarga automática',
+  'Clear Local Data':'Apagar Dados Locais',
+  'Clear Local Transactions':'Apagar Cargas Locais',
+  'Sync complete':'Sincronização concluída',
+  'Sync failed':'Falha na sincronização',
+  'Clear Local Transactions?':'Apagar Cargas Locais?',
+  'Loads only, this device — farms, fields and trucks are kept':'Somente cargas, neste aparelho — fazendas, talhões e caminhões são mantidos',
+  'Display Rounding':'Arredondamento da Tela',
+  'Idle Timeout':'Tempo de Inatividade',
+  'Scale Power Saving':'Economia de Bateria da Balança',
+  '30 min':'30 min',
+  '1 hr':'1 h',
+  '2 hr':'2 h',
+  'Off':'Desligado',
+  'Check for Firmware Updates':'Procurar Atualizações de Firmware',
+  'Tap to check for the latest version':'Toque para procurar a versão mais recente',
+  'Update available: v':'Atualização disponível: v',
+  'Grain Carts':'Graneleiros',
+  'Add Cart':'Adicionar Graneleiro',
+  'Add Grain Cart':'Adicionar Graneleiro',
+  'Edit Grain Cart':'Editar Graneleiro',
+  'Cart Name':'Nome do Graneleiro',
+  'Save Cart':'Salvar Graneleiro',
+  'Scale':'Balança',
+  'Scan & Connect Scale':'Buscar e Conectar Balança',
+  'No scale connected yet — tap Scan.':'Nenhuma balança conectada — toque em Buscar.',
+  'Searching for a Virtus module…':'Procurando um módulo Virtus…',
+  'No carts yet — tap Add Cart to name one and pair its scale':'Nenhum graneleiro ainda — toque em Adicionar Graneleiro para nomear um e parear sua balança',
+  'Remove Cart?':'Remover Graneleiro?',
+  'Selected':'Selecionado',
+  'Scale in Sleep Mode':'Balança em Modo de Espera',
+  'The scale is conserving battery after a period of inactivity. Tap Wake to resume weighing.':'A balança está economizando bateria após um período sem uso. Toque em Acordar para voltar a pesar.',
+  'Wake':'Acordar',
+  'Unrecognized Scale':'Balança Não Reconhecida',
+  'This scale could not be verified as genuine Virtus hardware. For your data\'s integrity, the app works only with authentic Virtus scales.':'Não foi possível confirmar que esta balança é um equipamento Virtus original. Para garantir a integridade dos seus dados, o aplicativo funciona apenas com balanças Virtus autênticas.',
+  'Disconnect':'Desconectar',
+  'Dark Mode':'Modo Escuro',
+  'Auto':'Auto',
+  'Light':'Claro',
+  'Dark':'Escuro',
+  'Theme: ':'Tema: ',
+  'Weight Unit':'Unidade de Peso',
+  'The unit used to display and record weights throughout the app — kilograms, pounds, or bushels. Changing it reformats every reading and log entry.':'A unidade usada para exibir e registrar pesos em todo o aplicativo — quilos, libras ou bushels. Alterá-la reformata todas as leituras e registros.',
+  'Area Unit':'Unidade de Área',
+  'The unit used for field sizes and yield calculations — hectares or acres. Affects the per-area figures shown on fields and farms.':'A unidade usada para o tamanho dos talhões e o cálculo de produtividade — hectares ou acres. Afeta os valores por área mostrados em talhões e fazendas.',
+  'The display language for the app interface. Your data is unaffected.':'O idioma da interface do aplicativo. Seus dados não são alterados.',
+  'How much weight must come off the cart before an unload is auto-detected. The averaged weight drop must hold for 4 seconds before unloading starts, which filters bumps and brief scale movement. Set to 0 to turn auto-unload off.':'Quanto peso precisa sair do graneleiro para que uma descarga seja detectada automaticamente. A queda média de peso precisa se manter por 4 segundos antes da descarga começar, o que filtra solavancos e movimentos rápidos da balança. Defina 0 para desligar a descarga automática.',
+  'After the screen sits idle this long, the app tells the connected scale to enter a low-power mode to save the module battery. Any tap wakes it again. Set to Off to keep the scale fully active.':'Depois que a tela ficar parada por esse tempo, o aplicativo coloca a balança conectada em modo de baixo consumo para economizar a bateria do módulo. Qualquer toque a acorda. Deixe em Desligado para manter a balança sempre ativa.',
+  'Wipes all harvest logs stored on this device. Records already synced to the cloud are not affected. This cannot be undone.':'Apaga todos os registros de colheita guardados neste aparelho. Os registros já sincronizados com a nuvem não são afetados. Isso não pode ser desfeito.',
+  'How closely the big weight number tracks the scale. The scale itself reports full 1 kg precision — this only smooths what\'s shown, so the display doesn\'t flicker on a bouncy load. Saved transaction weights are unaffected.':'O quanto o número grande de peso acompanha a balança. A balança informa precisão de 1 kg — isso apenas suaviza o que aparece na tela, para não ficar piscando com a carga balançando. Os pesos já salvos não são afetados.',
+  'Close':'Fechar',
+  'Firmware v':'Firmware v',
+  'available':'disponível',
+  'In-app updating runs in the Virtus iOS app. On the web, download the update file and flash it with the nRF Device Firmware Update app (put the scale in update mode first).':'A atualização pelo aplicativo funciona no app Virtus para iOS. Na web, baixe o arquivo de atualização e grave-o com o app nRF Device Firmware Update (coloque a balança em modo de atualização primeiro).',
+  'Download update file':'Baixar arquivo de atualização',
+  'Wipe logs from this device':'Apagar registros deste aparelho',
+  'Language':'Idioma',
+  'App language':'Idioma do aplicativo',
+  'Pending Records':'Registros Pendentes',
+  'Last Synced':'Última Sincronização',
+  'Connection':'Conexão',
+  'Never':'Nunca',
+  'All synced':'Tudo sincronizado',
+  'Sync':'Sincronizar',
+  'Bluetooth Scale':'Balança Bluetooth',
+  'Scan for Devices':'Buscar Dispositivos',
+  'Scanning...':'Buscando...',
+  'Connect':'Conectar',
+  'Connected':'Conectado',
+  'Weight Device':'Aparelho de Peso',
+  'Model':'Modelo',
+  'Serial Number':'Número de Série',
+  'Firmware Version':'Versão do Firmware',
+  'Battery':'Bateria',
+  'Input Voltage':'Tensão de Entrada',
+  'Calibration Tool':'Ferramenta de Calibração',
+  'Firmware Updates':'Atualizações de Firmware',
+  'Check':'Verificar',
+  'Good':'Boa',
+  'Low':'Baixa',
+  'Please Charge':'Carregue a Bateria',
+  'Calibration':'Calibração',
+  'Zero Scale':'Zerar Balança',
+  'Sensitivity':'Sensibilidade',
+  'Permanently re-zeros the scale':'Zera a balança de forma permanente',
+  'Zero':'Zerar',
+  'Slide to zero':'Deslize para zerar',
+  'Diagnostics Terminal':'Terminal de Diagnóstico',
+  'Run Diagnostics':'Executar Diagnóstico',
+  'Send Email':'Enviar E-mail',
+  'Share':'Compartilhar',
+  'Clear Event Log':'Apagar Registro de Eventos',
+  'Report ready — email it or share with any app':'Relatório pronto — envie por e-mail ou compartilhe com qualquer aplicativo',
+  'Connect a scale first':'Conecte uma balança primeiro',
+  'Connect a scale first (tap Scan)':'Conecte uma balança primeiro (toque em Buscar)',
+  'Checking…':'Verificando…',
+  'Update available:':'Atualização disponível:',
+  'Update':'Atualizar',
+  'Up to date':'Atualizado',
+  'Could not check for updates':'Não foi possível verificar atualizações',
+  'Send Report To':'Enviar Relatório Para',
+  'Tap Scan to find nearby Bluetooth scales':'Toque em Buscar para encontrar balanças Bluetooth por perto',
+  'Run diagnostics first, then email or share the report':'Execute o diagnóstico primeiro, depois envie ou compartilhe o relatório',
+  'Check via scale WiFi connection':'Verificar pela conexão WiFi da balança',
+  'Active Operator':'Operador Ativo',
+  '+ Operator':'+ Operador',
+  'Tap an operator below to select':'Toque em um operador abaixo para selecionar',
+  'Add Operator':'Adicionar Operador',
+  'Edit Operator':'Editar Operador',
+  'Name *':'Nome *',
+  'Select Operator':'Selecionar Operador',
+  'No operator selected':'Nenhum operador',
+  'Add operator':'Adicionar operador',
+  'Save anyway':'Salvar mesmo assim',
+  'This load will be saved without an operator. Add one now?':'Esta carga será salva sem operador. Adicionar um agora?',
+  'Active Season':'Safra Ativa',
+  'No Season Selected':'Nenhuma Safra Selecionada',
+  'Created':'Criada',
+  'Select or create a season below':'Selecione ou crie uma safra abaixo',
+  '+ Season':'+ Safra',
+  'Add Season':'Adicionar Safra',
+  'Edit Season':'Editar Safra',
+  'Season Name *':'Nome da Safra *',
+  'Transactions':'Cargas',
+  'All Fields':'Todos os Talhões',
+  'Current Field':'Talhão Atual',
+  'Select a field first':'Selecione um talhão primeiro',
+  'Zoom in':'Aproximar',
+  'Zoom out':'Afastar',
+  'No boundaries drawn yet':'Nenhum limite desenhado ainda',
+  'No boundary drawn for this field':'Este talhão não tem limite desenhado',
+  'Logged Entries':'Registros',
+  'Draw Boundary':'Desenhar Limite',
+  'My Location':'Minha Localização',
+  'Undo':'Desfazer',
+  'Cancel':'Cancelar',
+  'No GPS data found for any field or transaction yet.':'Nenhum dado de GPS encontrado para talhões ou cargas ainda.',
+  'Tap the map to place boundary points':'Toque no mapa para marcar os pontos do limite',
+  '0 points':'0 pontos',
+  'Version':'Versão',
+  'Platform':'Plataforma',
+  'Android App':'Aplicativo Android',
+  'iOS App':'Aplicativo iOS',
+  'Web App (iPad)':'Aplicativo Web (iPad)',
+  'Web App (Android)':'Aplicativo Web (Android)',
+  'Web App (iPhone)':'Aplicativo Web (iPhone)',
+  'Web App':'Aplicativo Web',
+  'Select Unload Location':'Selecionar Local de Descarga',
+  'Add New Field':'Adicionar Talhão',
+  'Add New Farm':'Adicionar Fazenda',
+  'Add New Destination':'Adicionar Destino',
+  'Farm name *':'Nome da Fazenda *',
+  'Field name *':'Nome do Talhão *',
+  'Destination / bin name *':'Nome do Destino / Silo *',
+  'Manage Crops':'Gerenciar Culturas',
+  'Add New Crop':'Adicionar Cultura',
+  'Add Crop':'Adicionar Cultura',
+  'Adding to':'Adicionando a',
+  'for yield calc':'para cálculo de produtividade',
+  'Crop name e.g. Wheat...':'Nome da cultura ex. Trigo...',
+  'Select Farm & Field':'Selecionar Fazenda e Talhão',
+  'Select Farm':'Selecionar Fazenda',
+  'Select Field':'Selecionar Talhão',
+  'Auto Select':'Seleção Automática',
+  'Auto Select enabled':'Seleção Automática ativada',
+  'Select Truck':'Selecionar Caminhão',
+  'Unload to Truck':'Descarregar no Caminhão',
+  'No truck selected':'Nenhum caminhão selecionado',
+  'You\'ve entered a field':'Você entrou em um talhão',
+  'Field Name':'Nome do Talhão',
+  'Stay':'Ficar',
+  'Switch Field':'Trocar de Talhão',
+  'Delete':'Excluir',
+  'Profile Photo':'Foto do Perfil',
+  'Choose how to add your photo':'Escolha como adicionar sua foto',
+  'Take Photo':'Tirar Foto',
+  'Choose from Gallery':'Escolher da Galeria',
+  'Remove Photo':'Remover Foto',
+  'Edit Field':'Editar Talhão',
+  'Edit Farm':'Editar Fazenda',
+  'Edit Destination':'Editar Destino',
+  'Edit':'Editar',
+  'Remisión — identification':'Remissão — identificação',
+  'Fill in details':'Preencher dados',
+  'Edit details':'Editar dados',
+  'Save draft':'Salvar rascunho',
+  'Remisión draft saved':'Rascunho da remissão salvo',
+  'Checking with Fenex…':'Consultando a Fenex…',
+  'Asking Fenex…':'Consultando a Fenex…',
+  'Declined':'Recusado',
+  'Disconnected':'Desconectado',
+  'Choose the department first':'Escolha o departamento primeiro',
+  'Sign in to load the DNIT list.':'Entre para carregar a lista DNIT.',
+  'City list for this district comes from Fenex, which is not connected yet.':'A lista de cidades deste distrito vem da Fenex, que ainda não está conectada.',
+  'No connection — the list loads once you are back online.':'Sem conexão — a lista carrega quando você voltar a ficar on-line.',
+  'Choose the district first':'Escolha o distrito primeiro',
+  'Loading…':'Carregando…',
+  'The DNIT list needs Fenex, which is not connected yet.':'A lista DNIT precisa da Fenex, que ainda não está conectada.',
+  'Could not load the list. Try again when there is a connection.':'Não foi possível carregar a lista. Tente novamente com conexão.',
+  'Integration unavailable':'Integração indisponível',
+  'Fenex integration is not available yet.':'A integração com a Fenex ainda não está disponível.',
+  'Hold':'Segure',
+  'No scale connected':'Nenhuma balança conectada',
+  'Zero sent to scale':'Zero enviado para a balança',
+  'Zero could not be sent — check the connection':'Não foi possível enviar o zero — verifique a conexão',
+  'Permanently re-zeros the scale — hold the button':'Zera a balança de forma permanente — segure o botão',
+  'Cancel request':'Cancelar solicitação',
+  'Cancel this request?':'Cancelar esta solicitação?',
+  'records updated':'registros atualizados',
+  'Farm already exists':'Esta fazenda já existe',
+  'Already exists':'Já existe',
+  'The RUC owner will no longer see this request.':'O dono do RUC não verá mais esta solicitação.',
+  'Waiting for internet':'Aguardando internet',
+  'Waiting to send':'Aguardando envio',
+  'Queued for the issuer. Nothing is issued until they approve it in Fenex.':'Na fila do emissor. Nada é emitido até que ele aprove na Fenex.',
+  'This truckload is already with the issuer.':'Esta carga já está com o emissor.',
+  'Sign in to send a remisión draft':'Entre para enviar um rascunho de remissão',
+  'Get PDF':'Obter PDF',
+  'Fetching the PDF…':'Baixando o PDF…',
+  'Remisión PDF':'PDF da Remissão',
+  'Loading PDF…':'Carregando PDF…',
+  'Could not open this PDF.':'Não foi possível abrir este PDF.',
+  'The signed PDF is not available yet.':'O PDF assinado ainda não está disponível.',
+  'Could not fetch the PDF.':'Não foi possível baixar o PDF.',
+  'No document reference yet — the issuer has not finished it.':'Ainda não há referência do documento — o emissor não finalizou.',
+  'Up to date with Fenex.':'Atualizado com a Fenex.',
+  'No profiles yet — add one and the RUC owner approves it in Fenex.':'Nenhum perfil ainda — adicione um e o dono do RUC aprova na Fenex.',
+  'Request sent. The RUC owner approves it inside Fenex.':'Solicitação enviada. O dono do RUC aprova dentro da Fenex.',
+  'Requesting…':'Solicitando…',
+  'Fenex accepted the request but did not create a pending connection. The Fenex backend must reopen the revoked profile before this request can be approved.':'A Fenex aceitou a solicitação, mas não criou uma conexão pendente. O sistema da Fenex precisa reabrir o perfil revogado antes que esta solicitação possa ser aprovada.',
+  'Fenex connection failed.':'Falha na conexão com a Fenex.',
+  'Fenex did not respond in time.':'A Fenex não respondeu a tempo.',
+  'Fenex accepted the draft but returned no draft id.':'A Fenex aceitou o rascunho mas não retornou um id.',
+  'Please sign in to Virtus again.':'Entre novamente no Virtus.',
+  'This ends the connection to that RUC. It does not cancel anything already issued.':'Isso encerra a conexão com aquele RUC. Não cancela nada que já foi emitido.',
+  'Connect an approved Fenex profile first — More ▸ Remisión.':'Conecte primeiro um perfil aprovado da Fenex — Mais ▸ Remissão.',
+  'Sending needs a connection. The draft is saved and can be sent later.':'O envio precisa de conexão. O rascunho foi salvo e pode ser enviado depois.',
+  'Send for approval?':'Enviar para aprovação?',
+  'Sending…':'Enviando…',
+  'Sent for approval':'Enviado para aprovação',
+  'Send this draft to':'Enviar este rascunho para',
+  'for review in Fenex? They create the remisión there.':'para revisão na Fenex? Eles criam a remissão lá.',
+  'Fill in the details, then send the draft to the issuer for approval in Fenex.':'Preencha os dados e envie o rascunho ao emissor para aprovação na Fenex.',
+  'Draft saved — will upload when there is signal':'Rascunho salvo — será enviado quando houver sinal',
+  'Saved on this device — waiting to upload.':'Salvo neste aparelho — aguardando envio.',
+  'Saved here, but the upload keeps failing:':'Salvo aqui, mas o envio continua falhando:',
+  'Could not save the draft':'Não foi possível salvar o rascunho',
+  'Sign in to save a remisión draft':'Entre para salvar um rascunho de remissão',
+  'Truckload not found':'Carga não encontrada',
+  'You can fill in and save the details now. Sending will be available when Fenex enables draft approval.':'Você pode preencher e salvar os dados agora. O envio ficará disponível quando a Fenex liberar a aprovação de rascunhos.',
+  'fields still needed — open Fill in details.':'campos faltando — abra Preencher dados.',
+  'field still needed — open Fill in details.':'campo faltando — abra Preencher dados.',
+  'The document is issued by whoever’s Fenex account sends it — their RUC, timbrado and numbering come from Fenex, not from here.':'O documento é emitido pela conta Fenex que o envia — o RUC, o timbrado e a numeração vêm da Fenex, não daqui.',
+  'Se emite a nombre de':'Emitido em nome de',
+  'Fecha de emisión':'Data de emissão',
+  'Inicio del traslado':'Início do transporte',
+  'Fin estimado':'Fim previsto',
+  'Fecha futura de la factura':'Data futura da fatura',
+  'Distancia estimada':'Distância estimada',
+  'No connected profile yet':'Nenhum perfil conectado ainda',
+  'Receptor':'Destinatário',
+  'Datos del traslado':'Dados do transporte',
+  'Punto de salida':'Ponto de saída',
+  'Punto de entrega':'Ponto de entrega',
+  'Vehículo, transportista y chofer':'Veículo, transportadora e motorista',
+  'Carga':'Carga',
+  'Prefilled from the destination. Check it against the buyer’s own paperwork.':'Preenchido a partir do destino. Confira com a documentação do comprador.',
+  'Where the truck was loaded — normally the farm.':'Onde o caminhão foi carregado — normalmente a fazenda.',
+  'One line per crop, weighed by your own scale, in whole kilos.':'Uma linha por cultura, pesada pela sua própria balança, em quilos inteiros.',
+  'Internal code':'Código interno',
+  'Unidad':'Unidade',
+  'Cantidad':'Quantidade',
+  'as saved':'como foi salvo',
+  'Total':'Total',
+  'thing SIFEN would reject:':'item que o SIFEN recusaria:',
+  'things SIFEN would reject:':'itens que o SIFEN recusaria:',
+  'You can still save — the draft is kept and nothing is sent.':'Você ainda pode salvar — o rascunho é mantido e nada é enviado.',
+  'The saved details pass the local checks. The issuer will review them in Fenex before creating the document.':'Os dados salvos passaram nas verificações locais. O emissor vai revisá-los na Fenex antes de criar o documento.',
+  'The department, district and city combination is verified by SIFEN itself. Copy all three from the destination or farm rather than typing codes.':'A combinação de departamento, distrito e cidade é verificada pelo próprio SIFEN. Copie os três do destino ou da fazenda em vez de digitar códigos.',
+  'Remisión documents always declare':'Os documentos de remissão sempre declaram',
+  'Cédula (CI)':'Cédula (CI)',
+  'Code':'Código',
+  'Document description':'Descrição do documento',
+  'Enable remisión':'Ativar remissão',
+  'On':'Ligado',
+  'Adds the legal fields a Paraguayan transport document needs to farms, trucks and destinations.':'Adiciona a fazendas, caminhões e destinos os campos legais exigidos pelo documento de transporte paraguaio.',
+  'Nota de Remisión enabled':'Nota de Remisión ativada',
+  'Nota de Remisión turned off':'Nota de Remisión desativada',
+  'Remisión — vehicle':'Remissão — veículo',
+  'Vehicle type':'Tipo de veículo',
+  'Driver cédula (CI)':'Cédula do motorista (CI)',
+  'Driver address':'Endereço do motorista',
+  'Remisión — hauler (transportista)':'Remissão — transportadora',
+  'Hauler name':'Nome da transportadora',
+  'Hauler address (street)':'Endereço da transportadora (rua)',
+  'Hauler locality (DNIT)':'Localidade da transportadora (DNIT)',
+  'Hauler RUC':'RUC da transportadora',
+  'Hauler address':'Endereço da transportadora',
+  'Remisión — departure point':'Remissão — ponto de partida',
+  'Remisión — receiver':'Remissão — destinatário',
+  'Legal name (razón social)':'Razão social',
+  'Address':'Endereço',
+  'Department':'Departamento',
+  'District':'Distrito',
+  'City':'Cidade',
+  'Yes':'Sim',
+  'No':'Não',
+  'updated':'atualizado',
+  'Save Field':'Salvar Talhão',
+  'Primary Crop':'Cultura Principal',
+  'Different crop':'Cultura diferente',
+  'You are weighing':'Você está pesando',
+  'is set to':'está definido como',
+  'this season':'nesta safra',
+  'Change crop':'Mudar cultura',
+  'Change field crop':'Mudar cultura do talhão',
+  'Leave both':'Deixar os dois',
+  'Set crop':'Definir cultura',
+  'Crop this season':'Cultura desta safra',
+  'What is planted here now — loads from this field will use it':'O que está plantado aqui agora — as cargas deste talhão vão usar',
+  'No crop assigned':'Sem cultura definida',
+  'optional':'opcional',
+  'Auto-calculated from drawn boundary':'Calculado automaticamente pelo limite desenhado',
+  'See Location':'Ver Localização',
+  'Add Transaction':'Adicionar Carga',
+  'Weight *':'Peso *',
+  'Crop *':'Cultura *',
+  'Add load':'Adicionar carga',
+  'Manual':'Manual',
+  'Edited':'Editada',
+  'is already full':'já está cheio',
+  'Waiting for scale to restart…':'Aguardando a balança reiniciar…',
+  'Update installed — please reconnect scale':'Atualização instalada — reconecte a balança',
+  'Firmware installed — please reconnect scale':'Firmware instalado — reconecte a balança',
+  'Firmware installed — scale reconnected':'Firmware instalado — balança reconectada',
+  'Update installed — restarting…':'Atualização instalada — reiniciando…',
+  'Reconnecting…':'Reconectando…',
+  'Scale reconnected':'Balança reconectada',
+  'Upload boundary':'Enviar limite',
+  'Upload file':'Enviar arquivo',
+  'Draw boundary':'Desenhar limite',
+  'Drop a file here, or tap to choose':'Solte um arquivo aqui, ou toque para escolher',
+  'KML, KMZ, GeoJSON, or a zipped shapefile':'KML, KMZ, GeoJSON ou um shapefile compactado',
+  'Save boundary':'Salvar limite',
+  'boundary imported':'limite importado',
+  'Add a field first':'Adicione um talhão primeiro',
+  'Reading':'Lendo',
+  'boundary':'limite',
+  'boundaries':'limites',
+  'points':'pontos',
+  'No boundary found in that file.':'Nenhum limite encontrado nesse arquivo.',
+  'Unsupported file type.':'Tipo de arquivo não suportado.',
+  'That file could not be read.':'Não foi possível ler esse arquivo.',
+  'That is not a shapefile.':'Esse arquivo não é um shapefile.',
+  'That zip could not be read.':'Não foi possível ler esse zip.',
+  'This device cannot open zip files.':'Este aparelho não consegue abrir arquivos zip.',
+  'Those coordinates are not latitude and longitude — the file may use a projected system.':'Essas coordenadas não são latitude e longitude — o arquivo pode usar um sistema projetado.',
+  'Field':'Talhão',
+  'Dry Weight':'Peso Seco',
+  'Optional notes...':'Observações (opcional)...',
+  'Save Transaction':'Salvar Carga',
+  'Tap to select':'Toque para selecionar',
+  'Clear Cloud Data':'Apagar Dados da Nuvem',
+  'How much signal the load cells produce at full rated load, per volt of excitation. It is printed on the load cell datasheet — 2.0 mV/V is the most common. All cells in one scale should match. Changing this rescales the raw reading, so recalibrate with a known weight afterwards.':'Quanto sinal as células de carga produzem na carga nominal máxima, por volt de excitação. Vem impresso na ficha técnica da célula — 2.0 mV/V é o mais comum. Todas as células de uma balança devem ser iguais. Alterar isso reescala a leitura bruta, então recalibre com um peso conhecido depois.',
+  'The combined rated capacity of ALL load cells, in kg. Example: 4 cells of 5000 kg each = 20000. This sets the scale\'s expected full range. Changing it rescales the raw reading, so recalibrate with a known weight afterwards.':'A capacidade nominal somada de TODAS as células de carga, em kg. Exemplo: 4 células de 5000 kg cada = 20000. Isso define a faixa total esperada da balança. Alterar reescala a leitura bruta, então recalibre com um peso conhecido depois.',
+  'The true weight of your test load — from a certified scale ticket or known test weights. Used together with the Scale Reading to calculate the calibration factor.':'O peso real da sua carga de teste — de um ticket de balança certificada ou de pesos-padrão conhecidos. Usado junto com a Leitura da Balança para calcular o fator de calibração.',
+  'What this scale shows for that same test load, before correction. Use the copy button to fill it from the live reading while the load is on the scale.':'O que esta balança mostra para essa mesma carga de teste, antes da correção. Use o botão de copiar para preencher com a leitura ao vivo enquanto a carga está na balança.',
+  'Sets the scale\'s permanent zero point, stored on the device and kept after power-off. Use it when the scale is empty and reads something other than zero.\n\nFor a temporary zero — such as subtracting a container or an already-loaded truck — use Tare on the Weight Display instead.':'Define o ponto zero permanente da balança, guardado no aparelho e mantido depois de desligar. Use quando a balança estiver vazia e mostrar algo diferente de zero.\n\nPara um zero temporário — como descontar um recipiente ou um caminhão já carregado — use a Tara na Tela de Peso.',
+  'The correction multiplier stored inside the scale: displayed weight = raw reading × factor. It is calculated from Certified Weight ÷ Scale Reading, or you can type one directly. It is saved in the scale\'s own memory and survives power-off.':'O multiplicador de correção guardado dentro da balança: peso exibido = leitura bruta × fator. É calculado por Peso Certificado ÷ Leitura da Balança, ou você pode digitar um direto. Fica salvo na memória da própria balança e é mantido ao desligar.',
+  'How much weight must come off the cart before an unload is auto-detected. Lower catches smaller dumps but is more sensitive to bounce; higher is steadier. Set to 0 to turn auto-unload off.':'Quanto peso precisa sair do graneleiro para que uma descarga seja detectada automaticamente. Um valor menor detecta descargas pequenas mas é mais sensível a solavancos; um maior é mais estável. Defina 0 para desligar a descarga automática.',
+  'Deletes your account\'s data from the cloud database, affecting every device signed into this account. You can choose to remove just transaction records, or everything — farms, fields, trucks, destinations, operators, crops, boundaries, and grain carts. This cannot be undone.':'Exclui os dados da sua conta no banco de dados na nuvem, afetando todos os aparelhos conectados a esta conta. Você pode escolher remover apenas as cargas, ou tudo — fazendas, talhões, caminhões, destinos, operadores, culturas, limites e graneleiros. Isso não pode ser desfeito.',
+  'Sensitivity (mV/V)':'Sensibilidade (mV/V)',
+  'Rated Capacity':'Capacidade Nominal',
+  'Certified Weight':'Peso Certificado',
+  'Scale Reading':'Leitura da Balança',
+  'Known true weight':'Peso real conhecido',
+  'What scale shows':'O que a balança mostra',
+  'Calculate Calibration Factor':'Calcular Fator de Calibração',
+  'Calibration Factor':'Fator de Calibração',
+  'Edit below to override':'Edite abaixo para substituir',
+  'Scale is perfectly calibrated ✓':'A balança está perfeitamente calibrada ✓',
+  'Scale reads LOW by':'A balança lê ABAIXO em',
+  'Scale reads HIGH by':'A balança lê ACIMA em',
+  'Apply':'Aplicar',
+  'Save Settings':'Salvar Configurações',
+  'Sign in to sync your data':'Entre para sincronizar seus dados',
+  'Save to cloud & access all features':'Salve na nuvem e use todos os recursos',
+  'Skip':'Pular',
+  'Sign In / Sign Up':'Entrar / Cadastrar',
+  'Reset Password':'Redefinir Senha',
+  'Display':'Tela',
+  'Fields':'Talhões',
+  'Destinations':'Destinos',
+  'Select':'Selecionar',
+  '+ Add New':'+ Adicionar',
+  'Done':'Pronto',
+  'Sign Out?':'Sair?',
+  'End your session and sign out?':'Encerrar sua sessão e sair?',
+  'Delete Field?':'Excluir Talhão?',
+  'Are you sure you want to delete this field? This cannot be undone.':'Tem certeza que deseja excluir este talhão? Isso não pode ser desfeito.',
+  'Remove Destination?':'Remover Destino?',
+  'Remove Truck?':'Remover Caminhão?',
+  'Delete Transaction?':'Excluir Carga?',
+  'Are you sure you want to delete this transaction?':'Tem certeza que deseja excluir esta carga?',
+  'Delete Farm?':'Excluir Fazenda?',
+  'Remove':'Remover',
+  'Remove this destination? All transactions delivered here will also be permanently deleted.':'Remover este destino? Todas as cargas entregues aqui também serão excluídas permanentemente.',
+  'All transactions logged under this truck will also be permanently deleted.':'Todas as cargas registradas neste caminhão também serão excluídas permanentemente.',
+  'this truck':'este caminhão',
+  'Are you sure you want to delete this transaction? This cannot be undone.':'Tem certeza que deseja excluir esta carga? Isso não pode ser desfeito.',
+  'Delete this field? All transactions logged under it will also be permanently deleted.':'Excluir este talhão? Todas as cargas registradas nele também serão excluídas permanentemente.',
+  'and all its fields? All transactions logged under this farm will also be permanently deleted.':'e todos os seus talhões? Todas as cargas registradas nesta fazenda também serão excluídas permanentemente.',
+  'All transactions logged under this season will also be permanently deleted.':'Todas as cargas registradas nesta safra também serão excluídas permanentemente.',
+  'Sign out of your account?':'Sair da sua conta?',
+  'Restore Device?':'Restaurar Aparelho?',
+  'Reset all calibration settings to factory defaults. This cannot be undone.':'Restaurar toda a calibração para os valores de fábrica. Isso não pode ser desfeito.',
+  'Restore':'Restaurar',
+  'Remove Operator?':'Remover Operador?',
+  'Delete Season?':'Excluir Safra?',
+  'Scale WiFi Detected':'WiFi da Balança Detectado',
+  'Connected to VirtusScale WiFi. Open in Remote Mode (view only) or use BLE for full access?':'Conectado ao WiFi da VirtusScale. Abrir em Modo Remoto (somente leitura) ou usar BLE para acesso completo?',
+  'Remote Mode':'Modo Remoto',
+  'Clear All Data?':'Apagar Todos os Dados?',
+  'This will delete all transaction records from this device AND from the cloud database. This cannot be undone.':'Isso vai excluir todas as cargas deste aparelho E do banco de dados na nuvem. Isso não pode ser desfeito.',
+  'Delete All':'Excluir Tudo',
+  'Change Crop?':'Mudar Cultura?',
+  'Switch Crop?':'Trocar Cultura?',
+  'Switch crop from':'Trocar cultura de',
+  'to':'para',
+  'How do I change the field\'s crop?':'Como mudo a cultura do talhão?',
+  'Keep':'Manter',
+  'Continue with':'Continuar com',
+  'or switch crop?':'ou trocar a cultura?',
+  'Switch crop':'Trocar cultura',
+  'Just this load':'Só esta carga',
+  'already has':'já tem',
+  'or switch crop':'ou trocar a cultura',
+  'Loaded':'Carregado',
+  'crop updated to':'cultura alterada para',
+  'Truck Full':'Caminhão Cheio',
+  'would be at':'ficaria em',
+  'Unload anyway':'Descarregar mesmo assim',
+  'Empty truck & switch':'Esvaziar caminhão e trocar',
+  'Unload discarded — no truck selected':'Descarga descartada — nenhum caminhão selecionado',
+  'Account':'Conta',
+  'Delete Account':'Excluir Conta',
+  'Delete Account?':'Excluir Conta?',
+  'Remisión':'Remissão',
+  'Fenex profiles':'Perfis Fenex',
+  'Connect a profile':'Conectar um perfil',
+  'Draw':'Desenhar',
+  'Profile name':'Nome do perfil',
+  'Add profile':'Adicionar perfil',
+  'Request connection':'Solicitar conexão',
+  'Refresh':'Atualizar',
+  'Make default':'Tornar padrão',
+  'Approved':'Aprovado',
+  'Awaiting approval':'Aguardando aprovação',
+  'Rejected':'Recusado',
+  'Revoked':'Revogado',
+  'Fenex profile':'Perfil Fenex',
+  'No Fenex profile connected yet.':'Nenhum perfil Fenex conectado ainda.',
+  'Enter a profile name':'Digite um nome de perfil',
+  'Enter the RUC':'Digite o RUC',
+  'Enter the RUC with its DV, like 00000000-0':'Digite o RUC com o DV, como 00000000-0',
+  'Updated from your saved records':'Atualizado a partir dos seus dados salvos',
+  'field still needed':'dado faltando',
+  'fields still needed':'dados faltando',
+  'transaction moved':'carga atualizada',
+  'transactions moved':'cargas atualizadas',
+  'Traslado':'Transporte',
+  'Desde':'De',
+  'Hasta':'Até',
+  'Fechas':'Datas',
+  'Sound the alarm at':'Tocar o alarme em',
+  'to full':'para encher',
+  'No alarm':'Sem alarme',
+  'Set the capacity first':'Defina a capacidade primeiro',
+  'Never sounds — over capacity':'Nunca toca — acima da capacidade',
+  'Preparing the PDF…':'Preparando o PDF…',
+  'Open or send the remisión':'Abrir ou enviar a remissão',
+  'Campo':'Talhão',
+  'has no fields yet — add one first.':'ainda não tem talhões — adicione um primeiro.',
+  'Which field?':'Qual talhão?',
+  'Pick the field each load came off.':'Escolha o talhão de onde saiu cada carga.',
+  'Set them all':'Aplicar a todas',
+  'fields':'talhões',
+  'Truckload':'Carga do Caminhão',
+  'Emisión':'Emissão',
+  'Inicio':'Início',
+  'Fin':'Fim',
+  'Distancia':'Distância',
+  'Todos los datos del documento':'Todos os dados do documento',
+  'Name for this connection':'Nome desta conexão',
+  'RUC (with DV)':'RUC (com DV)',
+  'That RUC is already connected':'Esse RUC já está conectado',
+  'Disconnect profile?':'Desconectar perfil?',
+  'Request cancelled':'Solicitação cancelada',
+  'Profile disconnected':'Perfil desconectado',
+  'Fenex did not confirm the disconnection. Please try again.':'A Fenex não confirmou a desconexão. Tente novamente.',
+  'That RUC already has a request waiting':'Esse RUC já tem uma solicitação pendente',
+  'Start corrected draft':'Corrigir e recomeçar',
+  'Start a corrected draft?':'Corrigir e recomeçar?',
+  'Correction required':'Correção necessária',
+  'The issuer rejected this draft.':'O emissor recusou este rascunho.',
+  'This starts a new draft for the same truckload. The rejected one stays on record.':'Isso começa um novo rascunho para a mesma carga. O recusado fica registrado.',
+  'With the issuer. They may correct details in Fenex before submitting it.':'Com o emissor. Ele pode corrigir dados na Fenex antes de enviar.',
+  'This removes the profile from this device. It does not cancel anything already issued.':'Isso remove o perfil deste aparelho. Não cancela nada que já foi emitido.',
+  'Not connected to Fenex yet — profiles are stored on this device only.':'Ainda sem conexão com a Fenex — os perfis ficam salvos só neste aparelho.',
+  'Saved on this device. Fenex is not connected yet, so it cannot issue.':'Salvo neste aparelho. A Fenex ainda não está conectada, então não pode emitir.',
+  'Cloud unavailable — check your connection and try again':'Nuvem indisponível — verifique sua conexão e tente novamente',
+  'Truckloads':'Cargas',
+  'On truck':'No caminhão',
+  'Delivered':'Entregue',
+  '+ Truckload':'+ Carga',
+  'New truckload':'Nova carga',
+  'Create truckload':'Criar carga',
+  'Truckload created':'Carga criada',
+  'Could not create the truckload.':'Não foi possível criar a carga.',
+  'not in a truckload':'sem carga atribuída',
+  'still on':'ainda em',
+  'Pick at least one load to put on the truckload.':'Escolha pelo menos uma carga para agrupar.',
+  'Choose which truck this load went out on.':'Escolha em qual caminhão esta carga saiu.',
+  'Sign in to create a truckload.':'Entre para criar uma carga.',
+  'Set a crop on every transaction before adding it to a truckload.':'Defina uma cultura em cada carga antes de agrupá-las.',
+  'A truckload can contain only one crop. Remove the different-crop transaction first.':'Uma carga de caminhão só pode ter uma cultura. Remova primeiro a carga de outra cultura.',
+  'Transactions that are not in a truckload yet. Pick the ones to group.':'Cargas que ainda não estão agrupadas. Escolha as que quer juntar.',
+  'Every transaction is already in a truckload.':'Todas as cargas já estão agrupadas.',
+  'Delivery':'Entrega',
+  'Emptied on':'Esvaziado em',
+  'Loaded now':'Carregado agora',
+  'Delivered total':'Total entregue',
+  'Loading since':'Carregando desde',
+  'loads':'cargas',
+  'load':'carga',
+  'No field':'Sem talhão',
+  'No loads in this truckload':'Nenhuma carga neste agrupamento',
+  'No truckloads':'Nenhuma carga',
+  'Loading remisión status…':'Carregando situação da remissão…',
+  'Draft — not sent':'Rascunho — não enviado',
+  'Sending':'Enviando',
+  'Checking delivery':'Verificando entrega',
+  'Awaiting issuer review':'Aguardando revisão do emissor',
+  'Awaiting submission':'Aguardando envio',
+  'Awaiting SIFEN response':'Aguardando resposta do SIFEN',
+  'Issued':'Emitida',
+  'Rejected — view reason':'Recusada — ver motivo',
+  'Cancelled':'Cancelada',
+  'Send for approval':'Enviar para aprovação',
+  'View PDF':'Ver PDF',
+  'Sending is unavailable until Fenex enables draft approval.':'O envio fica indisponível até a Fenex liberar a aprovação de rascunhos.',
+  'Fenex draft approval is not connected yet.':'A aprovação de rascunhos da Fenex ainda não está conectada.',
+  'The issuer will review this request in Fenex.':'O emissor vai revisar esta solicitação na Fenex.',
+  'Sign in to view remisión status.':'Entre para ver a situação da remissão.',
+  'Could not load remisión status.':'Não foi possível carregar a situação da remissão.',
+  'Could not reach the scale — calibration not changed':'Não foi possível falar com a balança — calibração não alterada',
+  'Could not reach the scale — update not started':'Não foi possível falar com a balança — atualização não iniciada',
+  'Scale did not confirm the new factor — nothing changed':'A balança não confirmou o novo fator — nada foi alterado',
+  'Calibration factor set to':'Fator de calibração definido em',
+  'Factor:':'Fator:',
+  'Permanently deletes your account and all its data':'Exclui permanentemente sua conta e todos os seus dados',
+  'This permanently deletes your account and every record in it — loads, fields, trucks and seasons. It cannot be undone.':'Isso exclui permanentemente sua conta e todos os registros dela — cargas, talhões, caminhões e safras. Não pode ser desfeito.',
+  'Type':'Digite',
+  'to confirm':'para confirmar',
+  'Account deleted':'Conta excluída',
+  'Could not delete account':'Não foi possível excluir a conta',
+  'Sign in required to delete your account':'Entre na conta para poder excluí-la',
+  'Different Crop On Truck':'Cultura Diferente no Caminhão',
+  'is already carrying':'já está carregando',
+  'Unloading':'Descarregar',
+  'will mix the load. Change the crop, or empty the truck first.':'vai misturar a carga. Mude a cultura, ou esvazie o caminhão primeiro.',
+  'Field Crop':'Cultura do Talhão',
+  'This season already has':'Esta safra já tem',
+  'recorded as':'registradas como',
+  'Switch to':'Trocar para',
+  'Yes, switch':'Sim, trocar',
+  'Crop Mismatch':'Cultura Não Confere',
+  'is assigned to':'está definido como',
+  'Switch crop to':'Trocar a cultura para',
+  'Update field':'Atualizar talhão',
+  'Are you sure?':'Tem certeza?',
+  'This cannot be undone.':'Isso não pode ser desfeito.',
+  'Enter your name':'Digite seu nome',
+  'PIN must be 4+ digits':'O PIN precisa ter 4 ou mais dígitos',
+  'Enter email and password.':'Digite e-mail e senha.',
+  'Signing in…':'Entrando…',
+  'Sign in failed.':'Falha ao entrar.',
+  'Tare set':'Tara definida',
+  'Tare cleared':'Tara removida',
+  'Enter a valid weight':'Digite um peso válido',
+  'Transaction deleted':'Carga excluída',
+  'Boundary deleted':'Limite excluído',
+  'Connect to the scale first':'Conecte a balança primeiro',
+  'Connected — no weight service found. Use manual input.':'Conectado — nenhum serviço de peso encontrado. Use a entrada manual.',
+  'Local data cleared':'Dados locais apagados',
+  'No destinations yet — add one in the Destinations tab':'Nenhum destino ainda — adicione um na aba Destinos',
+  'No orphaned boundaries found':'Nenhum limite órfão encontrado',
+  'No reading':'Sem leitura',
+  'Open the app via http:// or use the scale display link in Devices':'Abra o aplicativo por http:// ou use o link da balança em Dispositivos',
+  'Password reset cancelled':'Redefinição de senha cancelada',
+  'Select a field to complete the save':'Selecione um talhão para concluir o salvamento',
+  'Select a truck to complete the save':'Selecione um caminhão para concluir o salvamento',
+  'Sign in required to clear cloud data':'Entre para apagar os dados da nuvem',
+  'The scale assigns primary automatically':'A balança define o principal automaticamente',
+  'Weight is zero - check tare':'O peso está zero - verifique a tara',
+  'Transaction updated':'Carga atualizada',
+  'Transaction added':'Carga adicionada',
+  'Enter a field name':'Digite um nome de talhão',
+  'Open a farm first':'Abra uma fazenda primeiro',
+  'Field already exists in this farm':'Este talhão já existe nesta fazenda',
+  'Enter a farm name':'Digite um nome de fazenda',
+  'Field deleted':'Talhão excluído',
+  'Truck name is required':'O nome do caminhão é obrigatório',
+  'Licence plate is required':'A placa é obrigatória',
+  'Capacity saved':'Capacidade salva',
+  'No weight reading':'Sem leitura de peso',
+  'Enter a destination name':'Digite um nome de destino',
+  'Connecting…':'Conectando…',
+  'No device selected':'Nenhum aparelho selecionado',
+  'Firmware is up to date':'O firmware está atualizado',
+  'Boundary saved':'Limite salvo',
+  'Auto-unload cancelled':'Descarga automática cancelada',
+  'Season name required':'Nome da safra obrigatório',
+  'Season added':'Safra adicionada',
+  'Name required':'Nome obrigatório',
+  'Operator updated':'Operador atualizado',
+  'Operator added':'Operador adicionado',
+  'Signed out':'Sessão encerrada',
+  'Sign in required to sync':'É preciso entrar para sincronizar',
+  'Session expired — please sign in again':'Sessão expirada — entre novamente',
+  'No connection — try again when you are back in service':'Sem conexão — tente de novo quando tiver sinal',
+  'Pulling config…':'Baixando configuração…',
+  'Config sync failed':'Falha ao sincronizar a configuração',
+  'Field updated':'Talhão atualizado',
+  'Farm updated':'Fazenda atualizada',
+  'Destination updated':'Destino atualizado',
+  'Diagnostics complete':'Diagnóstico concluído',
+  'Enter an email address first':'Digite um e-mail primeiro',
+  'No live weight reading':'Sem leitura de peso ao vivo',
+  'Live weight copied':'Peso ao vivo copiado',
+  'Calibration settings saved':'Configurações de calibração salvas',
+  'Device restored to defaults':'Aparelho restaurado para o padrão',
+  'Profile photo updated':'Foto do perfil atualizada',
+  'Photo removed':'Foto removida',
+  'Select a season first':'Selecione uma safra primeiro',
+  'Select a field to complete saving your transaction':'Selecione um talhão para concluir o salvamento da carga',
+  'No farms yet':'Nenhuma fazenda ainda',
+  'No farms yet — add one below':'Nenhuma fazenda ainda — adicione uma abaixo',
+  'No farms yet — add one using the button below':'Nenhuma fazenda ainda — adicione uma no botão abaixo',
+  'No fields — add one below':'Nenhum talhão — adicione um abaixo',
+  'No operators yet — add one below':'Nenhum operador ainda — adicione um abaixo',
+  'No seasons yet — add one below':'Nenhuma safra ainda — adicione uma abaixo',
+  'No fields yet':'Nenhum talhão ainda',
+  'Downloading firmware…':'Baixando firmware…',
+  'Preparing scale…':'Preparando a balança…',
+  'Looking for scale…':'Procurando a balança…',
+  'Installing…':'Instalando…',
+  'Firmware updated':'Firmware atualizado',
+  'Update failed':'Falha na atualização',
+  'Firmware update failed':'Falha na atualização do firmware',
+  'Retry':'Tentar de novo',
+  'Firmware updates are not supported on this device yet — use nRF Connect.':'As atualizações de firmware ainda não funcionam neste aparelho — use o nRF Connect.',
+  'Wet':'Úmido',
+  'Dry':'Seco',
+  'moisture':'umidade',
+  'Awaiting delivery':'Aguardando entrega',
+  'Connected — not linked to a cart':'Conectado — sem graneleiro vinculado',
+  'Scale not nearby — tap Scan to find it':'A balança não está por perto — toque em Buscar para encontrá-la',
+  'Connecting to':'Conectando a',
+  'Connect to your scale first — the update installs straight over Bluetooth.':'Conecte a balança primeiro — a atualização é instalada direto por Bluetooth.',
+  'Custom':'Personalizado',
+  'Custom Moisture':'Umidade Personalizada',
+  'Enter a moisture between 0 and 60%':'Digite uma umidade entre 0 e 60%',
+  'No fields yet — tap + Field to add one':'Nenhum talhão ainda — toque em + Talhão para adicionar',
+  'No fields under this farm yet — tap + Field':'Esta fazenda ainda não tem talhões — toque em + Talhão',
+  'Select field':'Selecione o talhão',
+  'tap map to add':'toque no mapa para adicionar',
+  'Drag the points to adjust':'Arraste os pontos para ajustar',
+  'point':'ponto',
+  'Truck removed':'Caminhão removido',
+  'Destination removed':'Destino removido',
+  'Farm deleted':'Fazenda excluída',
+  'Season deleted':'Safra excluída',
+  'transaction':'carga',
+  'transactions':'cargas',
+  'removed':'removidas',
+  'Total Loaded':'Total Carregado',
+  'Total Delivered':'Total Entregue',
+  'all time':'desde o início',
+  'total':'total',
+  'Season Total':'Total da Safra',
+  'Set field areas':'Defina as áreas dos talhões',
+  'all fields':'todos os talhões',
+  'No fields under this farm yet.':'Esta fazenda ainda não tem talhões.',
+  'No fields yet — add one below':'Nenhum talhão ainda — adicione um abaixo',
+  'Yield':'Produtividade',
+  'Set area in Edit':'Defina a área em Editar',
+  'Field Area':'Área do Talhão',
+  'field size':'tamanho do talhão',
+  'All Transactions':'Todas as Cargas',
+  '+ Add new field...':'+ Adicionar novo talhão...',
+  'No farm selected':'Nenhuma fazenda selecionada',
+  'tap to pick field':'toque para escolher o talhão',
+  'Tap to select field':'Toque para selecionar o talhão',
+  'No fields yet — add one in the Fields tab':'Nenhum talhão ainda — adicione um na aba Talhões',
+  'No trucks yet — add one in the Trucks tab':'Nenhum caminhão ainda — adicione um na aba Caminhões',
+  'No operators added yet':'Nenhum operador cadastrado',
+  'Truck is already empty':'O caminhão já está vazio',
+  'Select a truck first':'Selecione um caminhão primeiro',
+  'Select a destination first':'Selecione um destino primeiro',
+  'Now select a field':'Agora selecione um talhão',
+  'Auto-unload discarded — no field selected':'Descarga automática descartada — nenhum talhão selecionado',
+  'Auto-unload discarded — no truck selected':'Descarga automática descartada — nenhum caminhão selecionado',
+  'Manual unload discarded — no truck selected':'Descarga manual descartada — nenhum caminhão selecionado',
+  'Transaction not found':'Carga não encontrada',
+  'Truck not found':'Caminhão não encontrado',
+  'GPS not available':'GPS indisponível',
+  'GPS not available on this device':'GPS indisponível neste aparelho',
+  'Location unavailable':'Localização indisponível',
+  'Map unavailable — check your connection':'Mapa indisponível — verifique sua conexão',
+  'This account still needs to be confirmed. Open the link in the email we sent to':'Esta conta ainda precisa ser confirmada. Abra o link do e-mail que enviamos para',
+  'Resend confirmation email':'Reenviar e-mail de confirmação',
+  'Please wait a minute before requesting another email.':'Aguarde um minuto antes de pedir outro e-mail.',
+  'Requesting GPS…':'Solicitando GPS…',
+  'Open Field Map first':'Abra o Mapa de Talhões primeiro',
+  'Need at least 3 points':'São necessários pelo menos 3 pontos',
+  'Field name required':'Nome do talhão obrigatório',
+  'Field not found':'Talhão não encontrado',
+  'Field switched':'Talhão trocado',
+  'Password must be at least 8 characters.':'A senha precisa ter pelo menos 8 caracteres.',
+  'Passwords do not match.':'As senhas não conferem.',
+  'Connection required.':'É necessária conexão.',
+  'Password updated! Please sign in with your new password.':'Senha atualizada! Entre com a nova senha.',
+  'Could not update password.':'Não foi possível atualizar a senha.',
+  'Password updated successfully!':'Senha atualizada com sucesso!',
+  'Not connected':'Sem conexão',
+  'No operator':'Sem operador',
+  'Connect to scale first':'Conecte a balança primeiro',
+  'Scale not connected':'Balança não conectada',
+  'Update already in progress':'Atualização já em andamento',
+  'Firmware update in progress — please wait':'Atualização de firmware em andamento — aguarde',
+  'Could not check for update':'Não foi possível verificar a atualização',
+  'Today':'Hoje',
+  'Yesterday':'Ontem',
+  'Primary device':'Dispositivo principal',
+  'Remote device':'Dispositivo remoto',
+  'Remote mode �� live weight only':'Modo remoto — somente peso ao vivo',
+  'Unloading Detected':'Descarga Detectada',
+  'Before':'Antes',
+  'Current':'Atual',
+  'No transactions for this truck yet.':'Nenhuma carga para este caminhão ainda.',
+  'Auto-unload detected — tracking…':'Descarga automática detectada — acompanhando…',
+  'Auto-unload detected — select a truck':'Descarga automática detectada — selecione um caminhão',
+  'Auto-unload detected — select a field':'Descarga automática detectada — selecione um talhão',
+  'Firmware updated! Scale restarting…':'Firmware atualizado! Balança reiniciando…',
+  'Scale has no WiFi — add your network to the firmware':'A balança não tem WiFi — adicione sua rede ao firmware',
+  'Already on latest firmware':'Já está no firmware mais recente',
+  'Starting firmware update…':'Iniciando atualização do firmware…',
+  'Checking for update…':'Verificando atualização…',
+  'A primary device is already connected via BLE — cannot switch':'Já existe um dispositivo principal conectado por BLE — não é possível trocar',
+  'Celsius':'Celsius',
+  'Fahrenheit':'Fahrenheit',
+  'Hectares':'Hectares',
+  'Acres':'Acres',
+  'Scale reading cannot be zero':'A leitura da balança não pode ser zero',
+  'Weight is zero — check tare':'O peso está zero — verifique a tara',
+  'Unload started — drive to unload, then press Save':'Descarga iniciada — dirija até o ponto de descarga e toque em Salvar',
+  'No weight change detected':'Nenhuma mudança de peso detectada',
+  'Enter the certified (true) weight':'Digite o peso certificado (real)',
+  'Enter what the scale is reading':'Digite o que a balança está mostrando',
+  'Enter a valid factor (e.g. 1.025)':'Digite um fator válido (ex. 1.025)',
+  'Enter both Certified Reading and Scale Reading':'Digite a Leitura Certificada e a Leitura da Balança',
+  'Scale disconnected':'Balança desconectada',
+  'No weight on scale to copy':'Sem peso na balança para copiar',
+  'Advertisement watching not supported — try a different browser':'Não compatível com este navegador — tente outro',
+  'Connect to your firmware update tool to update firmware':'Conecte sua ferramenta de atualização para atualizar o firmware',
+  'Unloaded weight too small':'O peso descarregado é muito pequeno',
+  'Weight unit: ':'Unidade de peso: ',
+  'Temperature: ':'Temperatura: ',
+  'Area unit: ':'Unidade de área: ',
+  'Drop trigger: ':'Queda mínima: ',
+  'Minimum trigger is 250 ':'A queda mínima é 250 ',
+  ' added':' adicionado(a)',
+  ' updated':' atualizado(a)',
+  ' selected':' selecionado(a)',
+  ' created':' criado(a)',
+  ' record(s) pending':' registro(s) pendente(s)',
+  ' load(s)':' carga(s)',
+  ' transaction(s) removed':' carga(s) removida(s)',
+  'No transactions for this destination yet.':'Nenhuma carga para este destino ainda.',
+  'Virtus Diagnostics v1.0':'Virtus Diagnóstico v1.0',
+  'Tap "Run Diagnostics" to collect report...':'Toque em "Executar Diagnóstico" para gerar o relatório...',
+  'Edit Transaction':'Editar Carga',
+  'No transactions recorded for this field yet.':'Nenhuma carga registrada para este talhão ainda.',
+  'No transactions received at this destination yet.':'Nenhuma carga recebida neste destino ainda.',
+  'Go to More → Operators to select':'Vá em Mais → Operadores para selecionar',
+  'No Operator':'Sem Operador',
+  'field':'talhão',
+  'records':'registros',
+  'record':'registro',
+  'pending':'pendentes',
+};
+
+const _i18n = { es: _i18n_es, pt: _i18n_pt };
+
 function T(en) {
-  if (_lang === 'en') return en;
-  return _i18n[en] || en;
+  var dict = _i18n[_lang];
+  return (dict && dict[en]) || en;
 }
 
-// Wraps a fragment that forms a whole question. Spanish opens with ¿, English
-// doesn't — so the mark can't live inside a dictionary entry that is also used
-// as a button label.
+// Wraps a fragment that forms a whole question. Spanish opens with ¿; English
+// and Portuguese do not — so the mark can't live inside a dictionary entry that
+// is also used as a button label.
 function _ask(s){ return (_lang === 'es' ? '¿' : '') + s + '?'; }
 
 function setLanguage(pref) {
@@ -6454,7 +7415,73 @@ function initLangToggle() {
   });
 }
 
+/**
+ * Put every UI label back into English before the sweeps below run.
+ *
+ * Those sweeps decide what to translate by comparing an element's CURRENT text
+ * against the English and Spanish it knows. That worked while there were two
+ * languages and silently broke on the third: once a title read "Configurações",
+ * no branch matched it, so switching to English left it in Portuguese forever.
+ *
+ * Rather than teach 78 comparisons a third language — and a fourth later — this
+ * reverses the translation first, so every sweep only ever sees English.
+ *
+ * Scoped to chrome selectors, never to user content: a field really can be
+ * named "Safra", and rewriting it would corrupt the record rather than the
+ * label. Ambiguous translations (one word meaning two different English keys)
+ * are dropped, because guessing which key was meant is worse than leaving the
+ * text alone.
+ */
+var _i18nReverse = null;
+function _buildI18nReverse(){
+  if(_i18nReverse) return _i18nReverse;
+  var seen = {};
+  _i18nReverse = {};
+  [_i18n_es, _i18n_pt].forEach(function(dict){
+    Object.keys(dict).forEach(function(en){
+      var translated = dict[en];
+      if(!translated || translated === en) return;      // nothing to reverse
+      if(seen[translated] && seen[translated] !== en){
+        _i18nReverse[translated] = null;                // ambiguous — leave alone
+        return;
+      }
+      seen[translated] = en;
+      if(_i18nReverse[translated] !== null) _i18nReverse[translated] = en;
+    });
+  });
+  return _i18nReverse;
+}
+
+var _I18N_CHROME_SELECTORS = [
+  '.sp-title','.sp-back','.more-row-label','.tx-btn-save','.tx-btn-cancel',
+  '.scale-sub-lbl','.info-row-sub',
+  '.abtn-col','.aub-lbl','.btn-add-confirm','.tab-label',
+  '#sp-settings .sp-section-lbl','#sp-settings .sr-label','#sp-settings .sr-sub',
+  '#sp-devices .sp-section-lbl','#sp-devices .sr-label','#sp-devices .sr-sub',
+  '#sp-operators .sp-section-lbl','#sp-about .sr-label',
+  '#sp-diagnostics .sp-section-lbl',
+  '#tp-fields .section-lbl','#tp-trucks .section-lbl','#tp-destinations .section-lbl',
+  '#seg-powersave .seg-btn','#seg-lang .seg-btn',
+  '#signin-form .signin-field label','#signup-form .signin-field label',
+  '#reset-form .signin-field label','#s-login .signin-field label',
+  '#in-app-signin-overlay label',
+  '#tx-sheet-overlay .tx-field-group label','#add-truck-sheet-overlay .tx-field-group label',
+  '.entry-form-panel label','.efp-row label'
+].join(',');
+
+function _normaliseLabelsToEnglish(){
+  var rev = _buildI18nReverse();
+  document.querySelectorAll(_I18N_CHROME_SELECTORS).forEach(function(el){
+    if(el.children.length) return;                      // leaf text only
+    var t = (el.textContent || '').trim();
+    if(!t) return;
+    var en = rev[t];
+    if(en) el.textContent = en;
+  });
+}
+
 function applyLanguage() {
+  _normaliseLabelsToEnglish();
   // ── Tab bar ──
   var tabMap = {weigh:'Display',fields:'Fields',trucks:'Trucks',destinations:'Dest',truckloads:'Remisión',device:'Device',more:'More'};
   Object.keys(tabMap).forEach(function(id) {
@@ -6667,7 +7694,8 @@ function applyLanguage() {
       'Cloud Sync':'Cloud Sync','Sincronización en la Nube':'Cloud Sync',
       'Operators':'Operators','Operadores':'Operators','Season':'Season','Temporada':'Season',
       'About':'About','Acerca de':'About','Field Map':'Field Map','Mapa de Campos':'Field Map',
-      'Transactions':'Transactions','Transacciones':'Transactions'};
+      'Transactions':'Transactions','Transacciones':'Transactions',
+      'Diagnostics':'Diagnostics','Remisión':'Remisión'};
     var key = map[txt]; if (key) el.textContent = T(key);
   });
 
@@ -7201,7 +8229,7 @@ async function doInAppSignIn(){
   } catch(e){
     if(errEl){ errEl.style.display=''; errEl.textContent=e.message||T('Sign in failed.'); }
   } finally {
-    if(btn){ btn.textContent='Sign In'; btn.disabled=false; }
+    if(btn){ btn.textContent=T('Sign In'); btn.disabled=false; }
   }
 }
 
@@ -7796,7 +8824,7 @@ function buildTruckTxCard(l, truckId){
   var actions=tx.querySelector('.fdp-tx-actions');
   var editBtn=document.createElement('button');
   editBtn.className='fdp-tx-edit';
-  editBtn.textContent='Edit';
+  editBtn.textContent=T('Edit');
   editBtn.addEventListener('click',function(){ openTxSheet(l.id, l.fieldId||null, null); });
   var delBtn=document.createElement('button');
   delBtn.className='fdp-tx-del';
@@ -8154,13 +9182,13 @@ function handleOtaResponse(msg){
   if(msg.startsWith('OTA_AVAILABLE:')){
     var newVer = msg.split(':')[1];
     if(sub){ sub.style.display=''; sub.textContent='v'+newVer+' available'; }
-    if(btn){ btn.style.display=''; btn.textContent='Update'; }
+    if(btn){ btn.style.display=''; btn.textContent=T('Update'); }
     showToast('Firmware update available: v'+newVer,'success');
   } else if(msg === 'OTA_UP_TO_DATE'){
     if(sub){ sub.style.display=''; sub.textContent=T('Up to date'); sub.style.color='var(--text3)'; }
     if(btn) btn.style.display='none';
   } else if(msg === 'OTA_STARTING'){
-    if(btn){ btn.textContent='Installing…'; btn.disabled=true; }
+    if(btn){ btn.textContent=T('Installing…'); btn.disabled=true; }
     showToast('Downloading firmware…','');
   } else if(msg.startsWith('OTA_PROGRESS:')){
     var pct = msg.split(':')[1];
@@ -8201,11 +9229,11 @@ function handleOtaResponse(msg){
     // before we send OTA_BEGIN; any that arrive are stale from a prior session).
     if(_otaDownloadPhase) return;
     _otaInProgress = false;
-    if(btn){ btn.textContent='Retry'; btn.disabled=false; btn.onclick=function(){ checkForBLEOTAUpdate(); }; }
+    if(btn){ btn.textContent=T('Retry'); btn.disabled=false; btn.onclick=function(){ checkForBLEOTAUpdate(); }; }
     if(sub){ sub.style.color='#B03020'; sub.textContent='Update failed — tap Retry'; }
     showToast('Firmware update failed','error');
   } else if(msg === 'OTA_CHECKING'){
-    if(sub){ sub.style.display=''; sub.textContent='Checking for update…'; sub.style.color='var(--text3)'; }
+    if(sub){ sub.style.display=''; sub.textContent=T('Checking for update…'); sub.style.color='var(--text3)'; }
   } else if(msg === 'OTA_NO_UPDATE'){
     showToast('Already on latest firmware','success');
   }
@@ -10921,7 +11949,7 @@ function _paintScaleDisplay(){
     _setMainWeight(_fmtDisplay(unloadedConv.val, unloadedConv.unit));
     document.querySelectorAll('.scale-unit-lbl').forEach(function(el){ el.textContent = unloadedConv.unit; });
     // Right sub keeps showing the live weight still sitting on the scale.
-    document.getElementById('scale-sub-lbl-right').textContent = 'On Scale';
+    document.getElementById('scale-sub-lbl-right').textContent = T('On Scale');
     _elScaleGross.textContent  = _fmtDisplay(netConv.val, netConv.unit);
     _elScaleTarget.textContent = '- -';
     var pfxU = document.getElementById('scale-weight-prefix');
@@ -10929,7 +11957,7 @@ function _paintScaleDisplay(){
   } else {
     _setMainWeight(_fmtDisplay(netConv.val, netConv.unit));
     document.querySelectorAll('.scale-unit-lbl').forEach(function(el){ el.textContent = netConv.unit; });
-    document.getElementById('scale-sub-lbl-right').textContent = 'Net';
+    document.getElementById('scale-sub-lbl-right').textContent = T('Net');
     var pfx2 = document.getElementById('scale-weight-prefix');
     if(pfx2) pfx2.style.display = 'none';
     if(heldWeight === null){
@@ -11098,8 +12126,8 @@ function zeroScale(){
   // This just offsets what the big number shows, the scale's raw reading is unchanged
   if(rawWeight===null){showToast('No weight reading','error');return;}
   heldWeight=null;
-  var lbl3=document.getElementById('scale-sub-lbl-left'); if(lbl3) lbl3.textContent='Gross';
-  var rbl3=document.getElementById('scale-sub-lbl-right'); if(rbl3) rbl3.textContent='Net';
+  var lbl3=document.getElementById('scale-sub-lbl-left'); if(lbl3) lbl3.textContent=T('Gross');
+  var rbl3=document.getElementById('scale-sub-lbl-right'); if(rbl3) rbl3.textContent=T('Net');
   // Set offset so big number reads 0 from this point
   tareOffset = rawWeight;
   // fmtWt() returns a formatted STRING ("1234.5 kg"), not an object. This was
@@ -11131,8 +12159,8 @@ function resetScaleDisplay(){
   var zno4=document.getElementById('zero-note'); if(zno4) zno4.textContent='Connect a scale to enable tare';
   var zraw=document.getElementById('zero-raw'); if(zraw) zraw.textContent='--';
   var znet=document.getElementById('zero-net'); if(znet) znet.textContent='--';
-  var lbl4=document.getElementById('scale-sub-lbl-left'); if(lbl4) lbl4.textContent='Gross';
-  var rbl4=document.getElementById('scale-sub-lbl-right'); if(rbl4) rbl4.textContent='Net';
+  var lbl4=document.getElementById('scale-sub-lbl-left'); if(lbl4) lbl4.textContent=T('Gross');
+  var rbl4=document.getElementById('scale-sub-lbl-right'); if(rbl4) rbl4.textContent=T('Net');
   _setMainWeight('- -');
   var pfxr = document.getElementById('scale-weight-prefix'); if(pfxr) pfxr.style.display='none';
   document.getElementById('scale-gross').textContent='- -';
@@ -13823,7 +14851,8 @@ function updateScaleModeLabel(role){
   var modeLbls = document.querySelectorAll('.scale-mode-lbl');
   modeLbls.forEach(function(el){
     if(el.classList.contains('active-mode')){
-      // keep Net label unchanged
+      // Net is translated by the data-en sweep, not here — this branch only
+      // exists so the Local/Remote swap below leaves it alone.
     } else {
       el.textContent = role==='remote' ? T('Remote') : T('Local');
     }
@@ -13985,7 +15014,7 @@ function openAddTruckSheet(truckId){
     _ntSetRm(truck);
     _tkaPaint();
   } else {
-    titleEl.textContent = 'Add New Truck';
+    titleEl.textContent = T('Add New Truck');
     editId.value = '';
     document.getElementById('nt-name').value     = '';
     document.getElementById('nt-plate').value    = '';
@@ -16057,7 +17086,7 @@ function buildDestTxCard(l, destId){
   var actions=tx.querySelector('.fdp-tx-actions');
   var editBtn=document.createElement('button');
   editBtn.className='fdp-tx-edit';
-  editBtn.textContent='Edit';
+  editBtn.textContent=T('Edit');
   editBtn.addEventListener('click',function(){ openTxSheet(l.id, l.fieldId||null, null); });
   var delBtn=document.createElement('button');
   delBtn.className='fdp-tx-del';
@@ -20321,8 +21350,8 @@ async function doAppResetPassword(){
   var pw2 = document.getElementById('app-reset-confirm').value || '';
   var msg = document.getElementById('app-reset-msg');
   var btn = document.getElementById('app-reset-btn');
-  if(pw1.length < 8){ if(msg){msg.style.display='';msg.textContent='Password must be at least 8 characters.';} return; }
-  if(pw1 !== pw2){ if(msg){msg.style.display='';msg.textContent='Passwords do not match.';} return; }
+  if(pw1.length < 8){ if(msg){msg.style.display='';msg.textContent=T('Password must be at least 8 characters.');} return; }
+  if(pw1 !== pw2){ if(msg){msg.style.display='';msg.textContent=T('Passwords do not match.');} return; }
   if(msg) msg.style.display = 'none';
   if(btn){ btn.textContent = 'Saving...'; btn.disabled = true; }
   try{
@@ -20363,12 +21392,12 @@ async function doAppResetPassword(){
       emailDisplay.textContent = currentWorker.email;
     }
     // Reset button text in case user sees overlay again later
-    if(btn){ btn.textContent = 'Set New Password'; btn.disabled = false; }
+    if(btn){ btn.textContent = T('Set New Password'); btn.disabled = false; }
 
     showToast('Password updated — you are signed in', 'success');
   } catch(e){
     if(msg){ msg.style.display=''; msg.textContent = e.message || 'Failed to update password. Try again.'; }
-    if(btn){ btn.textContent = 'Set New Password'; btn.disabled = false; }
+    if(btn){ btn.textContent = T('Set New Password'); btn.disabled = false; }
   }
 }
 
@@ -20730,7 +21759,7 @@ async function syncQueue(){
 
   localStorage.setItem(LS_QUEUE,JSON.stringify(failed));
   syncInProgress=false;
-  if(btn){btn.textContent='Sync';btn.disabled=false;}
+  if(btn){btn.textContent=T('Sync');btn.disabled=false;}
   var sc2=document.getElementById('sync-circle'); if(sc2) sc2.className = failed.length?'sync-circle error':'sync-circle synced';
   refreshQueue();renderLogs();
 
@@ -21096,7 +22125,7 @@ function _cancelManualUnload(){
 
 function _resetUnloadBtn(){
   var btn = document.getElementById('btn-unload');
-  if(btn){ btn.textContent = 'Unload'; btn.classList.remove('abtn-stop'); btn.style.background = ''; }
+  if(btn){ btn.textContent = T('Unload'); btn.classList.remove('abtn-stop'); btn.style.background = ''; }
   var pfx = document.getElementById('scale-weight-prefix');
   if(pfx) pfx.style.display = 'none';
   var pf = document.getElementById('scale-panel-fill');
@@ -21165,8 +22194,8 @@ function clearScale(){
   heldWeight = null;
   var lbl = document.getElementById('scale-sub-lbl-left');
   var rbl = document.getElementById('scale-sub-lbl-right');
-  if(lbl) lbl.textContent = 'Gross';
-  if(rbl) rbl.textContent = 'Net';
+  if(lbl) lbl.textContent = T('Gross');
+  if(rbl) rbl.textContent = T('Net');
   document.getElementById('scale-target').textContent = '- -';
   // Repaint with no offset — big number now shows actual total
   if(rawWeight !== null) setRawWeight(rawWeight);
