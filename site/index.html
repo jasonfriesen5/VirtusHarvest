@@ -9696,6 +9696,35 @@ function _rmApplyFlag(){
 
 // Keep the shared account flag aligned with the always-on app. This is best
 // effort because Remisión must stay available offline too.
+/**
+ * Take the account's Remisión setting on a device that has never expressed one.
+ *
+ * Only when the local key is absent — that is a fresh install, which has no
+ * opinion, so the account's answer is the best one available and saves a
+ * Paraguayan operator hunting for the switch on every new tablet.
+ *
+ * Deliberately NOT "cloud wins". Once someone has touched the switch on this
+ * device, '0' is an opinion and a stale true from another device must not
+ * overrule it — otherwise turning it off here would keep undoing itself.
+ */
+async function _rmAdoptAccountSetting(){
+  var neverSet = true;
+  try{ neverSet = localStorage.getItem(LS_REMISION_ON) === null; }catch(e){}
+  if(!neverSet) return;
+
+  var sb = getSupabase();
+  if(!sb || !currentWorker || !currentWorker.id) return;
+  try{
+    var r = await sb.from('ht_emisor')
+      .select('remision_enabled').eq('user_id', currentWorker.id).maybeSingle();
+    if(r && !r.error && r.data && r.data.remision_enabled === true){
+      try{ localStorage.setItem(LS_REMISION_ON, '1'); }catch(e){}
+      _rmApplyFlag();
+      logEvent('sync', 'Remisión enabled from account setting');
+    }
+  }catch(e){ /* offline or no row — stays off, switch is one tap away */ }
+}
+
 async function _rmPullEnabled(){
   _rmApplyFlag();
   var sb = getSupabase();
@@ -17988,6 +18017,11 @@ async function pullConfig(){
   currentWorker = currentWorker || {};
   currentWorker.id    = _sess.user.id;
   currentWorker.email = _sess.user.email || currentWorker.email;
+
+  // A second tablet on the same account should not have to be told again that
+  // this farm issues remisiones. Runs here rather than from the Remisión panel,
+  // which is hidden precisely when the setting still needs adopting.
+  await _rmAdoptAccountSetting();
   try{ localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker)); }catch(e){}
 
   try{
