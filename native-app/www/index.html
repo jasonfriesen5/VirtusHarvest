@@ -17897,10 +17897,22 @@ async function pullConfig(){
 
     // Fields
     if(fieldsRes.data && (fieldsRes.data.length || authoritative)){
+      // The crop had no column until now, so a field last written by an older
+      // build comes back with null and would have its crop cleared — which is
+      // exactly what "pick a crop, press sync, it forgets" was. Keep the local
+      // value in that case and queue the row so the choice reaches the cloud
+      // instead of being lost again on the next device.
+      var _localFieldsById = {};
+      getFields().forEach(function(z){ _localFieldsById[z.id] = z; });
+      var _fieldCropFixups = [];
       var fields = _reconcileConfig('ht_fields', fieldsRes.data.map(function(r){
-        return {id:r.id, farmId:r.farm_id, name:r.name, area:r.area, areaUnit:r.area_unit, notes:r.notes||'', crop:r.crop||null};
+        var keep = _localFieldsById[r.id] || {};
+        var crop = r.crop || null;
+        if(!crop && keep.crop){ crop = keep.crop; _fieldCropFixups.push(r.id); }
+        return {id:r.id, farmId:r.farm_id, name:r.name, area:r.area, areaUnit:r.area_unit, notes:r.notes||'', crop:crop};
       }), getFields(), byId);
       localStorage.setItem(LS_FIELDS, JSON.stringify(fields));
+      _fieldCropFixups.forEach(function(id){ _markDirty('ht_fields', id); });
     }
 
     // Trucks
@@ -18312,7 +18324,7 @@ function syncField(field){
   // row only if it is dirty" rule silently discarded it on first sign-in.
   // Marking here means the row survives that merge and syncQueue() uploads it.
   if(!currentWorker||!currentWorker.id){ _markDirty('ht_fields', field.id); return; }
-  _pushConfig('ht_fields',{id:field.id, user_id:currentWorker.id, farm_id:field.farmId, name:field.name, area:field.area||null, area_unit:field.areaUnit||'ha', notes:field.notes||null});
+  _pushConfig('ht_fields',{id:field.id, user_id:currentWorker.id, farm_id:field.farmId, name:field.name, area:field.area||null, area_unit:field.areaUnit||'ha', notes:field.notes||null, crop:field.crop||null});
 }
 function syncTruck(truck){
   // No session yet: still record the change. _pushConfig() marks dirty as its
