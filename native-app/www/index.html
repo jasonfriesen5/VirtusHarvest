@@ -17772,6 +17772,9 @@ function mapCloudLog(r){
       lng:           r.lng,
       isTruckEmpty:  r.is_truck_empty||false,
       autoDetected:  r.auto_detected||false,
+      manualEntry:   r.manual_entry||false,
+      edited:        r.edited||false,
+      editedAt:      r.edited_at||null,
       synced:        true
     };
   }
@@ -18087,12 +18090,21 @@ async function pullConfig(){
         if(!fresh.truckId && l.truckId !== undefined) fresh.truckId = l.truckId;
         if(l.gpsAccuracy !== undefined) fresh.gpsAccuracy = l.gpsAccuracy;
         if(l.gpsStatus   !== undefined) fresh.gpsStatus   = l.gpsStatus;
-        // No columns for these yet, so the cloud copy always says "false" and a
-        // plain overwrite erased them. manualEntry also drives the empty-truck
-        // exclusion, so losing it silently changed what a truckload contained.
-        if(l.manualEntry !== undefined) fresh.manualEntry = l.manualEntry;
-        if(l.edited      !== undefined) fresh.edited      = l.edited;
-        if(l.editedAt    !== undefined) fresh.editedAt    = l.editedAt;
+        // These have columns now, so the cloud copy is the truth. The local
+        // value still wins where the cloud says false and this device says
+        // true: that is a row written by a build from before the columns
+        // existed, and forgetting a hand-typed load would put it back into the
+        // empty-truck total. A stamp that lingers is recoverable; a truckload
+        // that silently changes size is not.
+        var _stampMissing = (!fresh.manualEntry && l.manualEntry) ||
+                            (!fresh.edited      && l.edited);
+        if(!fresh.manualEntry && l.manualEntry) fresh.manualEntry = true;
+        if(!fresh.edited      && l.edited)      fresh.edited      = true;
+        if(!fresh.editedAt    && l.editedAt)    fresh.editedAt    = l.editedAt;
+        // Queue the correction so the stamp reaches every other device instead
+        // of staying on this one. Without it a load stamped before the columns
+        // existed would be right here and wrong everywhere else forever.
+        if(_stampMissing) fresh.synced = false;
         return fresh;
       }).filter(function(l){
         if(!cloudIsComplete) return true;   // can't tell deleted from truncated
@@ -20396,6 +20408,13 @@ async function syncQueue(){
           lng:           entry.lng||null,
           is_truck_empty: entry.isTruckEmpty||false,
           auto_detected:  entry.autoDetected||false,
+          // How the load came to exist, and whether its weight was changed
+          // afterwards. manual_entry is not only a badge — it excludes the load
+          // from empty-truck totals, so a device that does not receive it
+          // disagrees with the one that made it about what a truckload held.
+          manual_entry:   entry.manualEntry||false,
+          edited:         entry.edited||false,
+          edited_at:      entry.editedAt||null,
           synced:         true
         };
         var result = await sb.from('weighings').upsert(row);
