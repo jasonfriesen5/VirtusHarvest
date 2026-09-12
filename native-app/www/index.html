@@ -18967,6 +18967,8 @@ async function _pushConfig(table, row, key){
     var result = await sb.from(table).upsert(row);
     if(result.error){ console.warn('Push config error ('+table+'):', result.error.message); return; }
     _clearDirty(table, [k]);
+    // Ours. Ignore the echo rather than pulling back what we just sent.
+    _rtMarkOwn(k);
   } catch(e){ console.warn('Push config exception:', e); }
 }
 
@@ -18979,6 +18981,7 @@ async function _deleteConfig(table, id){
     var result = await sb.from(table).delete().eq('id', id).eq('user_id', currentWorker.id);
     if(result.error){ console.warn('Delete config error ('+table+'):', result.error.message); return; }
     _clearDeleted(table, [id]);
+    _rtMarkOwn(id);
   } catch(e){ console.warn('Delete config exception:', e); }
 }
 
@@ -19158,17 +19161,29 @@ function startRealtimeSync(){
   if(_rtChannel) return;                                // one channel per session
 
   try{
-    _rtChannel = sb.channel('vh-weighings-' + currentWorker.id)
-      .on('postgres_changes',
-          { event:'*', schema:'public', table:'weighings',
-            filter:'user_id=eq.' + currentWorker.id },
-          function(payload){
-            var row = payload && (payload.new || payload.old);
-            var id  = row && row.id;
-            // Our own upload coming back to us. Nothing to fetch.
-            if(id && _rtOwnIds[id]) return;
-            _rtSchedulePull(payload.eventType || 'change');
-          })
+    _rtChannel = sb.channel('vh-sync-' + currentWorker.id);
+
+    // Everything a second device should see appear on its own: the loads, and
+    // the things loads are recorded against. All nine carry replica identity
+    // full, without which a DELETE arrives with only its primary key, the
+    // user_id filter cannot be evaluated, and a truck deleted on one tablet
+    // would sit on the other forever.
+    ['weighings','ht_farms','ht_fields','ht_trucks','ht_destinations',
+     'ht_operators','ht_crops','ht_seasons','ht_boundaries','ht_carts'
+    ].forEach(function(table){
+      _rtChannel.on('postgres_changes',
+        { event:'*', schema:'public', table:table,
+          filter:'user_id=eq.' + currentWorker.id },
+        function(payload){
+          var row = payload && (payload.new || payload.old);
+          var id  = row && (row.id || row.field_id);
+          // Our own upload coming back to us. Nothing to fetch.
+          if(id && _rtOwnIds[id]) return;
+          _rtSchedulePull(table + ' ' + (payload.eventType || 'change'));
+        });
+    });
+
+    _rtChannel
       .subscribe(function(status){
         logEvent('sync', 'Live sync: ' + status);
         // A device that was offline may have missed changes entirely, so the
