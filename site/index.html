@@ -1517,7 +1517,11 @@ body{
 .tka-hint{font-weight:600;text-align:center;flex:1;}
 
 /* Capacity input on truck rows in Trucks tab */
-.truck-capacity-row{display:flex;align-items:center;gap:8px;padding:8px 14px 12px;border-top:1px solid var(--border);}
+.truck-capacity-row{display:flex;align-items:center;gap:8px;padding:8px 14px 12px;border-top:1px solid var(--border);flex-wrap:wrap;}
+/* Pushes the alarm pair to the right of the capacity pair on a wide row, and
+   lets it drop to its own line when there is no room rather than squeezing
+   both inputs down to nothing. */
+.truck-alarm-lbl{margin-left:auto;}
 .truck-capacity-lbl{font-size:12px;color:var(--text2);white-space:nowrap;}
 /* Sized to its content rather than stretching across the row: wide enough for 5
    digits, and _sizeCapInput() widens it from there as more are typed. */
@@ -5639,6 +5643,7 @@ const _i18n = {
   'Licence Plate *':'Matrícula *','Driver Name':'Nombre del Conductor',
   'Capacity (kg)':'Capacidad (kg)','Make / Model':'Marca / Modelo',
   'Truck':'Camión','Save Truck':'Guardar Camión','Capacity:':'Capacidad:',
+  'Alarm at:':'Alarma a:','Alarm at':'Alarma a',
   'Edit Truck':'Editar Camión',
 
   // ── Destinations ──
@@ -7497,6 +7502,36 @@ function renderTrucks(){
     capInput.addEventListener('change', function(){
       setTruckCapacity(t.id, this.value);
     });
+
+    // Alarm weight, beside capacity — the two numbers are read together and
+    // only make sense next to each other. Same control as capacity so the pair
+    // reads as one setting rather than two unrelated boxes.
+    var almLbl = document.createElement('span');
+    almLbl.className = 'truck-capacity-lbl truck-alarm-lbl';
+    almLbl.textContent = T('Alarm at:');
+    capRow.appendChild(almLbl);
+
+    var almInput = document.createElement('input');
+    almInput.type = 'number';
+    almInput.className = 'truck-capacity-input';
+    almInput.min = '0';
+    almInput.step = '100';
+    almInput.placeholder = '0';
+    var _at = _truckAlertAt(t);
+    almInput.value = _at > 0 ? _at : '';
+    almInput.setAttribute('data-tid', t.id);
+    _sizeCapInput(almInput);
+    almInput.addEventListener('input', function(){ _sizeCapInput(this); });
+    almInput.addEventListener('change', function(){
+      setTruckAlertAt(t.id, this.value);
+    });
+    capRow.appendChild(almInput);
+
+    var almUnit = document.createElement('span');
+    almUnit.className = 'truck-capacity-unit';
+    almUnit.textContent = 'kg';
+    capRow.appendChild(almUnit);
+
     card.appendChild(capRow);
     list.appendChild(card);
   });
@@ -13213,6 +13248,28 @@ function _tlbRender(loaded, capacity){
     pct.style.color = 'var(--text3)';
     pct.style.fontWeight = '500';
   }
+}
+
+/**
+ * Set the weight this truck's alarm sounds at, from the Trucks list.
+ *
+ * Writes alertAtKg and drops the superseded alertBeforeFullKg, so a truck
+ * edited here stops carrying both and cannot disagree with itself.
+ */
+function setTruckAlertAt(truckId, value){
+  var trucks = getTrucks();
+  var idx = trucks.findIndex(function(t){ return t.id===truckId; });
+  if(idx===-1) return;
+  var at = parseFloat(value)||0;
+  trucks[idx].alertAtKg = at;
+  delete trucks[idx].alertBeforeFullKg;
+  saveTrucks(trucks);
+  syncTruck(trucks[idx]);
+  // A changed threshold is a new question; let it sound again for this load.
+  _tlbAlerted = false;
+  renderTrucks();
+  updateTruckLoadBar();
+  showToast(at > 0 ? (T('Alarm at')+' '+fmtWt(at,'')) : T('No alarm'), 'warn');
 }
 
 function setTruckCapacity(truckId, value){
