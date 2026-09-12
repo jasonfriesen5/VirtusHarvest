@@ -9633,7 +9633,7 @@ async function _tlLoadRemisiones(retried){
 // up later means replacing three bodies, not restructuring the screen.
 
 var LS_REMISION_PROFILES = 'vh_remision_profiles';
-var LS_REMISION_ON       = 'vh_remision_enabled'; // '1' on, '0' off, unset = guess from region
+var LS_REMISION_ON       = 'vh_remision_enabled'; // '1' on; anything else, including unset, off
 
 // Remisión is part of the app rather than an optional feature. Keeping this
 // function lets the existing call sites state their intent while guaranteeing
@@ -9645,29 +9645,18 @@ var LS_REMISION_ON       = 'vh_remision_enabled'; // '1' on, '0' off, unset = gu
  * so there is nothing here to protect — only clutter to keep off the screens of
  * farms outside Paraguay, where the document does not exist.
  *
- * Defaults on for anyone already using it, and for a device set to Paraguay.
- * Everywhere else starts off and switches on in Settings.
+ * Off on a fresh install, everywhere, with no guessing from region or locale:
+ * most installs will not be Paraguayan, and a wrong guess either hides a
+ * feature someone paid for or shows a tax regime that does not apply to them.
+ * Turning it on writes '1' and it stays on from then until it is turned off.
+ *
+ * Installs that predate the switch carry '1' already — the old always-on code
+ * wrote it on every run — so nobody currently using Remisión loses it.
  */
 function remisionEnabled(){
   try{
-    var v = localStorage.getItem(LS_REMISION_ON);
-    if(v === '1') return true;
-    if(v === '0') return false;
-  }catch(e){}
-  return _rmDefaultForRegion();
-}
-
-/** First-run guess only — the switch in Settings overrides it for good. */
-function _rmDefaultForRegion(){
-  try{
-    var tags = [];
-    if(navigator.languages) tags = tags.concat(navigator.languages);
-    if(navigator.language) tags.push(navigator.language);
-    for(var i=0;i<tags.length;i++){
-      if(/[-_]PY\b/i.test(tags[i])) return true;
-    }
-  }catch(e){}
-  return false;
+    return localStorage.getItem(LS_REMISION_ON) === '1';
+  }catch(e){ return false; }
 }
 
 /**
