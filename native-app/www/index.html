@@ -7739,15 +7739,16 @@ function openTxSheetForTruck(logId, truckId){
 
 function openTxSheetForDest(logId, destName){
   openTxSheet(logId, null, null);
-  // Opened from inside a destination, so the destination is already decided —
-  // same reasoning as openTxSheetForTruck: don't ask again, and don't give the
-  // two a chance to disagree.
+  // Editing keeps the picker, and the destination this was opened from is the
+  // sensible default. Adding does not: a new load belongs to the truck until
+  // Empty Truck delivers it, even when the sheet was opened from a
+  // destination's own page.
   var dg = document.getElementById('tx-dest-group');
-  if(dg) dg.style.display = destName ? 'none' : '';
-  // Pre-select after openTxSheet has populated the select.
+  if(dg) dg.style.display = logId ? '' : 'none';
+  if(!logId) return;
   setTimeout(function(){
     var unloadEl = document.getElementById('tx-unload');
-    if(unloadEl && !logId && destName) unloadEl.value = destName;
+    if(unloadEl && destName) unloadEl.value = destName;
     _txRefreshChoiceDisplay('unload');
   }, 30);
 }
@@ -11152,12 +11153,13 @@ function openTxSheet(logId, fieldId, fieldName){
     // Add mode
     titleEl.textContent = T('Add load');
     editIdEl.value = '';
-    // Destination is shown in Add mode. It used to be hidden on the assumption
-    // that delivery is chosen later, but a load added by hand from a truck or
-    // destination page then had no way to say which field it came from — the
-    // single most important attribute of a load.
+    // No destination when adding. A load is grain sitting on the truck; where
+    // it ends up is decided later by Empty Truck, which is the one place that
+    // knows a whole truckload was delivered somewhere. Letting this sheet set a
+    // destination made a hand-typed load look delivered the moment it was
+    // created, before the truck had gone anywhere.
     //
-    // The Field picker follows the same logic, but only when the field isn't
+    // The Field picker is shown here, but only when the field isn't
     // already known: opening this sheet from a field's own page (the FAB there
     // passes the id) means the answer is settled, and asking again is a
     // redundant tap on the thing you just navigated into. The field name goes
@@ -11170,7 +11172,7 @@ function openTxSheet(logId, fieldId, fieldName){
     if(_fieldKnown && _txSelectedFieldName){
       titleEl.textContent = T('Add load')+' — '+_txSelectedFieldName;
     }
-    if(txDestGroup) txDestGroup.style.display = '';
+    if(txDestGroup) txDestGroup.style.display = 'none';
     if(txOperatorGroup) txOperatorGroup.style.gridColumn = '';
     _updateTxFieldDisplay();
     document.getElementById('tx-weight').value = '';
@@ -11291,8 +11293,10 @@ function saveTxSheet(){
       fieldId:     _txFid || null,
       zone:        field ? field.name : (selectedField?selectedField.name:''),
       crop:        document.getElementById('tx-crop').value,
-      unload:      document.getElementById('tx-unload').value,
-      deliveredTo: document.getElementById('tx-unload').value || null,
+      // Not read from the select: the picker is hidden while adding, and a
+      // value left in it from a previous open must not become a delivery.
+      unload:      '',
+      deliveredTo: null,
       notes:       document.getElementById('tx-notes').value.trim(),
       weight:      parseFloat(weightVal.toFixed(2)),
       wetWeight:   parseFloat(weightVal.toFixed(2)),
