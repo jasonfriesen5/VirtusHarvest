@@ -3568,7 +3568,7 @@ function _openPasswordResetWhenReady(){
           <div class="more-row-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A7AE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
           </div>
-          <div class="more-row-label">Remisión</div>
+          <div class="more-row-label" data-en="Remisión">Remisión</div>
           <div class="more-row-chevron">›</div>
         </div>
 
@@ -3584,7 +3584,7 @@ function _openPasswordResetWhenReady(){
           <div class="more-row-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A7AE2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polyline points="6,9 9,12 6,15"/><line x1="11" y1="15" x2="17" y2="15"/></svg>
           </div>
-          <div class="more-row-label">Diagnostics</div>
+          <div class="more-row-label" data-en="Diagnostics">Diagnostics</div>
           <div class="more-row-chevron">›</div>
         </div>
 
@@ -3786,9 +3786,12 @@ function _openPasswordResetWhenReady(){
             <div><div class="sr-label">Language</div></div>
             <div class="seg-ctrl" id="seg-lang">
               <button class="seg-btn" data-lang="auto" onclick="setLanguage('auto')" data-en="Auto">Auto</button>
-              <button class="seg-btn" data-lang="en" onclick="setLanguage('en')">English</button>
-              <button class="seg-btn" data-lang="es" onclick="setLanguage('es')">Español</button>
-              <button class="seg-btn" data-lang="pt" onclick="setLanguage('pt')">Português</button>
+              <!-- Codes, not names: English / Español / Português plus Auto
+                   overflowed the row on a phone. EN / ES / PT is what the
+                   language pickers people already use look like. -->
+              <button class="seg-btn" data-lang="en" onclick="setLanguage('en')" title="English">EN</button>
+              <button class="seg-btn" data-lang="es" onclick="setLanguage('es')" title="Español">ES</button>
+              <button class="seg-btn" data-lang="pt" onclick="setLanguage('pt')" title="Português">PT</button>
             </div>
           </div>
           <div class="setting-row" style="border-bottom:none;">
@@ -18836,6 +18839,7 @@ function doLogout(){
     if(!ok) return;
     var sb = getSupabase();
     if(sb) sb.auth.signOut().catch(function(){});
+    stopRealtimeSync();
     currentWorker = null;
     localStorage.removeItem(LS_WORKER);
     localStorage.removeItem(LS_LOGIN_EMAIL);
@@ -19085,6 +19089,95 @@ function mapCloudLog(r){
     };
   }
 
+// ══ LIVE SYNC ══
+//
+// A second tablet on the same account used to sit there stale until somebody
+// pressed Sync. The scale in the cab saves a load, the office iPad shows
+// yesterday's total, and the two disagree for as long as nobody notices.
+//
+// Postgres streams the change instead. weighings is already in the
+// supabase_realtime publication with replica identity full, and its RLS policy
+// is auth.uid() = user_id, so a subscriber is only ever sent its own rows —
+// the filter below is belt and braces, not the security boundary.
+var _rtChannel   = null;
+var _rtPullTimer = null;
+var _rtOwnIds    = Object.create(null);   // rows THIS device just pushed
+
+/** Remember a row we uploaded, so its echo does not trigger a pointless pull. */
+function _rtMarkOwn(id){
+  if(!id) return;
+  _rtOwnIds[id] = Date.now();
+  // Keep the set from growing for the life of the session.
+  var cutoff = Date.now() - 60000;
+  Object.keys(_rtOwnIds).forEach(function(k){ if(_rtOwnIds[k] < cutoff) delete _rtOwnIds[k]; });
+}
+
+/**
+ * Pull, but not once per row: emptying a truck writes several weighings in a
+ * burst and each one arrives separately. Waiting a moment turns a burst into a
+ * single pull.
+ */
+function _rtSchedulePull(reason){
+  if(_rtPullTimer) return;
+  _rtPullTimer = setTimeout(async function(){
+    _rtPullTimer = null;
+    if(_syncing) { _rtSchedulePull('retry after sync'); return; }
+    try{
+      logEvent('sync', 'Live sync: pulling (' + reason + ')');
+      await pullConfig();
+      if(typeof renderLogs === 'function') renderLogs();
+      if(typeof updateWeighDisplay === 'function') updateWeighDisplay();
+      if(typeof updateTruckLoadBar === 'function') updateTruckLoadBar();
+    }catch(e){ console.warn('[live sync]', (e && e.message) || e); }
+  }, 1800);
+}
+
+function startRealtimeSync(){
+  var sb = getSupabase();
+  if(!sb || !currentWorker || !currentWorker.id) return;
+  if(typeof sb.channel !== 'function') return;          // older supabase-js
+  if(_rtChannel) return;                                // one channel per session
+
+  try{
+    _rtChannel = sb.channel('vh-weighings-' + currentWorker.id)
+      .on('postgres_changes',
+          { event:'*', schema:'public', table:'weighings',
+            filter:'user_id=eq.' + currentWorker.id },
+          function(payload){
+            var row = payload && (payload.new || payload.old);
+            var id  = row && row.id;
+            // Our own upload coming back to us. Nothing to fetch.
+            if(id && _rtOwnIds[id]) return;
+            _rtSchedulePull(payload.eventType || 'change');
+          })
+      .subscribe(function(status){
+        logEvent('sync', 'Live sync: ' + status);
+        // A device that was offline may have missed changes entirely, so the
+        // reconnect itself is a reason to pull rather than just to listen.
+        if(status === 'SUBSCRIBED') _rtSchedulePull('subscribed');
+      });
+  }catch(e){
+    _rtChannel = null;
+    console.warn('[live sync] could not subscribe:', (e && e.message) || e);
+  }
+}
+
+function stopRealtimeSync(){
+  if(_rtPullTimer){ clearTimeout(_rtPullTimer); _rtPullTimer = null; }
+  if(!_rtChannel) return;
+  try{ var sb = getSupabase(); if(sb && sb.removeChannel) sb.removeChannel(_rtChannel); }catch(e){}
+  _rtChannel = null;
+}
+
+// Coming back to the app is the cheapest moment to notice the socket died
+// while the screen was off.
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState !== 'visible') return;
+  if(!currentWorker || !currentWorker.id) return;
+  if(!_rtChannel) startRealtimeSync();
+  else _rtSchedulePull('returned to app');
+});
+
 async function pullConfig(){
   var sb = getSupabase();
   // Don't silently promote a recovery session into a logged-in state —
@@ -19115,6 +19208,9 @@ async function pullConfig(){
   // this farm issues remisiones. Runs here rather than from the Remisión panel,
   // which is hidden precisely when the setting still needs adopting.
   await _rmSyncAccountSetting();
+
+  // Session is live, so the socket can authenticate. Cheap when already up.
+  startRealtimeSync();
   try{ localStorage.setItem(LS_WORKER, JSON.stringify(currentWorker)); }catch(e){}
 
   try{
@@ -21744,6 +21840,7 @@ async function syncQueue(){
         if(result.error) throw result.error;
         synced++;
         markSynced(entry.id);
+        _rtMarkOwn(entry.id);
       } else {
         // ── Fallback: legacy REST endpoint ──
         var apiUrl = getApiUrl();
