@@ -47,11 +47,13 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<!-- iPhone: upright only. Every screen is laid out for a phone held
+	     upright, and this key applies to iPhone alone — iPad reads the
+	     ~ipad variant below and keeps all four, because the cab unit is
+	     docked in landscape. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

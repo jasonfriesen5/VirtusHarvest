@@ -6,4 +6,13 @@
       theme; the style itself stays defined in exactly one place.
     -->
     <bool name="lightSystemBars">true</bool>
+
+    <!--
+      Phones are held upright, and every screen here is laid out for that.
+      Tablets override this in values-sw600dp: the cab unit is docked in
+      landscape, where the gauge and Empty Truck sit side by side.
+      MainActivity reads this rather than the manifest locking the orientation,
+      because a manifest attribute cannot vary by screen size.
+    -->
+    <bool name="portraitOnly">true</bool>
 </resources>
