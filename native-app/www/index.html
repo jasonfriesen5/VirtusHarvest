@@ -7737,12 +7737,11 @@ function openTxSheetForTruck(logId, truckId){
   }, 30);
 }
 
+// Only ever reached for an EDIT now — the destination panel's Add load button
+// is gone, because a destination receives grain through Empty Truck rather
+// than having loads created on it.
 function openTxSheetForDest(logId, destName){
   openTxSheet(logId, null, null);
-  // Editing keeps the picker, and the destination this was opened from is the
-  // sensible default. Adding does not: a new load belongs to the truck until
-  // Empty Truck delivers it, even when the sheet was opened from a
-  // destination's own page.
   var dg = document.getElementById('tx-dest-group');
   if(dg) dg.style.display = logId ? '' : 'none';
   if(!logId) return;
@@ -15776,17 +15775,10 @@ function openDestDetail(destId){
     });
   }
 
-  // FAB — Add load
-  var fab=document.createElement('div');
-  fab.className='fdp-fab';
-  var fabBtn=document.createElement('button');
-  fabBtn.className='fdp-fab-btn';
-  fabBtn.innerHTML='＋ '+T('Add load');
-  fabBtn.addEventListener('click',function(){
-    openTxSheetForDest(null, dest.name);
-  });
-  fab.appendChild(fabBtn);
-  body.appendChild(fab);
+  // No Add load here. A destination receives grain by way of Empty Truck; it
+  // is not somewhere loads are created. The button used to attribute this
+  // destination to a brand-new load, which made it look delivered before any
+  // truck had gone anywhere.
 
   document.getElementById('dest-detail-panel').dataset.did = destId;
   document.getElementById('dest-detail-panel').classList.add('open');
