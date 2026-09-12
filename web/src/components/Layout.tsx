@@ -65,7 +65,7 @@ export default function Layout() {
               />
             </span>
             <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-50">
-              Virtus Harvest
+              Virtus Cart
             </span>
           </div>
 
@@ -167,7 +167,7 @@ export default function Layout() {
       </main>
 
       <footer className="border-t border-slate-200 px-4 py-4 text-center text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
-        Virtus Harvest — records sync from the mobile app.
+        Virtus Cart — records sync from the mobile app.
       </footer>
     </div>
   );

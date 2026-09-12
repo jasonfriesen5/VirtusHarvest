@@ -51,7 +51,7 @@ export default function Account() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `virtus-harvest-account-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `virtus-cart-account-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setNotice('Account export downloaded.');
@@ -69,7 +69,7 @@ export default function Account() {
     ]);
     const escape = (c: string | number) => `"${String(c).replace(/"/g, '""')}"`;
     const csv = [headers.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\r\n');
-    downloadCsv(`virtus-harvest-all-records-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    downloadCsv(`virtus-cart-all-records-${new Date().toISOString().slice(0, 10)}.csv`, csv);
     setNotice('All records exported as CSV.');
   }
 

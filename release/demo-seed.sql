@@ -1,5 +1,5 @@
 -- ============================================================================
--- Virtus Harvest — App Review demo account seed
+-- Virtus Cart — App Review demo account seed
 --
 -- Re-runnable. Wipes the demo account's data and rebuilds it, so the account can
 -- be reset to a clean, presentable state before every submission.

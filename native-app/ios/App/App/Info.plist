@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Virtus Harvest</string>
+        <string>Virtus Cart</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -65,11 +65,11 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Virtus Harvest connects to your grain-cart scale over Bluetooth to read weights and install firmware updates.</string>
+	<string>Virtus Cart connects to your grain-cart scale over Bluetooth to read weights and install firmware updates.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Virtus Harvest connects to your grain-cart scale over Bluetooth to read weights and install firmware updates.</string>
+	<string>Virtus Cart connects to your grain-cart scale over Bluetooth to read weights and install firmware updates.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Virtus Harvest records the field location of each load and shows your fields on the map.</string>
+	<string>Virtus Cart records the field location of each load and shows your fields on the map.</string>
 	<!-- Export compliance: the app uses only exempt cryptography — HTTPS/TLS for
 	     cloud sync, and ECDSA P-256 signature verification for the scale
 	     anti-clone handshake. Declaring it here stops App Store Connect asking

@@ -179,7 +179,7 @@ public class ScaleMonitoringService extends Service {
             "Scale monitoring",
             NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Shows when Virtus Harvest is monitoring a connected scale");
+        channel.setDescription("Shows when Virtus Cart is monitoring a connected scale");
         channel.setShowBadge(false);
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.createNotificationChannel(channel);

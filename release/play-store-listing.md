@@ -1,4 +1,4 @@
-# Google Play listing copy — Virtus Harvest
+# Google Play listing copy — Virtus Cart
 
 Play's limits differ from Apple's, and Play **truncates silently** rather than
 refusing the paste. Counts below are verified; re-check after any edit.
@@ -15,10 +15,10 @@ Spanish and Brazilian Portuguese, so all three are below.
 
 ---
 
-## App name  *(14 / 30)*
+## App name  *(11 / 30)*
 
 ```
-Virtus Harvest
+Virtus Cart
 ```
 
 ---
@@ -31,10 +31,10 @@ Virtus Harvest
 Weigh every load from your grain cart. Live Bluetooth weights, field by field.
 ```
 
-## Full description  *(1,993 / 4,000)*
+## Full description  *(2,002 / 4,000)*
 
 ```
-Virtus Harvest turns your grain cart into a complete harvest record.
+Virtus Cart turns every load off your grain cart into a complete harvest record.
 
 Pair the app with your Virtus scale over Bluetooth and every load is weighed, logged and totalled as you go — no notebooks, no whiteboard in the shop, no adding it up at the end of the day.
 
@@ -80,7 +80,7 @@ FOR PARAGUAY
 • Optional electronic Nota de Remisión, issued from the load you just weighed
 • Off unless you turn it on, and out of the way entirely if you don't
 
-Virtus Harvest requires a Virtus grain cart scale to read weights.
+Virtus Cart requires a Virtus grain cart scale to read weights.
 ```
 
 ---
@@ -96,10 +96,10 @@ the app's own Spanish is Latin American.
 Pesá cada carga desde tu tolva. Peso en vivo por Bluetooth, lote por lote.
 ```
 
-## Full description  *(2,034 / 4,000)*
+## Full description  *(2,042 / 4,000)*
 
 ```
-Virtus Harvest convierte tu tolva en un registro completo de la cosecha.
+Virtus Cart convierte cada carga de tu tolva en un registro completo de la cosecha.
 
 Conectá la app a tu balanza Virtus por Bluetooth y cada carga queda pesada, registrada y sumada sobre la marcha — sin cuadernos, sin pizarra en el galpón, sin tener que sacar la cuenta al final del día.
 
@@ -145,7 +145,7 @@ PARA PARAGUAY
 • Nota de Remisión electrónica opcional, emitida desde la carga recién pesada
 • Desactivada salvo que la actives, y fuera del camino si no la usás
 
-Virtus Harvest requiere una balanza Virtus para tolva para leer pesos.
+Virtus Cart requiere una balanza Virtus para tolva para leer pesos.
 ```
 
 ---
@@ -162,10 +162,10 @@ there is no NF-e.
 Pese cada carga do seu graneleiro. Peso ao vivo por Bluetooth, talhão a talhão.
 ```
 
-## Full description  *(1,903 / 4,000)*
+## Full description  *(1,909 / 4,000)*
 
 ```
-O Virtus Harvest transforma o seu graneleiro em um registro completo da colheita.
+O Virtus Cart transforma cada carga do seu graneleiro em um registro completo da colheita.
 
 Conecte o aplicativo à sua balança Virtus por Bluetooth e cada carga é pesada, registrada e somada na hora — sem caderno, sem quadro no barracão, sem fechar a conta no fim do dia.
 
@@ -207,7 +207,7 @@ MANUTENÇÃO DA BALANÇA INCLUÍDA
 • Leituras de bateria, tensão e sensibilidade
 • Atualizações de firmware por Bluetooth, dentro do próprio aplicativo
 
-O Virtus Harvest precisa de uma balança Virtus para graneleiro para ler pesos.
+O Virtus Cart precisa de uma balança Virtus para graneleiro para ler pesos.
 ```
 
 ---

@@ -42,12 +42,12 @@
   <!-- Home screen / PWA icon -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Virtus Harvest">
-  <meta name="application-name" content="Virtus Harvest">
+  <meta name="apple-mobile-web-app-title" content="Virtus Cart">
+  <meta name="application-name" content="Virtus Cart">
   <meta name="theme-color" content="#D4930A">
-  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjogIlZpcnR1cyBIYXJ2ZXN0IiwgInNob3J0X25hbWUiOiAiVmlydHVzIiwgImRlc2NyaXB0aW9uIjogIkhhcnZlc3QgZGF0YSBtYW5hZ2VtZW50IGZvciB0aGUgY2FiIiwgInN0YXJ0X3VybCI6ICIvIiwgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNGNUM4NDIiLCAidGhlbWVfY29sb3IiOiAiI0Q0OTMwQSIsICJvcmllbnRhdGlvbiI6ICJsYW5kc2NhcGUifQ==">
+  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjogIlZpcnR1cyBDYXJ0IiwgInNob3J0X25hbWUiOiAiVmlydHVzIiwgImRlc2NyaXB0aW9uIjogIkhhcnZlc3QgZGF0YSBtYW5hZ2VtZW50IGZvciB0aGUgY2FiIiwgInN0YXJ0X3VybCI6ICIvIiwgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNGNUM4NDIiLCAidGhlbWVfY29sb3IiOiAiI0Q0OTMwQSIsICJvcmllbnRhdGlvbiI6ICJsYW5kc2NhcGUifQ==">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-<title>Virtus - Harvest Manager</title>
+<title>Virtus Cart</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -3061,7 +3061,7 @@ function _openPasswordResetWhenReady(){
        so signing in doesn't feel like a different app. -->
   <div class="signin-brand">
     <div class="signin-brand-name">VIRTUS</div>
-    <div class="signin-brand-sub">HARVEST</div>
+    <div class="signin-brand-sub">CART</div>
   </div>
 
   <div class="signin-card">
@@ -3165,7 +3165,7 @@ function _openPasswordResetWhenReady(){
 <div class="screen active" id="s-app">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:9px;">
-      <div class="topbar-logo" style="line-height:1.05;">VIRTUS<br><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:#C47D00;">HARVEST</span></div>
+      <div class="topbar-logo" style="line-height:1.05;">VIRTUS<br><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:#C47D00;">CART</span></div>
     </div>
     <div class="topbar-right">
       <!-- GPS / Online / BT pills hidden per user preference (JS still updates them) -->
@@ -18755,7 +18755,7 @@ async function doSignUp(){
     switchAuthTab('signin');
     document.getElementById('signin-email').value = email;
     _pendingConfirmEmail = email;
-    _setAuthSuccess('Account created. Check your email — including the spam folder — for a confirmation link from Virtus Harvest. You must confirm before you can sign in.');
+    _setAuthSuccess('Account created. Check your email — including the spam folder — for a confirmation link from Virtus Cart. You must confirm before you can sign in.');
   } catch(e){
     _setAuthBtnLoading('signup-btn', false, 'Create Account');
     _setAuthError(e.message||'Could not create account. Please try again.');

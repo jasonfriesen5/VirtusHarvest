@@ -1,7 +1,7 @@
 {
   "name": "virtus-dfu",
   "version": "1.0.0",
-  "description": "Nordic Secure DFU for Virtus Harvest — thin Capacitor wrapper over Nordic's own DFU libraries (IOS-DFU-Library on iOS, Android-DFU-Library on Android).",
+  "description": "Nordic Secure DFU for Virtus Cart — thin Capacitor wrapper over Nordic's own DFU libraries (IOS-DFU-Library on iOS, Android-DFU-Library on Android).",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",

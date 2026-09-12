@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The brand ground the Harvest mark is rendered on. The foreground layer is
+<!-- The brand ground the Virtus mark is rendered on. The foreground layer is
      opaque and matches this, so it only shows if a launcher shifts the layers. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"

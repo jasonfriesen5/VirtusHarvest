@@ -1,6 +1,6 @@
-# Virtus Harvest — web console
+# Virtus Cart — web console
 
-Desktop companion to the Virtus Harvest mobile app. Same Supabase project, same
+Desktop companion to the Virtus Cart mobile app. Same Supabase project, same
 login, same records. Built with React + Vite + Tailwind; deployed to Netlify at
 `view.virtusharvest.com`.
 

@@ -1,4 +1,4 @@
--- Account deletion for Virtus Harvest
+-- Account deletion for Virtus Cart
 -- Run once in Supabase ▸ SQL Editor ▸ New query ▸ Run.
 --
 -- WHY A FUNCTION: deleting a row from auth.users needs privileges the app's

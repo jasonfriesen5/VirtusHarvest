@@ -106,7 +106,7 @@ only `resend._domainkey.send`.
     | Field | Value |
     |---|---|
     | Sender email | `noreply@send.virtusharvest.com` |
-    | Sender name | `Virtus Harvest` |
+    | Sender name | `Virtus Cart` |
     | Host | `smtp.resend.com` |
     | Port | `587` |
     | Username | `resend` |

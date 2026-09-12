@@ -186,7 +186,7 @@ export default function Records() {
       w.notes ?? '',
       w.id,
     ]);
-    downloadCsv(`virtus-harvest-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, rows));
+    downloadCsv(`virtus-cart-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, rows));
   }
 
   async function confirmDelete() {

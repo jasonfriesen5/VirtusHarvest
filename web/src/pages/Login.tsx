@@ -53,7 +53,7 @@ export default function Login() {
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <img
             src="/virtus-icon.png"
-            alt="Virtus Harvest"
+            alt="Virtus Cart"
             width={160}
             height={160}
             className="h-40 w-40 rounded-2xl object-cover shadow-sm ring-1 ring-black/5 dark:ring-white/10"
@@ -61,7 +61,7 @@ export default function Login() {
           {/* The artwork already carries the wordmark, so a visible heading
               would just repeat it — kept for screen readers and the document
               outline instead. */}
-          <h1 className="sr-only">Virtus Harvest</h1>
+          <h1 className="sr-only">Virtus Cart</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Sign in with the same account you use in the app.
           </p>

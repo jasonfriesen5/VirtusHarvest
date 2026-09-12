@@ -1,4 +1,4 @@
-# Release materials — Virtus Harvest
+# Release materials — Virtus Cart
 
 Everything needed to submit a version to the App Store, so none of it has to be
 reconstructed from memory next time.

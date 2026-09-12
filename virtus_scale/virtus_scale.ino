@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
 //  Virtus Scale — nRF52840 + NAU7802 load-cell firmware
 //
-//  Speaks the Virtus Harvest app protocol over Nordic UART Service:
+//  Speaks the Virtus Cart app protocol over Nordic UART Service:
 //    TX (scale → app), newline-terminated:
 //      P:<net>,L:<gross>,S:<stable 0/1>,U:0
 //      INFO:firmware=x.y.z,model=VirtusScale,serial=XXXXXX

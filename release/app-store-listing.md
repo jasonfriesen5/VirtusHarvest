@@ -1,4 +1,4 @@
-# App Store listing copy — Virtus Harvest
+# App Store listing copy — Virtus Cart
 
 Character counts verified against Apple's limits. Keep them in mind when editing:
 going over is silently rejected by the field, not flagged.
@@ -13,10 +13,10 @@ Weigh every load straight from your grain cart. Live Bluetooth weights, automati
 
 ---
 
-## Description  *(1,575 / 4,000)*
+## Description  *(1,584 / 4,000)*
 
 ```
-Virtus Harvest turns your grain cart into a complete harvest record.
+Virtus Cart turns every load off your grain cart into a complete harvest record.
 
 Pair the app with your Virtus scale over Bluetooth and every load is weighed, logged and totalled as you go — no notebooks, no whiteboard in the shop, no adding it up at the end of the day.
 
@@ -53,7 +53,7 @@ SCALE MAINTENANCE BUILT IN
 • Battery, voltage and sensitivity readouts
 • Firmware updates installed over Bluetooth, entirely inside the app
 
-Virtus Harvest requires a Virtus grain cart scale to read weights.
+Virtus Cart requires a Virtus grain cart scale to read weights.
 ```
 
 ---
@@ -66,9 +66,10 @@ grain,cart,scale,harvest,farm,yield,bushel,agriculture,weigh,bluetooth,combine,t
 
 No spaces after commas — spaces count against the limit.
 
-Note: `harvest` is arguably wasted, since it already appears in the app name and
-Apple indexes that separately. Swapping it for a term you don't otherwise rank
-for (e.g. `grower`, `acres`) would buy ~8 characters of reach.
+Note: with the rename to Virtus Cart, `harvest` is no longer in the app name, so
+it now earns its place here. `cart` is the term that became redundant — it is
+indexed from the name — and swapping it for one you don't otherwise rank for
+(e.g. `grower`, `acres`) buys a few characters of reach.
 
 ---
 

@@ -127,12 +127,12 @@ Suggested note:
 
 ## 5. Release checklist
 
-1. Upload `VirtusHarvest-1.0.4-27.aab` — the **.aab**, not the .apk.
+1. Upload `VirtusCart-1.0.4-28.aab` — the **.aab**, not the .apk.
 2. Play will ask you to enrol in **Play App Signing**. Accept it. Your upload key
    (`CN=Virtus Scales`) stays the upload key; Google holds the distribution key.
    Keep the keystore and `keystore.properties` backed up — losing the upload key
    means an identity reset with Google support.
-3. versionCode **27** is uploaded. Play rejects a reused value, so bump
+3. versionCode **28** is uploaded. Play rejects a reused value, so bump
    `native-app/android/app/build.gradle` for every subsequent upload.
 4. Internal testing track first. It goes live in minutes and lets you install
    from Play on a real phone before anyone else sees it.

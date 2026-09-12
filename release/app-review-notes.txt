@@ -1,6 +1,6 @@
 WHAT THIS APP DOES
 
-Virtus Harvest is the companion app for the Virtus grain cart scale, a Bluetooth LE weighing device fitted to agricultural grain carts. The audience is grain growers and their operators.
+Virtus Cart is the companion app for the Virtus grain cart scale, a Bluetooth LE weighing device fitted to agricultural grain carts. The audience is grain growers and their operators.
 
 During harvest, grain moves from the combine to a grain cart and then into trucks. Growers need to know how much came off each field, which truck carried it and where it went. The app reads live weight from the scale over Bluetooth and records each load against a field, truck, destination, crop and operator, with a GPS point and moisture reading. It totals yield per field and per hectare, works offline, and syncs when back in service so the same records appear on every device the grower uses.
 
