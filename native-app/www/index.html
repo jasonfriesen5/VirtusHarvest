@@ -6121,6 +6121,7 @@ const _i18n_es = {
   'or switch crop':'o cambiar cultivo',
   'Loaded':'Cargado','crop updated to':'cultivo actualizado a',
   'Truck Full':'Camión Lleno','would be at':'estaría al','Unload anyway':'Descargar de todos modos',
+  'Empty truck':'Vaciar camión',
   'Empty truck & switch':'Vaciar camión y cambiar','Unload discarded — no truck selected':'Descarga descartada — ningún camión seleccionado',
   'Account':'Cuenta','Delete Account':'Eliminar Cuenta','Delete Account?':'¿Eliminar Cuenta?',
   'Remisión':'Remisión','Fenex profiles':'Perfiles Fenex','Connect a profile':'Conectar un perfil',
@@ -7003,7 +7004,7 @@ const _i18n_pt = {
   'or switch crop':'ou trocar a cultura',
   'Loaded':'Carregado',
   'crop updated to':'cultura alterada para',
-  'Truck Full':'Caminhão Cheio',
+  'Truck Full':'Caminhão Cheio','Empty truck':'Esvaziar caminhão',
   'would be at':'ficaria em',
   'Unload anyway':'Descarregar mesmo assim',
   'Empty truck & switch':'Esvaziar caminhão e trocar',
@@ -15651,7 +15652,25 @@ function _saveAutoEntry(entry){
   var conflict = _truckCropConflict();
   if(conflict && !entry.__cropChecked){
     entry.__cropChecked = true;
-    _confirmTruckCrop().then(function(ok){ if(ok) _saveAutoEntry(entry); });
+    _confirmTruckCrop().then(function(cropChoice){
+      if(cropChoice === 'empty'){
+        // Same as the manual path, but the entry was built before the dialog,
+        // so it waits until the truck is empty and is then saved as-is.
+        _pendingAfterEmpty = entry;
+        _afterEmptyTruck = function(){
+          var pending = _pendingAfterEmpty; _pendingAfterEmpty = null;
+          if(pending) _saveAutoEntry(pending);
+        };
+        openEmptyTruckDialog();
+        return;
+      }
+      if(cropChoice !== 'proceed') return;
+      // Change crop rewrites the selector, but this entry was built before
+      // that — without this it would save under the crop it no longer has.
+      var chosen = (document.getElementById('f-crop')||{}).value;
+      if(chosen) entry.crop = chosen;
+      _saveAutoEntry(entry);
+    });
     return;
   }
 
@@ -22240,8 +22259,16 @@ function confirmUnload(){
   _confirmOperator().then(function(go){
     if(!go) return;
     return _confirmTruckCrop();
-  }).then(function(ok){
-    if(!ok) return;
+  }).then(function(cropChoice){
+    if(!cropChoice) return;
+    if(cropChoice === 'empty'){
+      // The truck leaves and comes back empty, so this load is simply the
+      // first one on it — no truck picker, unlike the capacity flow where the
+      // current truck is full and a different one has to take the grain.
+      _afterEmptyTruck = function(){ logEntry(); updateTruckLoadBar(); };
+      openEmptyTruckDialog();
+      return;
+    }
     var conflict = _truckFullConflict(_pendingUnloadKg());
     if(!conflict){ logEntry(); updateTruckLoadBar(); return; }
     showTruckFullChoice(conflict).then(function(choice){
@@ -24979,17 +25006,52 @@ function _truckCropConflict(){
   return { crop: crop, aboard: aboard };
 }
 
+/**
+ * Set the working crop to whatever the truck is already carrying.
+ *
+ * Deliberately NOT handleCropChange(): that runs the field-crop checks and
+ * would stack a second dialog on top of this one, mid-unload. The operator has
+ * already answered the crop question by tapping the button.
+ */
+function _adoptTruckCrop(crop){
+  var cropEl = document.getElementById('f-crop');
+  if(cropEl) cropEl.value = crop;
+  var sub = document.getElementById('ir-crop-sub');
+  if(sub) sub.textContent = crop;
+  if(typeof updateCropDisplay === 'function') updateCropDisplay();
+  if(typeof _saveSelection === 'function') _saveSelection();
+}
+
+/**
+ * Three ways out of a crop conflict, because Cancel was never really one of
+ * them: the grain is already moving by the time this appears.
+ *
+ *   Change crop   — this load was mislabelled; take the truck's crop.
+ *   Unload anyway — deliberately mixing, which cannot be undone afterwards.
+ *   Empty truck   — the truck delivers and comes back empty, and this load is
+ *                   then the first one on it.
+ *
+ * Resolves 'proceed' (the crop is settled, carry on) or 'empty' (the caller
+ * runs the empty-truck flow, then saves against the same truck).
+ */
 function _confirmTruckCrop(){
   var c = _truckCropConflict();
-  if(!c) return Promise.resolve(true);
+  if(!c) return Promise.resolve('proceed');
+  var aboard = c.aboard[0];
   return showConfirm({
     icon: '⚠️',
     title: T('Different Crop On Truck'),
     msg: '"'+selectedTruck.name+'" '+T('is already carrying')+' '+c.aboard.map(T).join(' + ')+'. '+
          T('Unloading')+' '+T(c.crop)+' '+T('will mix the load. Change the crop, or empty the truck first.'),
-    okLabel: T('Unload anyway'),
-    okColor: '#B03020',
-    cancelLabel: T('Cancel')
+    okLabel: T('Change crop')+' → '+T(aboard),
+    okColor: '#2D9D5C',
+    altLabel: T('Unload anyway'),
+    altColor: '#B03020',
+    cancelLabel: T('Empty truck')
+  }).then(function(choice){
+    if(choice === true){ _adoptTruckCrop(aboard); return 'proceed'; }
+    if(choice === 'alt'){ return 'proceed'; }
+    return 'empty';
   });
 }
 
