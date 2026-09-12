@@ -24,6 +24,13 @@ type DraftSummary = {
   updatedAt: string;
 };
 type DraftDetail = { summary: DraftSummary; remission: Record<string, unknown> };
+class FenexHttpError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 const unavailable = "Fenex connections are not available yet. The updated backend must be deployed and connected.";
 
 /**
@@ -59,9 +66,9 @@ async function partner(path: string, method = "GET", payload?: unknown) {
     logUpstream(method, path, response.status, failure);
     // Never forward upstream bodies TO THE BROWSER: they may contain internal
     // details or secrets. The log above is server-side only.
-    if (response.status === 404) throw new Error("Fenex could not find this account or connection endpoint. Confirm the RUC with the issuer.");
-    if (response.status === 401 || response.status === 403) throw new Error("The Virtus–Fenex server connection is not authorized.");
-    if (response.status === 409) throw new Error("Fenex reports that this request has already been decided.");
+    if (response.status === 404) throw new FenexHttpError("Fenex could not find this account or connection endpoint. Confirm the RUC with the issuer.", 404);
+    if (response.status === 401 || response.status === 403) throw new FenexHttpError("The Virtus–Fenex server connection is not authorized.", response.status);
+    if (response.status === 409) throw new FenexHttpError("Fenex reports that this request has already been decided.", 409);
     throw new Error("Fenex could not complete the request (" + response.status + ").");
   }
   logUpstream(method, path, response.status);
@@ -82,8 +89,8 @@ async function partnerPdf(path: string) {
   if (!response.ok) {
     const failure = await response.text().catch(() => "");
     logUpstream("GET", path, response.status, failure);
-    if (response.status === 409) throw new Error("The signed PDF is not available until SIFEN approves the remisión.");
-    if (response.status === 401 || response.status === 403) throw new Error("The Virtus–Fenex server connection is not authorized.");
+    if (response.status === 409) throw new FenexHttpError("The signed PDF is not available until SIFEN approves the remisión.", 409);
+    if (response.status === 401 || response.status === 403) throw new FenexHttpError("The Virtus–Fenex server connection is not authorized.", response.status);
     throw new Error("Fenex could not return the signed PDF (" + response.status + ").");
   }
   // Never the bytes, just the fact that they arrived.
@@ -131,13 +138,20 @@ Deno.serve(async (req: Request) => {
       const { error } = await db.from("ht_issuers").upsert(remote.map(c => {
         const [ruc, dv] = c.ruc.split("-");
         return { id: c.id, user_id: user!.id, label: c.label,
-          is_default: local.find(p => p.id === c.id)?.is_default ?? false,
+          // Keep rows for historical remisiones which reference this issuer,
+          // but a revoked connection must never remain the account default.
+          is_default: c.status === "REVOKED"
+            ? false
+            : (local.find(p => p.id === c.id)?.is_default ?? false),
           razon_social: c.status === "APPROVED" ? c.legalName : null, ruc, ruc_dv: dv,
           updated_at: new Date().toISOString() };
       }), { onConflict: "id" });
       if (error) throw new Error("Fenex received the request, but Virtus could not save its profile. Refresh to recover it.");
     }
-    return remote.map(c => ({
+    // A revoked connection remains materialized above only so old remisiones
+    // keep their issuer reference. It is no longer a selectable profile and
+    // must disappear from every current connection response.
+    return remote.filter(c => c.status !== "REVOKED").map(c => ({
       id: c.id, label: c.label, connection_status: c.status,
       ruc: c.ruc.split("-")[0], ruc_dv: c.ruc.split("-")[1],
       razon_social: c.status === "APPROVED" ? c.legalName : null,
@@ -156,23 +170,45 @@ Deno.serve(async (req: Request) => {
         await partner("/connections", "POST", {
           requesterId: user.id, requesterEmail: user.email, label, ruc,
         });
-        return json({ issuers: await sync() });
+        // A successful HTTP response is not enough. Fenex can retain the old
+        // REVOKED row for its audit trail, and previously the app interpreted
+        // that 2xx as a new request even when Fenex never reopened it. Confirm
+        // the authoritative connection list contains this RUC as genuinely
+        // PENDING (or already APPROVED) before telling the device it was sent.
+        const issuers = await sync();
+        const confirmed = issuers.find(profile =>
+          `${profile.ruc}-${profile.ruc_dv}` === ruc
+          && ["PENDING", "APPROVED"].includes(profile.connection_status)
+        );
+        if (!confirmed)
+          throw new Error("Fenex accepted the request but did not create a pending connection. The Fenex backend must reopen the revoked profile before this request can be approved.");
+        return json({ issuers });
       }
       case "unlink": {
         if (!/^[0-9a-f-]{36}$/i.test(issuerId)) return json({ error: "Invalid connection" }, 400);
         await partner("/connections/" + issuerId + "?requesterId=" + encodeURIComponent(user.id), "DELETE");
-        return json({ issuers: await sync() });
+        // Do not tell the device it disconnected until Fenex's authoritative
+        // connection list confirms that this profile is no longer active.
+        const issuers = await sync();
+        if (issuers.some(p => p.id === issuerId))
+          throw new Error("Fenex did not confirm the disconnection. Please try again.");
+        return json({ issuers });
       }
       case "setDefaultIssuer": {
         const profiles = await sync();
         if (!profiles.some(p => p.id === issuerId && p.connection_status === "APPROVED"))
           return json({ error: "Choose a connected profile." }, 409);
+        // Old app versions omit isDefault and continue to mean "select". New
+        // versions send false when the already-selected button is tapped again.
+        const shouldSetDefault = body.isDefault !== false;
         const { error: clearError } = await db.from("ht_issuers").update({ is_default: false })
           .eq("user_id", user.id).eq("is_default", true);
         if (clearError) throw new Error("Could not change default profile.");
-        const { error } = await db.from("ht_issuers").update({ is_default: true })
-          .eq("user_id", user.id).eq("id", issuerId);
-        if (error) throw new Error("Could not set default profile.");
+        if (shouldSetDefault) {
+          const { error } = await db.from("ht_issuers").update({ is_default: true })
+            .eq("user_id", user.id).eq("id", issuerId);
+          if (error) throw new Error("Could not set default profile.");
+        }
         return json({ issuers: await sync() });
       }
       case "link": return json({ error: "Password linking has been replaced by issuer approval. Refresh Virtus." }, 409);
@@ -223,7 +259,10 @@ Deno.serve(async (req: Request) => {
       default: return json({ error: "Unsupported Fenex action." }, 400);
     }
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Fenex connection failed." }, 502);
+    return json(
+      { error: error instanceof Error ? error.message : "Fenex connection failed." },
+      error instanceof FenexHttpError ? error.status : 502,
+    );
   }
 });
 

@@ -2,8 +2,8 @@
   "appId": "com.virtusharvest.app",
   "appName": "Virtus Harvest",
   "webDir": "www",
-  "backgroundColor": "#ffffff",
+  "backgroundColor": "#242426",
   "ios": {
-    "backgroundColor": "#ffffff"
+    "backgroundColor": "#242426"
   }
 }
