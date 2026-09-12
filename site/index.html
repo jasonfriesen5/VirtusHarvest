@@ -1599,6 +1599,30 @@ body{
   font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
   color:var(--text3);padding:12px 17px 6px;
 }
+/* iOS-style switch. Segmented controls elsewhere are for choices among two or
+   more options; this is a plain on/off, where a track that slides reads faster
+   than two words to compare. */
+.ios-switch{
+  position:relative;flex-shrink:0;
+  width:51px;height:31px;border-radius:16px;
+  border:none;padding:0;cursor:pointer;
+  background:rgba(120,120,128,0.32);
+  transition:background .22s cubic-bezier(.4,0,.2,1);
+  appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;
+}
+.ios-switch-knob{
+  position:absolute;top:2px;left:2px;
+  width:27px;height:27px;border-radius:14px;background:#fff;
+  box-shadow:0 3px 8px rgba(0,0,0,0.15),0 1px 1px rgba(0,0,0,0.16);
+  transition:transform .22s cubic-bezier(.4,0,.2,1), width .18s ease;
+}
+.ios-switch.on{background:#2D9D5C;}
+.ios-switch.on .ios-switch-knob{transform:translateX(20px);}
+/* Pressing stretches the knob slightly, the way the real one does. */
+.ios-switch:active .ios-switch-knob{width:31px;}
+.ios-switch.on:active .ios-switch-knob{transform:translateX(16px);}
+[data-theme="dark"] .ios-switch{background:rgba(120,120,128,0.48);}
+
 .seg-ctrl{
   display:flex;
   background:var(--surface2);
@@ -3742,23 +3766,6 @@ function _openPasswordResetWhenReady(){
         <div style="display:none;"><div id="set-sync-status"></div><input id="api-url-input"><div id="device-role-sub"></div><div id="seg-role"></div></div>
 
 
-        <!-- Remisión on/off. Lives in Settings rather than in the Remisión
-             panel itself, because turning it off hides that panel — a switch
-             inside the thing it hides can only be found once. -->
-        <div class="card">
-          <div class="sp-section-lbl" data-en="Paraguay">Paraguay</div>
-          <div class="setting-row">
-            <div>
-              <div class="sr-label" data-en="Nota de Remisión">Nota de Remisión</div>
-              <div class="sr-sub" data-en="SIFEN electronic dispatch notes. Paraguay only — leave off elsewhere.">SIFEN electronic dispatch notes. Paraguay only — leave off elsewhere.</div>
-            </div>
-            <div class="seg-ctrl" id="seg-remision">
-              <button class="seg-btn" data-rm="off" onclick="setRemisionEnabled(false)" data-en="Off">Off</button>
-              <button class="seg-btn" data-rm="on"  onclick="setRemisionEnabled(true)"  data-en="On">On</button>
-            </div>
-          </div>
-        </div>
-
         <!-- Language -->
         <div class="card">
           <div class="sp-section-lbl" data-i18n-key="Language">Language</div>
@@ -3824,6 +3831,20 @@ function _openPasswordResetWhenReady(){
           </div>
           <div class="setting-row" style="border-bottom:none;">
             <div><div class="sr-label" data-en="Connection">Connection</div><div class="sr-sub" id="cloud-conn">--</div></div>
+          </div>
+        </div>
+
+        <!-- Remisión on/off. In Settings rather than in the Remisión panel
+             itself, because turning it off hides that panel — a switch inside
+             the thing it hides can only be found once. -->
+        <div class="card">
+          <div class="sp-section-lbl" data-en="Paraguay">Paraguay</div>
+          <div class="setting-row" style="border-bottom:none;">
+            <div><div class="sr-label" data-en="Nota de Remisión">Nota de Remisión</div></div>
+            <button type="button" class="ios-switch" id="sw-remision" role="switch"
+                    aria-checked="false" onclick="toggleRemision()">
+              <span class="ios-switch-knob"></span>
+            </button>
           </div>
         </div>
 
@@ -5666,9 +5687,7 @@ const _i18n = {
   'Truck':'Camión','Save Truck':'Guardar Camión','Capacity:':'Capacidad:',
   'Alarm at:':'Alarma a:','Alarm at':'Alarma a',
   'Remisión on':'Remisión activada','Remisión off':'Remisión desactivada',
-  'Nota de Remisión':'Nota de Remisión','Paraguay':'Paraguay','On':'Activado','Off':'Desactivado',
-  'SIFEN electronic dispatch notes. Paraguay only — leave off elsewhere.':
-    'Notas de remisión electrónicas SIFEN. Solo Paraguay — déjalo desactivado en otros países.',
+  'Nota de Remisión':'Nota de Remisión','Paraguay':'Paraguay',
   'Edit Truck':'Editar Camión',
 
   // ── Destinations ──
@@ -9651,6 +9670,15 @@ function _rmDefaultForRegion(){
   return false;
 }
 
+/**
+ * Flip it. No _actionHaptic() here on purpose — Settings has one delegated
+ * listener that already fires on every button inside the panel, so calling it
+ * here too buzzed twice for one tap.
+ */
+function toggleRemision(){
+  setRemisionEnabled(!remisionEnabled());
+}
+
 function setRemisionEnabled(on){
   try{ localStorage.setItem(LS_REMISION_ON, on ? '1' : '0'); }catch(e){}
   _rmApplyFlag();
@@ -9669,11 +9697,10 @@ function _rmApplyFlag(){
   var on = remisionEnabled();
   document.body.classList.toggle('rm-on', on);
   // Reflect the live value on the Settings switch.
-  var seg = document.getElementById('seg-remision');
-  if(seg){
-    seg.querySelectorAll('.seg-btn').forEach(function(b){
-      b.classList.toggle('active', (b.getAttribute('data-rm') === 'on') === on);
-    });
+  var sw = document.getElementById('sw-remision');
+  if(sw){
+    sw.classList.toggle('on', on);
+    sw.setAttribute('aria-checked', on ? 'true' : 'false');
   }
   _updateUnitSifenNote();
 }
