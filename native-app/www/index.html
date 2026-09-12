@@ -11014,6 +11014,33 @@ function openTxChoicePicker(kind){
   });
 }
 
+/**
+ * Point the sheet's crop picker at what the given field is growing.
+ *
+ * A field that says it is in chia is the best available guess for a load
+ * coming off it, and it beats the alphabetical first crop the sheet used to
+ * default to. Returns false when there is nothing to go on, so the caller can
+ * fall back.
+ */
+function _txPresetCropForField(fieldId){
+  if(!fieldId) return false;
+  var field = getFields().find(function(z){ return z.id===fieldId; });
+  if(!field || !field.crop) return false;
+  var cropSel = document.getElementById('tx-crop');
+  if(!cropSel) return false;
+  // A field can hold a crop that has since been removed from the list; keep it
+  // selectable rather than silently falling back to something else.
+  var known = Array.prototype.slice.call(cropSel.options)
+    .some(function(o){ return o.value === field.crop; });
+  if(!known){
+    var opt = document.createElement('option');
+    opt.value = field.crop; opt.textContent = T(field.crop);
+    cropSel.appendChild(opt);
+  }
+  cropSel.value = field.crop;
+  return true;
+}
+
 function openTxSheet(logId, fieldId, fieldName){
   // Default the truck picker back on; openTxSheetForTruck() hides it after.
   var _bg = document.getElementById('tx-buggy-group');
@@ -11147,7 +11174,10 @@ function openTxSheet(logId, fieldId, fieldName){
     if(txOperatorGroup) txOperatorGroup.style.gridColumn = '';
     _updateTxFieldDisplay();
     document.getElementById('tx-weight').value = '';
-    if(crops.length) cropSel.value = crops[0];
+    // The field in play, whether it came in as an argument or is simply the
+    // one being weighed into.
+    var _cropField = _txSelectedFieldId || (selectedField && selectedField.id) || null;
+    if(!_txPresetCropForField(_cropField) && crops.length) cropSel.value = crops[0];
     document.getElementById('tx-buggy').value = '';
     document.getElementById('tx-unload').value = '';
     document.getElementById('tx-notes').value = '';
@@ -15864,6 +15894,14 @@ function openTxFieldPicker(){
         _txSelectedFieldId   = field.id;
         _txSelectedFieldName = field.name;
         _updateTxFieldDisplay();
+        // Add mode only. Following the field's crop while EDITING would quietly
+        // rewrite what a recorded load was weighed as, which is a different and
+        // much less welcome thing to do.
+        var editing = (document.getElementById('tx-edit-id') || {}).value;
+        if(!editing){
+          _txPresetCropForField(field.id);
+          if(typeof _txRefreshChoiceDisplays === 'function') _txRefreshChoiceDisplays();
+        }
         closeFieldOnlyPicker();
       });
       body.appendChild(row);
