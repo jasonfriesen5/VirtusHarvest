@@ -23,7 +23,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Keep in step with APP_VERSION in index.html (the About screen reads that).
         // Bump versionCode for every Play upload; Play rejects a reused value.
-        versionCode 25
+        versionCode 26
         versionName "1.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
