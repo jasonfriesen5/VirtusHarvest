@@ -53,7 +53,7 @@ export default function Layout() {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
-            {/* The full artwork includes the "HARVEST" wordmark, which turns to
+            {/* The full artwork includes the "CART" wordmark, which turns to
                 mush at 28px. Zooming to the V-and-wheat mark crops the wordmark
                 out — the adjacent text already says the name. */}
             <span className="block h-7 w-7 shrink-0 overflow-hidden rounded-md ring-1 ring-black/5 dark:ring-white/10">

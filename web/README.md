@@ -48,7 +48,7 @@ light value falls outside the contrast band on a dark surface.
 
 `public/virtus-icon.png` is a copy of `Glas Virtus Icon.png` from the repo root.
 Replace both together if the mark ever changes. The full artwork carries the
-"HARVEST" wordmark, so the 28px header mark CSS-zooms to the V-and-wheat and
+"CART" wordmark, so the 28px header mark CSS-zooms to the V-and-wheat and
 crops the wordmark out.
 
 ## How it reads the data
