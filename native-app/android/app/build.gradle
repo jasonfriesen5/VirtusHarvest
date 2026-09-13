@@ -18,12 +18,12 @@ android {
     namespace = "com.virtusharvest.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.virtusharvest.app"
+        applicationId "com.virtuscart.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Keep in step with APP_VERSION in index.html (the About screen reads that).
         // Bump versionCode for every Play upload; Play rejects a reused value.
-        versionCode 29
+        versionCode 30
         versionName "1.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
