@@ -112,35 +112,24 @@ this is a common cause of a rejected first review.
   over a path in the notes that didn't match the app — **open the app and walk
   the path you write down before submitting.**
 
-Paste this into **Instructions** (paths verified against the running app —
-Apple rejected 1.0 (9) over a path in the notes that did not match):
+Paste this into **Instructions**. That field is capped at **500 characters**, so
+it is deliberately terse — 463 with a normal YouTube URL in place, leaving 37
+spare. Anything longer gets cut off mid-sentence, and the hardware paragraph is
+the part a reviewer must see.
+
+Paths are verified against the running app: the tabs are Display, Fields, Trucks,
+Dest and Device, with Settings under More. Apple rejected 1.0 (9) over a path in
+the notes that was not where the notes said it was.
 
 ```
-Virtus Cart is the companion app for the Virtus grain cart scale, a Bluetooth LE
-weighing device fitted to farm grain carts. Sign in with the account above. It is
-pre-loaded with 2 farms, 4 fields with drawn boundaries, 3 trucks, 3 destinations,
-3 operators and about 18 recorded loads, so every screen has real data.
+HARDWARE: live weighing needs the physical Virtus scale, which we cannot ship to reviewers. Without it the Display tab shows no weight and Device lists no scale. This is expected, not a defect. Video of the app with a real scale: <YOUTUBE LINK>
 
-HARDWARE REQUIREMENT - PLEASE READ
-Live weighing requires the physical Virtus scale, which we cannot ship to the
-review team. Without it the Display tab shows no weight and the Device tab lists
-no scale. This is expected, not a defect.
-
-Demo video showing the app working with a real scale, including the background
-notification while the screen is off:
-<YOUTUBE LINK>
-
-Everything else is fully reviewable with no hardware:
-- Fields: create farms and fields, draw a field boundary on the satellite map
-- Trucks: create a truck with a capacity and a near-full alarm
-- Dest: create a destination
-- Display: add a load manually; it appears in the field and truck history
-- More > Settings: units (kg/lb/bushels), language (English, Spanish,
-  Portuguese), dark mode
-- More > Settings > Delete Account: permanent account deletion
-
-Support: support@virtusharvest.com
+The demo account holds 2 farms, 4 fields, 3 trucks and ~18 loads. Everything else works without hardware: Fields, Trucks, Dest, adding loads manually, and More > Settings > Delete Account.
 ```
+
+The **Name** field above it takes something like `Full app`, with the demo email
+and password in the credential fields — those are separate fields and do not
+count against the 500.
 
 ### The demo video
 
