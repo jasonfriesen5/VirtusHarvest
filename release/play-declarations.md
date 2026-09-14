@@ -60,22 +60,46 @@ describe one app, and a reviewer comparing them should find no contradiction.
 (URL: `https://virtusharvest.com/support`; in-app path: More ▸ Settings ▸
 Delete Account.)
 
-| Play data type | Collected | Shared | Processed ephemerally | Required | Purpose |
+| Play data type | Collected | Shared | Ephemeral | Required | Purpose |
 |---|---|---|---|---|---|
 | Personal info → **Email address** | Yes | No | No | Required | App functionality, Account management |
 | Personal info → **Name** | Yes | No | No | Optional | App functionality |
+| Personal info → **Address** | Yes | No | No | Optional | App functionality |
+| Personal info → **Other info** | Yes | No | No | Optional | App functionality |
 | Location → **Precise location** | Yes | No | No | Optional | App functionality |
 | App activity → **Other user-generated content** | Yes | No | No | Required | App functionality |
 
 Everything else: **not collected**. No advertising ID, no analytics SDK, no crash
 reporter, no photos, no contacts, no financial data, no purchases.
 
-> **"Shared" means transmitted to a third party.** Supabase is the app's own
-> backend under the developer's account, which Play treats as processing, not
-> sharing — so every Shared answer is No. If the Fenex remisión integration ever
-> sends grower data from the app itself rather than server-side, that answer
-> changes. Today it does not: the app calls a Supabase Edge Function, and the
-> function talks to Fenex.
+### Address and Other info are there because of the remisión
+
+A remisión is a SIFEN fiscal document, so issuing one needs identity data the rest
+of the app never touches: **RUC** tax numbers and **razón social** legal names for
+the issuer, the receiver and the hauler (`ht_destinations.ruc/razon_social/address`,
+`ht_trucks.transportista_ruc/_name/_address`), and the hauler may instead be
+identified by **CI**, a national ID number.
+
+- **Address** covers the receiver and hauler addresses.
+- **Other info** covers the RUC and CI numbers. A company RUC is not personal data,
+  but a sole trader's is, and a CI always is — so declare it.
+
+Both are **Optional**: they are only ever collected from growers who turn the
+remisión switch on, which is off at install.
+
+### Why "Shared" is No, including for the remisión
+
+Play defines sharing as transferring user data to a third party, and that includes
+transfers from your own backend — so "the edge function calls Fenex, not the app"
+is not by itself the reason. The reason is that Play exempts two things that both
+apply here: a transfer a **user specifically initiates** (the grower taps to issue
+the remisión, having switched the feature on), and a transfer made **to comply with
+a legal obligation**, which a fiscal document filed with the tax authority is.
+
+Supabase is separately exempt as a service provider processing on your behalf.
+
+If the app ever sends grower data anywhere the user did not ask for and the law
+does not require, this answer changes.
 
 ### Why Precise and not Approximate
 `getCurrentPosition` runs with `enableHighAccuracy: true` and coordinates are
