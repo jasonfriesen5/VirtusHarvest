@@ -112,18 +112,57 @@ this is a common cause of a rejected first review.
   over a path in the notes that didn't match the app — **open the app and walk
   the path you write down before submitting.**
 
-Suggested note:
+Paste this into **Instructions** (paths verified against the running app —
+Apple rejected 1.0 (9) over a path in the notes that did not match):
 
-> Sign in with the credentials above. The account is pre-loaded with a season of
-> harvest records.
->
-> Live weighing requires a Virtus grain-cart scale, which is Bluetooth hardware
-> not available to reviewers — the Scale tab will show "not connected". Every
-> other feature works without it: Records lists loads, Fields shows farms and
-> field boundaries on a map, Trucks shows capacities and loads, and More ▸
-> Settings holds language, units and Delete Account.
+```
+Virtus Cart is the companion app for the Virtus grain cart scale, a Bluetooth LE
+weighing device fitted to farm grain carts. Sign in with the account above. It is
+pre-loaded with 2 farms, 4 fields with drawn boundaries, 3 trucks, 3 destinations,
+3 operators and about 18 recorded loads, so every screen has real data.
 
----
+HARDWARE REQUIREMENT - PLEASE READ
+Live weighing requires the physical Virtus scale, which we cannot ship to the
+review team. Without it the Display tab shows no weight and the Device tab lists
+no scale. This is expected, not a defect.
+
+Demo video showing the app working with a real scale, including the background
+notification while the screen is off:
+<YOUTUBE LINK>
+
+Everything else is fully reviewable with no hardware:
+- Fields: create farms and fields, draw a field boundary on the satellite map
+- Trucks: create a truck with a capacity and a near-full alarm
+- Dest: create a destination
+- Display: add a load manually; it appears in the field and truck history
+- More > Settings: units (kg/lb/bushels), language (English, Spanish,
+  Portuguese), dark mode
+- More > Settings > Delete Account: permanent account deletion
+
+Support: support@virtusharvest.com
+```
+
+### The demo video
+
+Google expects to see the declared feature actually running, with the foreground
+notification visible. Record a fresh one — the existing
+`App Store Assets/virtus-shots/Google Tablet Sceen/Edit Google Demo.mov` shows the
+old VIRTUS HARVEST branding, which reads as a different app.
+
+Shot list, about 60-90 seconds, on a phone with a scale connected:
+
+1. Open the app, go to the Device tab, connect the scale.
+2. Show live weight changing on the Display tab.
+3. Lock the screen. Pull down the notification shade so "Scale monitoring active"
+   is clearly visible.
+4. With the screen still off, unload so a load is recorded.
+5. Unlock, show the new load in the history with its weight and GPS point.
+6. Disconnect the scale and show the notification disappearing — this
+   demonstrates the service ends when the user ends it.
+
+Upload to YouTube as **Unlisted** (not Private — Google cannot open Private), then
+paste the link in both the foreground service declaration and the App access
+instructions above.
 
 ## 5. Release checklist
 
