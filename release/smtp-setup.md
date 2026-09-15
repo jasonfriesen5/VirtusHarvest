@@ -107,6 +107,22 @@ only `resend._domainkey.send`.
     |---|---|
     | Sender email | `noreply@send.virtusharvest.com` |
     | Sender name | `Virtus Cart` |
+
+> ⚠ **The sender NAME and the sender ADDRESS are not the same thing.** The name is
+> free text and can say anything — "Virtus Cart" is fine. The address must be on a
+> domain **verified in Resend**. On 2026-09-15 the address was changed to
+> `send.virtuscart.com` to match the rename, and every sign-up and password reset
+> started failing with:
+>
+> ```
+> gomail: could not send email 1: 550 "The send.virtuscart.com domain is not
+> verified. Please, add and verify your domain on https://resend.com/domains"
+> ```
+>
+> Supabase fails the whole request when the mail cannot be sent, so `/signup`
+> returned 500 and no user row was created at all — it looks like a broken app
+> rather than a mail problem. Only change the address to a new domain **after**
+> that domain is verified in Resend and its DNS records are live.
     | Host | `smtp.resend.com` |
     | Port | `587` |
     | Username | `resend` |
