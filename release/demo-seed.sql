@@ -14,6 +14,8 @@
 -- HOW TO USE
 --   1. Create the account in the app first (sign up + confirm the email).
 --   2. Check demo_email below.
+--      (Columns kept in step with the live schema: ht_fields.crop,
+--       ht_trucks.alert_at_kg and weighings.truck_id were added later.)
 --   3. Run the whole file in the Supabase SQL editor.
 --   4. Sign in on a device and Sync to pull it down.
 --
@@ -42,7 +44,15 @@ begin
     raise exception 'No auth user for % — create the account in the app first.', demo_email;
   end if;
 
-  -- ── Wipe (same order delete_own_account() uses) ───────────────────────────
+  -- ── Wipe (children first: these FK to weighings with NO ACTION) ───────────
+  delete from public.ht_remisiones          where user_id = uid;
+  delete from public.ht_truckloads          where user_id = uid;
+  delete from public.ht_load_assignments    where user_id = uid;
+  delete from public.ht_destination_customers where user_id = uid;
+  delete from public.ht_issuer_tokens       where user_id = uid;
+  delete from public.ht_issuers             where user_id = uid;
+  delete from public.ht_routes              where user_id = uid;
+  delete from public.ht_emisor              where user_id = uid;
   delete from public.weighings       where user_id = uid;
   delete from public.ht_boundaries   where user_id = uid;
   delete from public.ht_fields       where user_id = uid;
@@ -64,11 +74,11 @@ begin
     (f2, uid, 'Eastview Acres');
 
   -- ── Fields ────────────────────────────────────────────────────────────────
-  insert into public.ht_fields (id, user_id, farm_id, name, area, area_unit, notes) values
-    (z1, uid, f1, 'North Quarter', 58.20, 'ha', 'Tile drained, good access off the grid road'),
-    (z2, uid, f1, 'Creek Field',   32.50, 'ha', 'Low corner stays wet in spring'),
-    (z3, uid, f1, 'Home Section',  64.75, 'ha', null),
-    (z4, uid, f2, 'Airport Field', 41.20, 'ha', null);
+  insert into public.ht_fields (id, user_id, farm_id, name, area, area_unit, notes, crop) values
+    (z1, uid, f1, 'North Quarter', 58.20, 'ha', 'Tile drained, good access off the grid road', 'Corn'),
+    (z2, uid, f1, 'Creek Field',   32.50, 'ha', 'Low corner stays wet in spring',              'Oats'),
+    (z3, uid, f1, 'Home Section',  64.75, 'ha', null,                                          'Canola'),
+    (z4, uid, f2, 'Airport Field', 41.20, 'ha', null,                                          'Soybeans');
 
   -- ── One drawn boundary, so the Field Map has something on it ──────────────
   -- Shape matches what the app writes: [{ id, points:[{lat,lng}, …] }]
@@ -81,10 +91,10 @@ begin
       ]}]'::jsonb);
 
   -- ── Trucks ────────────────────────────────────────────────────────────────
-  insert into public.ht_trucks (id, user_id, name, plate, driver, capacity, make_model, notes) values
-    ('demo_truck_1', uid, 'Super B',     'JHT 418', 'Marcus Reimer', 42000, 'Peterbilt 379', null),
-    ('demo_truck_2', uid, 'Tandem',      'KPD 902', 'Elena Fehr',    15000, 'Ford F-900',    'Used for short hauls to the bins'),
-    ('demo_truck_3', uid, 'Grain Liner', 'RWQ 233', 'Marcus Reimer', 38000, 'Kenworth T800', null);
+  insert into public.ht_trucks (id, user_id, name, plate, driver, capacity, make_model, notes, alert_at_kg) values
+    ('demo_truck_1', uid, 'Super B',     'JHT 418', 'Marcus Reimer', 42000, 'Peterbilt 379', null, 38000),
+    ('demo_truck_2', uid, 'Tandem',      'KPD 902', 'Elena Fehr',    15000, 'Ford F-900',    'Used for short hauls to the bins', 13500),
+    ('demo_truck_3', uid, 'Grain Liner', 'RWQ 233', 'Marcus Reimer', 38000, 'Kenworth T800', null, 34000);
 
   -- ── Destinations ──────────────────────────────────────────────────────────
   insert into public.ht_destinations (id, user_id, name) values
@@ -116,12 +126,15 @@ begin
   insert into public.weighings
     (id, user_id, worker, farm, buggy, crop, zone, field_id, unload, delivered_to,
      weight, wet_weight, dry_weight, moisture, unit, notes, timestamp, lat, lng,
-     is_truck_empty, auto_detected, synced, season_id)
+     is_truck_empty, auto_detected, synced, season_id, truck_id)
   select
     'demo_w_'||n, uid, worker, farm, buggy, crop, zone, fid, dest, dest,
     wt, wt, round(wt * (1 - (moist-13)/100.0), 2), moist, 'kg', note,
     now() - (days || ' days')::interval, lat, lng,
-    false, auto, true, s_id
+    false, auto, true, s_id,
+    case buggy when 'Super B' then 'demo_truck_1'
+               when 'Tandem'  then 'demo_truck_2'
+               else 'demo_truck_3' end
   from (values
     ( 1,'Elena Fehr',   'Riverbend Farms','Super B',    'Wheat',   'North Quarter', z1,'Home Bins',          14820.5,13.8,10,42.68105,-80.79880,true, null),
     ( 2,'Elena Fehr',   'Riverbend Farms','Super B',    'Wheat',   'North Quarter', z1,'Home Bins',          15230.0,13.6, 9,42.68140,-80.79805,true, null),
