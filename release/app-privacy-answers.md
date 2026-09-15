@@ -69,10 +69,13 @@ these answers are expected to agree.
 - Calls the `delete_own_account()` Postgres function, which clears all ten
   user-owned tables and then the `auth.users` row.
 
-⚠ **The FKs from the app tables to `auth.users` are `NO ACTION`, not `CASCADE`.**
-That function only works because it deletes every user-owned table by hand first.
-**Any new user-owned table must be added to it**, or account deletion starts
-failing on the foreign key — which would break 5.1.1(v) compliance.
+⚠ **Outdated warning removed.** This used to say the foreign keys were `NO ACTION`
+and that `delete_own_account()` only worked because it deleted every table by
+hand. That stopped being true when the `cascade_user_data_on_account_delete`
+migration ran: re-verified 2026-09-15, all 22 user_id foreign keys are
+`ON DELETE CASCADE`, the newer remisión and issuer tables included. The function
+still lists the tables explicitly as insurance, so a table added without a
+cascade cannot break deletion silently.
 
 Verified end-to-end on 2026-08-12: a test account and every associated row were
 removed, with zero orphaned records across all ten tables plus `auth.identities`

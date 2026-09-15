@@ -20,20 +20,30 @@ begin
     raise exception 'Not authenticated';
   end if;
 
-  -- IMPORTANT — see the note at the bottom of this file.
-  -- If your tables do NOT cascade from auth.users, delete them explicitly here
-  -- first, e.g.:
-  --
-  --   delete from public.ht_logs     where user_id = uid;
-  --   delete from public.ht_carts    where user_id = uid;
-  --   delete from public.ht_fields   where user_id = uid;
-  --   delete from public.ht_farms    where user_id = uid;
-  --   delete from public.ht_trucks   where user_id = uid;
-  --   delete from public.ht_destinations where user_id = uid;
-  --   delete from public.ht_operators    where user_id = uid;
-  --   delete from public.ht_seasons      where user_id = uid;
-  --
-  -- Uncomment and adjust to match your actual table and column names.
+  -- Every user_id foreign key is ON DELETE CASCADE, so the final delete alone
+  -- would clear these rows. They are listed anyway, children first, so deletion
+  -- does not silently depend on a schema property no one re-checks — a future
+  -- table added with a plain `references auth.users(id)` would otherwise make
+  -- account deletion fail outright. Insurance, not a requirement.
+
+  delete from public.ht_remisiones            where user_id = uid;
+  delete from public.ht_truckloads            where user_id = uid;
+  delete from public.ht_load_assignments      where user_id = uid;
+  delete from public.ht_destination_customers where user_id = uid;
+  delete from public.ht_issuer_tokens         where user_id = uid;
+  delete from public.ht_issuers               where user_id = uid;
+  delete from public.ht_emisor                where user_id = uid;
+  delete from public.ht_routes                where user_id = uid;
+  delete from public.weighings                where user_id = uid;
+  delete from public.ht_boundaries            where user_id = uid;
+  delete from public.ht_fields                where user_id = uid;
+  delete from public.ht_farms                 where user_id = uid;
+  delete from public.ht_trucks                where user_id = uid;
+  delete from public.ht_destinations          where user_id = uid;
+  delete from public.ht_operators             where user_id = uid;
+  delete from public.ht_crops                 where user_id = uid;
+  delete from public.ht_carts                 where user_id = uid;
+  delete from public.ht_seasons               where user_id = uid;
 
   delete from auth.users where id = uid;
 end;
@@ -45,40 +55,29 @@ grant execute on function public.delete_own_account() to authenticated;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- CASCADE STATUS — VERIFIED 2026-08-18
+-- CASCADE STATUS — RE-VERIFIED 2026-09-15
 --
--- Deleting auth.users only removes the user's rows automatically if each table
--- references it with ON DELETE CASCADE. Originally none of them did: all ten
--- foreign keys were NO ACTION, so `delete from auth.users` was REJECTED for any
--- account that held data, and account deletion failed with a foreign-key error.
--- That made the App Store 5.1.1(v) feature non-functional and the privacy
--- policy's deletion claim untrue.
+-- All 22 user_id foreign keys are ON DELETE CASCADE, including the tables added
+-- since the original check: ht_remisiones, ht_truckloads, ht_load_assignments,
+-- ht_emisor, ht_issuers, ht_issuer_tokens, ht_destination_customers, ht_routes.
+-- The three that reference weighings rather than auth.users cascade too.
 --
--- Fixed by migration `cascade_user_data_on_account_delete`, which re-created
--- every user_id foreign key with ON DELETE CASCADE:
+-- Declare every new table's key `references auth.users(id) on delete cascade`.
+-- The explicit deletes in the function body are a second line of defence for the
+-- day someone forgets.
 --
---   weighings, ht_boundaries, ht_carts, ht_crops, ht_destinations,
---   ht_farms, ht_fields, ht_operators, ht_seasons, ht_trucks
+-- Re-check with:
 --
--- Because the cascade is now in the schema, the function body needs no explicit
--- deletes, and any NEW table picks up the same behaviour as long as its
--- user_id foreign key is declared `references auth.users(id) on delete cascade`.
--- Declare it that way when you add one — that is the whole maintenance burden.
+--   select c.conrelid::regclass::text as tbl,
+--          case c.confdeltype when 'a' then 'NO ACTION' when 'c' then 'CASCADE' end as on_delete
+--   from pg_constraint c join pg_namespace n on n.oid = c.connamespace
+--   where c.contype = 'f' and n.nspname = 'public'
+--     and c.confrelid in ('auth.users'::regclass, 'public.weighings'::regclass)
+--   order by on_delete, tbl;
 --
--- Re-check at any time with:
---
---   select tc.table_name, rc.delete_rule
---   from information_schema.table_constraints tc
---   join information_schema.referential_constraints rc
---     on tc.constraint_name = rc.constraint_name
---   where tc.constraint_type = 'FOREIGN KEY'
---     and tc.table_schema = 'public'
---   order by rc.delete_rule, tc.table_name;
---
--- Anything that is not CASCADE will be orphaned when an account is deleted.
---
--- STILL WORTH DOING: an end-to-end test. Create a throwaway account in the app,
--- add a load, delete the account from More ▸ Cloud ▸ Delete Account, then
--- confirm the rows are gone. The schema is correct, but only a real run proves
--- the whole path works.
+-- END-TO-END TEST — PASSED 2026-09-15. A throwaway auth user with rows in
+-- ht_farms, weighings, ht_truckloads, ht_remisiones, ht_load_assignments,
+-- ht_emisor, ht_issuers and ht_routes was deleted through this function with
+-- request.jwt.claims set to that user; the user row and every child row were
+-- gone afterwards, with no stray rows left behind.
 -- ─────────────────────────────────────────────────────────────────────────────
