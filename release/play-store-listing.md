@@ -212,6 +212,61 @@ O Virtus Cart precisa de uma balança Virtus para graneleiro para ler pesos.
 
 ---
 
+## Release name and release notes
+
+**Release name** is internal — only you see it in Play Console. Use the version
+and build so a row in the release list is unambiguous:
+
+```
+1.0.4 (30)
+```
+
+**Release notes** are public, shown to testers now and on the store listing later.
+Play caps each language at **500 characters** and wants one block per language,
+matching the languages the listing is translated into.
+
+### en-US  *(379 / 500)*
+
+```
+First release of Virtus Cart.
+
+Weigh every load off your grain cart over Bluetooth and record it against a field, truck, destination and crop. Totals per field and per season, field boundaries on a satellite map, and a near-full alarm so the driver knows before the truck is over.
+
+Works with no signal and syncs when you are back in service.
+
+Requires a Virtus grain cart scale.
+```
+
+### es-419  *(346 / 500)*
+
+```
+Primera versión de Virtus Cart.
+
+Pesá cada carga de tu tolva por Bluetooth y registrala por lote, camión, destino y cultivo. Totales por lote y por zafra, perímetros sobre mapa satelital y alarma de camión casi lleno, para avisar antes de pasarse.
+
+Funciona sin señal y sincroniza cuando volvés a tenerla.
+
+Requiere una balanza Virtus para tolva.
+```
+
+### pt-BR  *(368 / 500)*
+
+```
+Primeira versão do Virtus Cart.
+
+Pese cada carga do seu graneleiro por Bluetooth e registre por talhão, caminhão, destino e cultura. Totais por talhão e por safra, contornos em mapa de satélite e alarme de caminhão quase cheio, para avisar antes de passar do peso.
+
+Funciona sem sinal e sincroniza quando o sinal voltar.
+
+Precisa de uma balança Virtus para graneleiro.
+```
+
+For later updates, drop the "First release" line and say what changed — Play
+shows these notes on the What's New card, and "bug fixes and improvements"
+tells a grower nothing.
+
+---
+
 ## Store settings
 
 | setting | value |
