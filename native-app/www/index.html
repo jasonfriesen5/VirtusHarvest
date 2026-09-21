@@ -2570,7 +2570,7 @@ body.panel-open #tl-fab{display:none;}
    opaque rule above is what should apply; being named here overrode it, because
    both carry !important and this one comes later. */
 [data-theme="dark"] .card,[data-theme="dark"] .info-rows,[data-theme="dark"] .tx-sheet,[data-theme="dark"] .sleep-box,[data-theme="dark"] .field-only-sheet,
-[data-theme="dark"] .add-form,[data-theme="dark"] .login-card,[data-theme="dark"] .entry-form-panel,[data-theme="dark"] .confirm-box,
+[data-theme="dark"] .add-form,[data-theme="dark"] .login-card,[data-theme="dark"] .signin-card,[data-theme="dark"] .entry-form-panel,[data-theme="dark"] .confirm-box,
 [data-theme="dark"] .cal-sheet,[data-theme="dark"] .truck-load-bar-wrap,
 [data-theme="dark"] .farm-item,[data-theme="dark"] .field-item,
 [data-theme="dark"] .more-list,[data-theme="dark"] .more-profile,
@@ -18778,7 +18778,7 @@ async function doForgotPassword(){
 
   try{
     var result = await sb.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://virtusharvest.com'
+      redirectTo: 'https://virtusharvest.com/reset-password'
     });
     if(result.error) throw result.error;
     _setAuthBtnLoading('forgot-btn', false, 'Send Reset Link');

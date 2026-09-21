@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const { error } = await withAuthTimeout(
             supabase.auth.resetPasswordForEmail(email.trim(), {
-              redirectTo: window.location.origin,
+              redirectTo: `${window.location.origin}/reset-password`,
             }),
             'Password reset',
           );

@@ -5,6 +5,7 @@ import { DataProvider } from './state/DataProvider';
 import Layout from './components/Layout';
 import { Spinner } from './components/ui';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import Records from './pages/Records';
 import Truckloads from './pages/Truckloads';
 import Live from './pages/Live';
@@ -23,6 +24,18 @@ export default function App() {
   // Without this gate the login form flashes for a moment on every reload
   // while getSession() reads the persisted token.
   if (loading) return <Spinner label="Checking your session…" />;
+
+  // A recovery link has to be matched on path, not on session. Supabase
+  // consumes the token on load and creates a session, so the checks below would
+  // otherwise treat the visitor as signed in and drop them on the dashboard —
+  // which is exactly what made the reset email look like it did nothing.
+  if (window.location.pathname === '/reset-password') {
+    return (
+      <Routes>
+        <Route path="*" element={<ResetPassword />} />
+      </Routes>
+    );
+  }
 
   if (!session) {
     return (
