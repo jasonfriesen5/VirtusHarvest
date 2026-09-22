@@ -146,7 +146,7 @@ Dest and Device, with Settings under More. Apple rejected 1.0 (9) over a path in
 the notes that was not where the notes said it was.
 
 ```
-HARDWARE: live weighing needs the physical Virtus scale, which we cannot ship to reviewers. Without it the Display tab shows no weight and Device lists no scale. This is expected, not a defect. Video of the app with a real scale: <YOUTUBE LINK>
+HARDWARE: live weighing needs the physical Virtus scale, which we cannot ship to reviewers. Without it the Display tab shows no weight and Device lists no scale. This is expected, not a defect. Video of the app with a real scale: https://youtu.be/5rHVuxwlDDU
 
 The demo account holds 2 farms, 4 fields, 3 trucks and ~18 loads. Everything else works without hardware: Fields, Trucks, Dest, adding loads manually, and More > Settings > Delete Account.
 ```
