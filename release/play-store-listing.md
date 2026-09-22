@@ -267,6 +267,56 @@ tells a grower nothing.
 
 ---
 
+## Release 1.0.4 (33) — closed testing
+
+Build 30 went to the closed track before the fixes below existed. 33 is what
+testers should actually be running, and the build the foreground service demo
+video shows.
+
+**Release name**
+
+```
+1.0.4 (33)
+```
+
+**Release notes**
+
+### en-US  *(422 / 500)*
+
+```
+Fixes since the first test build:
+
+• The truck near-full alarm now sounds when the screen is locked or the app is in the background. It no longer doubles up while the app is open.
+• Virtus Cart now shows a notification while it is watching the scale, so you can see it is running.
+• Password reset emails now open a page where you can set a new password.
+• The sign-in and password reset screens are readable in dark mode.
+```
+
+### es-419  *(470 / 500)*
+
+```
+Correcciones desde la primera versión de prueba:
+
+• La alarma de camión casi lleno ahora suena con la pantalla bloqueada o con la app en segundo plano. Ya no suena dos veces con la app abierta.
+• Virtus Cart ahora muestra una notificación mientras controla la balanza, para que veas que está funcionando.
+• El correo de recuperación ahora abre una página para crear una nueva contraseña.
+• Las pantallas de inicio de sesión y de recuperación se leen bien en modo oscuro.
+```
+
+### pt-BR  *(452 / 500)*
+
+```
+Correções desde a primeira versão de teste:
+
+• O alarme de caminhão quase cheio agora toca com a tela bloqueada ou com o aplicativo em segundo plano. Não toca mais duas vezes com o aplicativo aberto.
+• O Virtus Cart agora mostra uma notificação enquanto monitora a balança, para você ver que está funcionando.
+• O e-mail de redefinição agora abre uma página para criar uma nova senha.
+• As telas de login e de redefinição ficam legíveis no modo escuro.
+```
+
+
+---
+
 ## Store settings
 
 | setting | value |
