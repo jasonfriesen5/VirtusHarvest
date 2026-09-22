@@ -40,6 +40,19 @@ ScaleMonitoringService — android:foregroundServiceType="connectedDevice|locati
 > while this user-initiated, notification-backed service is running, and only to
 > stamp a load the user is actively creating.
 
+### How the form actually behaves (learned 2026-09-21)
+
+The Location section lists "Other" twice: once under **Background location
+updates**, once under **Other tasks**. Only the one under **Other tasks** has a
+free-text description box. Tick that one and put the justification there — the
+category names suggest background location updates is the closer fit, but
+without a description field there is nowhere to explain the use, which is the
+part a reviewer reads.
+
+Connected device needs only **Continuous data transfer to an external device**.
+
+Each section takes the video link separately, even though one video covers both.
+
 **Video:** Play wants a link (YouTube unlisted is fine) showing the feature in
 use and the notification visible. `App Store Assets/virtus-shots/Google Tablet
 Sceen/Edit Google Demo.mov` is a starting point — check it actually shows the
