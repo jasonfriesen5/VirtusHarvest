@@ -14433,6 +14433,29 @@ function _truckAlertAt(truck){
  * threshold would otherwise beep on every packet. Emptying the truck rearms it,
  * as does the load dropping back clear of the margin.
  */
+/**
+ * Raises the near-full alarm by whichever route can actually be perceived.
+ *
+ * Both at once is wrong: with the app in front the operator got the in-app beep
+ * AND the system notification sound. document.hidden is the right test rather
+ * than "is the screen off" — a driver who has switched to another app cannot see
+ * the toast or hear a suspended AudioContext either, so that case wants the
+ * notification too.
+ */
+function _tlbFireAlarm(text){
+  var hidden = false;
+  try{ hidden = (typeof document !== 'undefined') && document.hidden === true; }catch(e){}
+
+  if(hidden){
+    // No toast worth queuing here — nothing is on screen to read it.
+    _nativeNearFullAlarm(T('Truck almost full'), text);
+    return 'native';
+  }
+  _tlbBeep();
+  showToast(text, 'warn');
+  return 'inapp';
+}
+
 function _tlbCheckAlert(loaded, capacity){
   var truck = selectedTruck && getTrucks().find(function(t){ return t.id===selectedTruck.id; });
   var trigger = _truckAlertAt(truck);
@@ -14441,10 +14464,7 @@ function _tlbCheckAlert(loaded, capacity){
   if(loaded >= trigger){
     if(!_tlbAlerted){
       _tlbAlerted = true;
-      _tlbBeep();
-      _nativeNearFullAlarm(T('Truck almost full'),
-        fmtWt(Math.max(0, capacity - loaded),'') + ' ' + T('to full'));
-      showToast(fmtWt(Math.max(0, capacity - loaded),'') + ' ' + T('to full'), 'warn');
+      _tlbFireAlarm(fmtWt(Math.max(0, capacity - loaded),'') + ' ' + T('to full'));
     }
   } else if(loaded < trigger - 1){
     // A kilo of hysteresis: a reading hovering on the line must not retrigger.
