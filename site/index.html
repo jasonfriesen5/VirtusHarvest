@@ -5363,6 +5363,26 @@ function _startBackgroundMotionPolling(){
   _backgroundMotionTimer = setInterval(poll, 1000);
 }
 
+/**
+ * Near-full alarm through the native layer.
+ *
+ * _tlbBeep() uses an AudioContext, and Android suspends that the moment the
+ * screen goes off — so the one alarm a driver most needs to hear was silent
+ * exactly when the tablet was face-down in the cab. Native posts a sounding,
+ * vibrating notification that shows on the lock screen. The beep stays for the
+ * foreground case and for iOS, where this plugin does not exist.
+ */
+function _nativeNearFullAlarm(title, text){
+  try{
+    var plugin = _getBackgroundScalePlugin();
+    if(plugin && typeof plugin.alarm === 'function'){
+      plugin.alarm({ title: title, text: text });
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
 function _stopBackgroundScaleMonitor(){
   var plugin = _getBackgroundScalePlugin();
   if(_backgroundMotionTimer){ clearInterval(_backgroundMotionTimer); _backgroundMotionTimer = null; }
@@ -6136,7 +6156,7 @@ const _i18n_es = {
   'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
-  'Sound the alarm at':'Sonar la alarma a','to full':'para llenar',
+  'Sound the alarm at':'Sonar la alarma a','to full':'para llenar','Truck almost full':'Camión casi lleno',
   'No alarm':'Sin alarma','Set the capacity first':'Primero indica la capacidad',
   'Never sounds — over capacity':'Nunca suena — supera la capacidad',
   'Preparing the PDF…':'Preparando el PDF…','Open or send the remisión':'Abrir o enviar la remisión',
@@ -7040,7 +7060,7 @@ const _i18n_pt = {
   'Hasta':'Até',
   'Fechas':'Datas',
   'Sound the alarm at':'Tocar o alarme em',
-  'to full':'para encher',
+  'to full':'para encher','Truck almost full':'Caminhão quase cheio',
   'No alarm':'Sem alarme',
   'Set the capacity first':'Defina a capacidade primeiro',
   'Never sounds — over capacity':'Nunca toca — acima da capacidade',
@@ -14422,6 +14442,8 @@ function _tlbCheckAlert(loaded, capacity){
     if(!_tlbAlerted){
       _tlbAlerted = true;
       _tlbBeep();
+      _nativeNearFullAlarm(T('Truck almost full'),
+        fmtWt(Math.max(0, capacity - loaded),'') + ' ' + T('to full'));
       showToast(fmtWt(Math.max(0, capacity - loaded),'') + ' ' + T('to full'), 'warn');
     }
   } else if(loaded < trigger - 1){

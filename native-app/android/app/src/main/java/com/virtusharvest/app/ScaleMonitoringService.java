@@ -8,7 +8,11 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -31,6 +35,9 @@ public class ScaleMonitoringService extends Service {
 
     private static final String CHANNEL_ID = "scale_monitoring";
     private static final int NOTIFICATION_ID = 1801;
+    /** Separate channel: the monitoring notice must stay silent, the alarm must not. */
+    private static final String ALARM_CHANNEL_ID = "truck_near_full";
+    private static final int ALARM_NOTIFICATION_ID = 1802;
     private static volatile double lastLatitude = Double.NaN;
     private static volatile double lastLongitude = Double.NaN;
     private static volatile double lastSpeedKmh = Double.NaN;
@@ -171,6 +178,53 @@ public class ScaleMonitoringService extends Service {
     static double getLastSpeedKmh() { return lastSpeedKmh; }
     static float getLastAccuracy() { return lastAccuracy; }
     static long getLastLocationAt() { return lastLocationAt; }
+
+    /**
+     * Raises the near-full alarm from the native side.
+     *
+     * The web layer beeps through an AudioContext, which Android suspends once
+     * the screen goes off — so the alarm that matters most, the one warning a
+     * driver the truck is nearly over, was the one that could not sound. A
+     * high-importance notification carries its own sound and vibration and shows
+     * on the lock screen.
+     */
+    static void raiseNearFullAlarm(Context context, String title, String text) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager == null) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && manager.getNotificationChannel(ALARM_CHANNEL_ID) == null) {
+            NotificationChannel channel = new NotificationChannel(
+                ALARM_CHANNEL_ID, "Truck near full", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Sounds when a truck reaches its alarm weight");
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0, 400, 200, 400});
+            Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            channel.setSound(sound, new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build());
+            manager.createNotificationChannel(channel);
+        }
+
+        Intent openApp = new Intent(context, MainActivity.class);
+        openApp.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title == null || title.isEmpty() ? "Truck almost full" : title)
+            .setContentText(text == null ? "" : text)
+            .setContentIntent(PendingIntent.getActivity(context, 1, openApp, pendingFlags))
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true);
+
+        manager.notify(ALARM_NOTIFICATION_ID, builder.build());
+    }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;

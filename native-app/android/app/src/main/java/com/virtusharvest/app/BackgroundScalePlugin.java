@@ -43,6 +43,18 @@ public class BackgroundScalePlugin extends Plugin {
         call.resolve(result);
     }
 
+    /** Near-full alarm, raised natively so it still sounds with the screen off. */
+    @PluginMethod
+    public void alarm(PluginCall call) {
+        try {
+            ScaleMonitoringService.raiseNearFullAlarm(
+                getContext(), call.getString("title"), call.getString("text"));
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Unable to raise the near-full alarm", error);
+        }
+    }
+
     /** Returns the newest native GPS fix collected by the foreground service. */
     @PluginMethod
     public void getMotion(PluginCall call) {
