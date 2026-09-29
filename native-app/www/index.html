@@ -6156,7 +6156,7 @@ const _i18n_es = {
   'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
-  'Sound the alarm at':'Sonar la alarma a','to full':'para llenar','Truck almost full':'Camión casi lleno',
+  'Sound the alarm at':'Sonar la alarma a','to full':'para llenar','Weighing paused':'Pesaje en pausa','iPhone and iPad stop the app when it is not on screen, so the scale was disconnected. Any load that came off the cart in that time was not recorded — check the truck total before carrying on.':'El iPhone y el iPad detienen la app cuando no está en pantalla, así que la balanza se desconectó. Cualquier carga que haya salido de la tolva en ese tiempo no quedó registrada: revisá el total del camión antes de seguir.','Keep this app open — iPhone and iPad stop weighing when it is not on screen.':'Mantené esta app abierta: el iPhone y el iPad detienen el pesaje cuando no está en pantalla.','min':'min','Truck almost full':'Camión casi lleno',
   'No alarm':'Sin alarma','Set the capacity first':'Primero indica la capacidad',
   'Never sounds — over capacity':'Nunca suena — supera la capacidad',
   'Preparing the PDF…':'Preparando el PDF…','Open or send the remisión':'Abrir o enviar la remisión',
@@ -7060,7 +7060,7 @@ const _i18n_pt = {
   'Hasta':'Até',
   'Fechas':'Datas',
   'Sound the alarm at':'Tocar o alarme em',
-  'to full':'para encher','Truck almost full':'Caminhão quase cheio',
+  'to full':'para encher','Weighing paused':'Pesagem pausada','iPhone and iPad stop the app when it is not on screen, so the scale was disconnected. Any load that came off the cart in that time was not recorded — check the truck total before carrying on.':'O iPhone e o iPad param o aplicativo quando ele não está na tela, então a balança foi desconectada. Qualquer carga que saiu do graneleiro nesse período não foi registrada — confira o total do caminhão antes de continuar.','Keep this app open — iPhone and iPad stop weighing when it is not on screen.':'Mantenha este aplicativo aberto — o iPhone e o iPad param a pesagem quando ele não está na tela.','min':'min','Truck almost full':'Caminhão quase cheio',
   'No alarm':'Sem alarme',
   'Set the capacity first':'Defina a capacidade primeiro',
   'Never sounds — over capacity':'Nunca toca — acima da capacidade',
@@ -11260,6 +11260,55 @@ async function _wakeLockApply(){
 // lock whenever the page is hidden.
 document.addEventListener('visibilitychange', function(){ _wakeLockApply(); });
 
+/* ── iOS background guard ──────────────────────────────────────────────────
+ * Android keeps weighing with the screen off, because the foreground service
+ * holds the process open and the WebView keeps running. iOS has no equivalent:
+ * the moment the app leaves the screen, WKWebView is suspended, the scale link
+ * drops, and any load that comes off the cart in that window is never recorded.
+ * Fixing that properly means moving the weighing loop into Swift. Until then
+ * the honest thing is to make the gap impossible to miss rather than let the
+ * operator find out at the weighbridge.
+ */
+var _iosPausedAt = 0;
+
+function _isIosShell(){
+  try{
+    return !!(window.Capacitor && typeof Capacitor.getPlatform === 'function'
+              && Capacitor.getPlatform() === 'ios');
+  }catch(e){ return false; }
+}
+
+function _iosGuardHidden(){
+  if(!_isIosShell() || _iosPausedAt) return;
+  if(typeof _psScaleConnected === 'function' && !_psScaleConnected()) return;
+  _iosPausedAt = Date.now();
+}
+
+function _iosGuardVisible(){
+  if(!_iosPausedAt) return;
+  var seconds = Math.round((Date.now() - _iosPausedAt) / 1000);
+  _iosPausedAt = 0;
+  // A glance at the app switcher is not a lost load. Only a gap long enough to
+  // have covered an unload is worth interrupting someone for.
+  if(seconds < 20) return;
+  var mins = Math.max(1, Math.round(seconds / 60));
+  showConfirm({
+    icon: '⚠️',
+    title: T('Weighing paused'),
+    msg: T('iPhone and iPad stop the app when it is not on screen, so the scale was disconnected. Any load that came off the cart in that time was not recorded — check the truck total before carrying on.')
+         + ' (' + mins + ' ' + T('min') + ')',
+    okLabel: T('OK'),
+    singleButton: true
+  });
+}
+
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'hidden') _iosGuardHidden();
+  else _iosGuardVisible();
+});
+// pagehide fires in cases visibilitychange does not, and costs nothing here.
+window.addEventListener('pagehide', _iosGuardHidden);
+
 // The lock used to be acquired at a handful of moments only — connect, wake,
 // visibility change — and never re-checked. Anything that dropped it (the OS
 // declining, a transient hide, a rejected request) left the screen unlocked
@@ -11678,6 +11727,12 @@ async function connectRealDevice(device){
       connected = true;
       showToast('Connected: ' + deviceName, 'success');
       logEvent('scale', 'Connected: '+deviceName);
+      // Said up front on iOS, where leaving the app stops the weighing.
+      if(_isIosShell()){
+        setTimeout(function(){
+          showToast(T('Keep this app open — iPhone and iPad stop weighing when it is not on screen.'), 'warn');
+        }, 2600);
+      }
       // Request device info and status immediately
       setTimeout(function(){ sendBleCommand('INFO'); }, 500);
       setTimeout(function(){ sendBleCommand('STATUS'); }, 1000);
