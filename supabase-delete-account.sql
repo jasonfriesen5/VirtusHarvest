@@ -81,3 +81,18 @@ grant execute on function public.delete_own_account() to authenticated;
 -- request.jwt.claims set to that user; the user row and every child row were
 -- gone afterwards, with no stray rows left behind.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SCALE LICENCE TABLES (added 2026-10-01) — deliberately NOT in the list above.
+--
+--   scale_sightings  ON DELETE CASCADE   — goes with the account, as it should.
+--   scale_licences   ON DELETE SET NULL  — the record that a scale was sold or
+--                                          lent must survive the account. A demo
+--                                          row left unassigned simply stops
+--                                          weighing until it is reassigned.
+--   app_admins       ON DELETE CASCADE
+--
+-- So the "every user_id FK is covered" check will list these three as absent
+-- from the function. That is intended: deleting from scale_licences here would
+-- erase the proof of a sale.
+-- ─────────────────────────────────────────────────────────────────────────────

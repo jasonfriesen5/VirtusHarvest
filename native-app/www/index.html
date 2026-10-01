@@ -289,6 +289,23 @@ body{
 .stable-dot{width:9px;height:9px;border-radius:50%;background:var(--text3);}
 .stable-dot.ok{background:var(--green-mid);}
 .scale-hint{font-size:12px;color:var(--text3);margin-top:6px;}
+/* Demo-scale countdown, top right. Amber while there is time, red in the last
+   three days so the end of a loan is never a surprise. */
+.demo-badge{display:inline-flex;align-items:center;gap:6px;margin-right:8px;padding:6px 11px;
+  border-radius:999px;border:1px solid rgba(196,125,0,0.35);background:rgba(245,200,66,0.18);
+  color:#8A5A00;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.02em;
+  white-space:nowrap;cursor:pointer;}
+/* display:inline-flex above beats the browser's own [hidden] rule, so state it
+   explicitly — otherwise every user gets an empty pill in the corner. */
+.demo-badge[hidden]{display:none;}
+.demo-badge.urgent{border-color:rgba(176,48,32,0.4);background:rgba(176,48,32,0.12);color:#B03020;}
+.demo-badge.renew{border-color:rgba(42,122,226,0.35);background:rgba(42,122,226,0.10);color:#1F5FAF;}
+[data-theme="dark"] .demo-badge{color:#F5C842;}
+[data-theme="dark"] .demo-badge.urgent{color:#FF8A7A;}
+[data-theme="dark"] .demo-badge.renew{color:#8EB8F0;}
+.licence-secondary{width:100%;margin-top:10px;padding:13px;border-radius:12px;background:transparent;
+  border:1.5px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:15px;
+  font-weight:600;cursor:pointer;}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
 .form-row.one{grid-template-columns:1fr;}
 .ff label{font-size:10px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:5px;}
@@ -3168,6 +3185,7 @@ function _openPasswordResetWhenReady(){
       <div class="topbar-logo" style="line-height:1.05;">VIRTUS<br><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:#C47D00;">CART</span></div>
     </div>
     <div class="topbar-right">
+      <button type="button" class="demo-badge" id="demo-badge" hidden onclick="_licenceExplain()"></button>
       <!-- GPS / Online / BT pills hidden per user preference (JS still updates them) -->
       <div class="gps-pill gps-off" id="pill-gps" onclick="requestGPS()" title="Tap to enable GPS" style="display:none"><div class="gps-dot"></div><span id="pill-gps-txt">GPS</span></div>
       <div class="status-pill pill-offline" id="pill-net" style="display:none"><div class="pill-dot"></div><span id="pill-net-txt">Offline</span></div>
@@ -4754,6 +4772,18 @@ function _openPasswordResetWhenReady(){
   </div>
 </div>
 
+<!-- Demo-scale block. Only ever shown for a scale registered as a demo unit
+     that has ended or is lent to someone else — never for a paid or unknown
+     scale. See supabase/migrations/20261001120000_scale_licences.sql. -->
+<div class="sleep-overlay" id="licence-block">
+  <div class="sleep-box">
+    <div class="sleep-title" id="licence-title"></div>
+    <div class="sleep-sub" id="licence-sub"></div>
+    <button class="btn-gold btn-gold-lg" style="width:100%;" onclick="_licenceContact()" id="licence-contact"></button>
+    <button type="button" class="licence-secondary" onclick="disconnectBt()" id="licence-disconnect"></button>
+  </div>
+</div>
+
 <!-- Add Grain Cart sheet (name it + scan/connect its scale) -->
 <div class="tx-sheet-overlay" id="add-cart-sheet-overlay" onclick="if(event.target===this)closeAddCartSheet()">
   <div class="tx-sheet">
@@ -6156,7 +6186,7 @@ const _i18n_es = {
   'field still needed':'dato faltante','fields still needed':'datos faltantes',
   'transaction moved':'transacción actualizada','transactions moved':'transacciones actualizadas',
   'Traslado':'Traslado','Desde':'Desde','Hasta':'Hasta','Fechas':'Fechas',
-  'Sound the alarm at':'Sonar la alarma a','to full':'para llenar','Weighing paused':'Pesaje en pausa','iPhone and iPad stop the app when it is not on screen, so the scale was disconnected. Any load that came off the cart in that time was not recorded — check the truck total before carrying on.':'El iPhone y el iPad detienen la app cuando no está en pantalla, así que la balanza se desconectó. Cualquier carga que haya salido de la tolva en ese tiempo no quedó registrada: revisá el total del camión antes de seguir.','Keep this app open — iPhone and iPad stop weighing when it is not on screen.':'Mantené esta app abierta: el iPhone y el iPad detienen el pesaje cuando no está en pantalla.','min':'min','Truck almost full':'Camión casi lleno',
+  'Sound the alarm at':'Sonar la alarma a','to full':'para llenar','Demo':'Demo','day':'día','days':'días','Renewal due':'Renovación pendiente','Demo ended':'Demo terminada','This demo scale\'s free month is over. Contact Virtus to keep it — your harvest records stay in your account.':'El mes gratis de esta balanza demo terminó. Contactá a Virtus para quedártela: tus registros de cosecha siguen en tu cuenta.','Demo scale in use':'Balanza demo en uso','This demo scale is lent to another account. Contact Virtus if it should be yours.':'Esta balanza demo está prestada a otra cuenta. Contactá a Virtus si debería ser tuya.','Contact Virtus':'Contactar a Virtus','Annual renewal':'Renovación anual','The annual plan for this scale has ended. The scale keeps weighing — contact Virtus to renew.':'El plan anual de esta balanza terminó. La balanza sigue pesando: contactá a Virtus para renovarlo.','Demo scale':'Balanza demo','Lent to you until':'Prestada hasta el','To keep it after that, contact Virtus — everything you weigh stays in your account.':'Para quedártela después, contactá a Virtus: todo lo que peses queda en tu cuenta.','Weighing paused':'Pesaje en pausa','iPhone and iPad stop the app when it is not on screen, so the scale was disconnected. Any load that came off the cart in that time was not recorded — check the truck total before carrying on.':'El iPhone y el iPad detienen la app cuando no está en pantalla, así que la balanza se desconectó. Cualquier carga que haya salido de la tolva en ese tiempo no quedó registrada: revisá el total del camión antes de seguir.','Keep this app open — iPhone and iPad stop weighing when it is not on screen.':'Mantené esta app abierta: el iPhone y el iPad detienen el pesaje cuando no está en pantalla.','min':'min','Truck almost full':'Camión casi lleno',
   'No alarm':'Sin alarma','Set the capacity first':'Primero indica la capacidad',
   'Never sounds — over capacity':'Nunca suena — supera la capacidad',
   'Preparing the PDF…':'Preparando el PDF…','Open or send the remisión':'Abrir o enviar la remisión',
@@ -7060,7 +7090,7 @@ const _i18n_pt = {
   'Hasta':'Até',
   'Fechas':'Datas',
   'Sound the alarm at':'Tocar o alarme em',
-  'to full':'para encher','Weighing paused':'Pesagem pausada','iPhone and iPad stop the app when it is not on screen, so the scale was disconnected. Any load that came off the cart in that time was not recorded — check the truck total before carrying on.':'O iPhone e o iPad param o aplicativo quando ele não está na tela, então a balança foi desconectada. Qualquer carga que saiu do graneleiro nesse período não foi registrada — confira o total do caminhão antes de continuar.','Keep this app open — iPhone and iPad stop weighing when it is not on screen.':'Mantenha este aplicativo aberto — o iPhone e o iPad param a pesagem quando ele não está na tela.','min':'min','Truck almost full':'Caminhão quase cheio',
+  'to full':'para encher','Demo':'Demo','day':'dia','days':'dias','Renewal due':'Renovação pendente','Demo ended':'Demonstração encerrada','This demo scale\'s free month is over. Contact Virtus to keep it — your harvest records stay in your account.':'O mês grátis desta balança de demonstração terminou. Fale com a Virtus para ficar com ela — seus registros de colheita continuam na sua conta.','Demo scale in use':'Balança de demonstração em uso','This demo scale is lent to another account. Contact Virtus if it should be yours.':'Esta balança de demonstração está emprestada para outra conta. Fale com a Virtus se ela deveria ser sua.','Contact Virtus':'Falar com a Virtus','Annual renewal':'Renovação anual','The annual plan for this scale has ended. The scale keeps weighing — contact Virtus to renew.':'O plano anual desta balança terminou. A balança continua pesando — fale com a Virtus para renovar.','Demo scale':'Balança de demonstração','Lent to you until':'Emprestada até','To keep it after that, contact Virtus — everything you weigh stays in your account.':'Para ficar com ela depois disso, fale com a Virtus — tudo o que você pesar fica na sua conta.','Weighing paused':'Pesagem pausada','iPhone and iPad stop the app when it is not on screen, so the scale was disconnected. Any load that came off the cart in that time was not recorded — check the truck total before carrying on.':'O iPhone e o iPad param o aplicativo quando ele não está na tela, então a balança foi desconectada. Qualquer carga que saiu do graneleiro nesse período não foi registrada — confira o total do caminhão antes de continuar.','Keep this app open — iPhone and iPad stop weighing when it is not on screen.':'Mantenha este aplicativo aberto — o iPhone e o iPad param a pesagem quando ele não está na tela.','min':'min','Truck almost full':'Caminhão quase cheio',
   'No alarm':'Sem alarme',
   'Set the capacity first':'Defina a capacidade primeiro',
   'Never sounds — over capacity':'Nunca toca — acima da capacidade',
@@ -11309,6 +11339,176 @@ document.addEventListener('visibilitychange', function(){
 // pagehide fires in cases visibilitychange does not, and costs nothing here.
 window.addEventListener('pagehide', _iosGuardHidden);
 
+/* ── Scale licences ─────────────────────────────────────────────────────────
+ * THE RULE: only a scale registered as a DEMO unit can ever be stopped.
+ *
+ * A paid scale, a lapsed paid scale, a scale with no record, no signal, the
+ * server unreachable, signed out with nothing cached — every one of those keeps
+ * weighing. A customer who paid for the hardware must never be locked out of it,
+ * so every uncertain path here falls open. The server applies the same rule
+ * (scale_licence_status); this side only acts on what it says.
+ *
+ * Days are counted from the server's clock as of the last check plus time
+ * elapsed since, so moving the phone's date does not extend a loan.
+ */
+var _licenceBlocked = false;
+var _licenceSerial  = null;
+var _licenceState   = null;   // { status, validUntil, serverNow, fetchedAt }
+
+function _licenceCacheKey(serial){ return 'vh_licence_' + serial; }
+
+function _licenceCacheRead(serial){
+  try{ return JSON.parse(localStorage.getItem(_licenceCacheKey(serial)) || 'null'); }
+  catch(e){ return null; }
+}
+function _licenceCacheWrite(serial, st){
+  try{ localStorage.setItem(_licenceCacheKey(serial), JSON.stringify(st)); }catch(e){}
+}
+
+async function _licenceCheck(serial){
+  serial = String(serial || '').trim().toUpperCase();
+  if(!serial) return;
+  _licenceSerial = serial;
+
+  // Cached answer first, so a known demo unit is handled even with no signal.
+  var cached = _licenceCacheRead(serial);
+  if(cached) _licenceApply(cached);
+
+  // getSupabase(), as everywhere else — there is no global client. Reading a
+  // global `sb` here made this return before ever asking the server.
+  var sb = (typeof getSupabase === 'function') ? getSupabase() : null;
+  if(!sb || !currentWorker || !currentWorker.id) return;
+  try{
+    var res = await sb.rpc('scale_licence_status', { p_serial: serial });
+    if(res.error || !res.data || !res.data.status) return;   // keep whatever we had
+    if(_licenceSerial !== serial) return;                     // scale changed meanwhile
+    var st = {
+      status:     res.data.status,
+      validUntil: res.data.valid_until || null,
+      serverNow:  res.data.server_now || null,
+      fetchedAt:  Date.now(),
+      account:    currentWorker.id
+    };
+    _licenceCacheWrite(serial, st);
+    _licenceApply(st);
+  }catch(e){
+    console.warn('[licence] check failed — staying open:', (e && e.message) || e);
+  }
+}
+
+// Days left on a loan, by the server's clock carried forward.
+function _licenceDaysLeft(st){
+  if(!st || !st.validUntil) return null;
+  var serverNow = st.serverNow ? new Date(st.serverNow).getTime() : Date.now();
+  var now = serverNow + Math.max(0, Date.now() - (st.fetchedAt || Date.now()));
+  return Math.ceil((new Date(st.validUntil).getTime() - now) / 86400000);
+}
+
+function _licenceApply(st){
+  _licenceState = st;
+  var status = st && st.status;
+
+  // A demo that was fine at the last check may have run out since, offline.
+  if(status === 'demo'){
+    var d = _licenceDaysLeft(st);
+    if(d !== null && d <= 0) status = 'demo_ended';
+  }
+  // A cached answer belongs to the account that fetched it; a demo lent to
+  // someone else must not unlock just because a different person signed in.
+  if((status === 'demo' || status === 'demo_ended') && st.account
+     && currentWorker && currentWorker.id && st.account !== currentWorker.id){
+    status = 'demo_other_account';
+  }
+
+  var block = (status === 'demo_ended' || status === 'demo_other_account');
+  _licenceBlocked = block;
+  _licenceRenderBlock(block ? status : null);
+  _licenceRenderBadge(status, st);
+  if(block) logEvent('licence', 'Demo scale blocked: ' + status + ' (' + _licenceSerial + ')');
+}
+
+function _licenceClear(){
+  _licenceBlocked = false;
+  _licenceSerial = null;
+  _licenceState = null;
+  _licenceRenderBlock(null);
+  _licenceRenderBadge(null, null);
+}
+
+function _licenceRenderBadge(status, st){
+  var b = document.getElementById('demo-badge');
+  if(!b) return;
+  b.classList.remove('urgent', 'renew');
+  if(status === 'demo'){
+    var d = Math.max(0, _licenceDaysLeft(st) || 0);
+    b.textContent = T('Demo') + ' · ' + d + ' ' + (d === 1 ? T('day') : T('days'));
+    if(d <= 3) b.classList.add('urgent');
+    b.hidden = false;
+  } else if(status === 'paid_renewal_due'){
+    b.textContent = T('Renewal due');
+    b.classList.add('renew');
+    b.hidden = false;
+  } else {
+    b.hidden = true;
+  }
+}
+
+function _licenceRenderBlock(status){
+  var el = document.getElementById('licence-block');
+  if(!el) return;
+  if(!status){ el.classList.remove('open'); return; }
+  var ended = status === 'demo_ended';
+  document.getElementById('licence-title').textContent =
+    ended ? T('Demo ended') : T('Demo scale in use');
+  document.getElementById('licence-sub').textContent = ended
+    ? T("This demo scale's free month is over. Contact Virtus to keep it — your harvest records stay in your account.")
+    : T('This demo scale is lent to another account. Contact Virtus if it should be yours.');
+  document.getElementById('licence-contact').textContent = T('Contact Virtus');
+  document.getElementById('licence-disconnect').textContent = T('Disconnect');
+  el.classList.add('open');
+}
+
+function _licenceDate(iso){
+  try{
+    var loc = _lang === 'es' ? 'es-PY' : (_lang === 'pt' ? 'pt-BR' : 'en-CA');
+    return new Date(iso).toLocaleDateString(loc, { day: 'numeric', month: 'long', year: 'numeric' });
+  }catch(e){ return String(iso).slice(0, 10); }
+}
+
+function _licenceExplain(){
+  var st = _licenceState;
+  if(!st) return;
+  if(st.status === 'paid_renewal_due'){
+    showConfirm({
+      icon: 'ℹ️',
+      title: T('Annual renewal'),
+      msg: T('The annual plan for this scale has ended. The scale keeps weighing — contact Virtus to renew.'),
+      okLabel: T('Contact Virtus'),
+      cancelLabel: T('Close')
+    }).then(function(r){ if(r === true) _licenceContact(); });
+    return;
+  }
+  showConfirm({
+    icon: 'ℹ️',
+    title: T('Demo scale'),
+    msg: T('Lent to you until') + ' ' + _licenceDate(st.validUntil) + '. ' +
+         T('To keep it after that, contact Virtus — everything you weigh stays in your account.'),
+    okLabel: T('Contact Virtus'),
+    cancelLabel: T('Close')
+  }).then(function(r){ if(r === true) _licenceContact(); });
+}
+
+function _licenceContact(){
+  var subj = encodeURIComponent('Virtus Cart — scale ' + (_licenceSerial || ''));
+  window.location.href = 'mailto:support@virtusharvest.com?subject=' + subj;
+}
+
+// Coming back to the app refreshes the count, and catches a loan extended or a
+// scale sold while the app was closed.
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && _licenceSerial) _licenceCheck(_licenceSerial);
+});
+
 // The lock used to be acquired at a handful of moments only — connect, wake,
 // visibility change — and never re-checked. Anything that dropped it (the OS
 // declining, a transient hide, a rejected request) left the screen unlocked
@@ -11862,6 +12062,7 @@ function _paintDisplayCartName(connected,name){
   }
 }
 function updateBtPills(connected,name){
+  try{ if(!connected && typeof _licenceClear === 'function') _licenceClear(); }catch(e){}
   // Topbar pill + the Grain-Carts-card pill were removed per user preference
   // (redundant with the per-cart "● Connected" status). Only the Display
   // tab's device row is kept.
@@ -11960,6 +12161,9 @@ if(document.fonts && document.fonts.ready){
 }
 
 function setRawWeightWithStable(w, fwStable){
+  // Demo unit ended or lent elsewhere — see _licenceApply. typeof-guarded so a
+  // fault in the licence code can only ever fail open, never stop weighing.
+  if(typeof _licenceBlocked !== 'undefined' && _licenceBlocked === true) return;
   rawWeight    = w;
   // Use firmware stable flag if provided — overrides app's own stability detection
   if(fwStable !== undefined) weightStable = fwStable;
@@ -11973,6 +12177,7 @@ function setRawWeightWithStable(w, fwStable){
 }
 
 function setRawWeight(w){
+  if(typeof _licenceBlocked !== 'undefined' && _licenceBlocked === true) return;
   rawWeight = w;
   _auTick(w);
   if(_rafPending) return;
@@ -17351,6 +17556,7 @@ async function connectAdvertDevice(device){
 
 // ══ DEVICE INFO ══
 function updateDeviceInfo(info){
+  try{ if(info && info.serial && info.serial !== 'N/A' && typeof _licenceCheck === 'function') _licenceCheck(info.serial); }catch(e){}
   // info: {model, serial, firmware, battery, extPower, sensitivity, capacity, calibration}
   var fields = {
     'dev-model':       info.model       || 'N/A',
