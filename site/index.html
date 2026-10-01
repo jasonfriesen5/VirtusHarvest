@@ -11498,6 +11498,48 @@ function _licenceExplain(){
   }).then(function(r){ if(r === true) _licenceContact(); });
 }
 
+// ── Scale identity for diagnostic reports ──────────────────────────────────
+// The serial is what a licence is keyed on, so it has to be in every report —
+// connected or not. Falls back to the last scale seen, then to each cart's
+// stored serial, which survives on the account even on a new phone.
+function _diagLastScale(){
+  try{ return JSON.parse(localStorage.getItem('vh_last_scale') || 'null'); }catch(e){ return null; }
+}
+
+function _diagLicenceText(){
+  var st = (typeof _licenceState !== 'undefined') ? _licenceState : null;
+  if(!st) return btDevice ? 'not checked (offline or not signed in)' : '—';
+  switch(st.status){
+    case 'demo':               return 'demo, ' + Math.max(0, _licenceDaysLeft(st) || 0) + ' days left';
+    case 'demo_ended':         return 'demo ended';
+    case 'demo_other_account': return 'demo lent to another account';
+    case 'paid':               return 'paid until ' + String(st.validUntil || '').slice(0, 10);
+    case 'paid_renewal_due':   return 'paid, renewal due since ' + String(st.validUntil || '').slice(0, 10);
+    case 'unregistered':       return 'not registered';
+    default:                   return String(st.status || '—');
+  }
+}
+
+function _diagScaleLines(){
+  var live = (document.getElementById('dev-serial') || {}).textContent || '';
+  var lines = [];
+  if(btDevice && live && live !== 'N/A'){
+    lines.push('Scale serial: ' + live + ' (connected) | licence ' + _diagLicenceText());
+  } else {
+    var last = _diagLastScale();
+    lines.push(last && last.serial
+      ? 'Scale serial: ' + last.serial + ' (last connected ' + new Date(last.at).toLocaleString() + ')'
+      : 'Scale serial: none seen on this device');
+  }
+  var carts = (typeof getCarts === 'function') ? getCarts() : [];
+  if(carts.length){
+    lines.push('Carts: ' + carts.map(function(c){
+      return (c.name || 'Cart') + ' SN ' + (c.serial || '—');
+    }).join('; '));
+  }
+  return lines;
+}
+
 function _licenceContact(){
   var subj = encodeURIComponent('Virtus Cart — scale ' + (_licenceSerial || ''));
   window.location.href = 'mailto:support@virtusharvest.com?subject=' + subj;
@@ -17557,6 +17599,15 @@ async function connectAdvertDevice(device){
 // ══ DEVICE INFO ══
 function updateDeviceInfo(info){
   try{ if(info && info.serial && info.serial !== 'N/A' && typeof _licenceCheck === 'function') _licenceCheck(info.serial); }catch(e){}
+  // Remember the last scale that identified itself, so a diagnostic report sent
+  // after disconnecting — or because it will not connect — still names it.
+  try{
+    if(info && info.serial && info.serial !== 'N/A'){
+      localStorage.setItem('vh_last_scale', JSON.stringify({
+        serial: String(info.serial).toUpperCase(), model: info.model || '',
+        firmware: info.firmware || '', at: Date.now() }));
+    }
+  }catch(e){}
   // info: {model, serial, firmware, battery, extPower, sensitivity, capacity, calibration}
   var fields = {
     'dev-model':       info.model       || 'N/A',
@@ -17999,6 +18050,7 @@ function runDiagnostics(){
   } else {
     termLog('No device connected — device info unavailable', '#F85149');
   }
+  _diagScaleLines().forEach(function(l){ termLog(esc(l), '#E6EDF3'); });
 
   termLog('────── Scale Readings ──────', '#6E7681');
   termLog('Raw weight: '+(rawWeight!==null?rawWeight.toFixed(3)+' kg':'No reading'), '#E6EDF3');
@@ -18052,6 +18104,7 @@ function runDiagnostics(){
   var _diagUnits = getUnits();
   _lastDiagReport = [
     'Virtus Diagnostic '+APP_VERSION+' | '+new Date().toLocaleString(),
+  ].concat(_diagScaleLines()).concat([
     'Device: '+(btDevice ? _diagShort(btDevice.name,'Connected',40) : 'Not connected')+
       ' | Model '+_diagShort(devModel,'N/A',30)+' | SN '+_diagShort(devSerial,'N/A',30)+
       ' | FW '+_diagShort(devFirmware,'N/A',20),
@@ -18071,7 +18124,7 @@ function runDiagnostics(){
       ' | fields '+getFields().length+' | trucks '+getTrucks().length,
     'Settings: '+_diagUnits.weight+'/'+_diagUnits.area+' | role '+getDeviceRole()+
       ' | unload '+auDropKg+'kg | field gain '+AUTO_FIELD_GAIN_KG+'kg'
-  ].concat(_diagEvents).join('\n');
+  ]).concat(_diagEvents).join('\n');
 
   var el = document.getElementById('diag-status');
   if(el) el.textContent = T('Report ready — email it or share with any app');
