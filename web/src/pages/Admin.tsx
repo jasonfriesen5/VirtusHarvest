@@ -32,6 +32,22 @@ type Scale = {
   server_now: string;
 };
 
+type Promotion = {
+  active: boolean;
+  demo_days: number;
+  started_at: string | null;
+  ended_at: string | null;
+};
+
+type PromoDemo = {
+  serial: string;
+  user_id: string | null;
+  account_email: string | null;
+  valid_until: string;
+  created_at: string;
+  server_now: string;
+};
+
 type Action = 'demo_30' | 'paid_1y' | 'paid_3y' | 'paid_5y' | 'comp' | 'clear';
 
 type Payment = {
@@ -99,11 +115,24 @@ export default function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
+  const [promo, setPromo] = useState<Promotion | null>(null);
+  const [promoDemos, setPromoDemos] = useState<PromoDemo[]>([]);
 
   const loadAccounts = useCallback(async () => {
     const { data, error: err } = await supabase.rpc('admin_list_accounts');
     if (err) throw err;
     setAccounts((data ?? []) as Account[]);
+  }, []);
+
+  const loadPromotion = useCallback(async () => {
+    const [p, d] = await Promise.all([
+      supabase.rpc('admin_get_promotion'),
+      supabase.rpc('admin_list_promotion_demos'),
+    ]);
+    if (p.error) throw p.error;
+    if (d.error) throw d.error;
+    setPromo(((p.data ?? []) as Promotion[])[0] ?? null);
+    setPromoDemos((d.data ?? []) as PromoDemo[]);
   }, []);
 
   const loadScales = useCallback(async (acct: Account) => {
@@ -127,13 +156,13 @@ export default function Admin() {
         const { data, error: err } = await supabase.rpc('admin_whoami');
         if (err) throw err;
         setIsAdmin(data === true);
-        if (data === true) await loadAccounts();
+        if (data === true) await Promise.all([loadAccounts(), loadPromotion()]);
       } catch (e) {
         setIsAdmin(false);
         setError(e instanceof Error ? e.message : String(e));
       }
     })();
-  }, [loadAccounts]);
+  }, [loadAccounts, loadPromotion]);
 
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -205,12 +234,42 @@ export default function Admin() {
         `${scale.serial}: ${label}.` +
           (action.startsWith('paid') || action === 'comp' ? ' Attach the invoice PDF below.' : ''),
       );
-      await Promise.all([loadScales(selected), loadAccounts()]);
+      await Promise.all([loadScales(selected), loadAccounts(), loadPromotion()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
+  }
+
+  async function togglePromotion() {
+    if (!promo) return;
+    const turningOn = !promo.active;
+    const ok = window.confirm(
+      turningOn
+        ? `Turn the promotion ON?\n\nEvery account that signs up from now on gets a free ${promo.demo_days}-day demo ` +
+            `on the first brand-new scale it connects.\n\nA scale you have sold but not yet marked Paid will ` +
+            `become a demo if its buyer connects it first — press Paid as soon as a scale is sold.`
+        : 'Turn the promotion OFF?\n\nNew sign-ups stop getting a demo. Demos already given keep running.',
+    );
+    if (!ok) return;
+    setBusy('promo');
+    setError(null);
+    try {
+      const { error: err } = await supabase.rpc('admin_set_promotion', { p_active: turningOn });
+      if (err) throw err;
+      setNotice(turningOn ? 'Promotion is ON for new sign-ups.' : 'Promotion is OFF.');
+      await loadPromotion();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function openAccount(userId: string | null) {
+    const acct = accounts.find((a) => a.user_id === userId);
+    if (acct) void choose(acct);
   }
 
   async function attachInvoice(serial: string, pay: Payment, file: File) {
@@ -279,6 +338,60 @@ export default function Admin() {
         <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
           {notice}
         </div>
+      )}
+
+      {promo && (
+        <Card>
+          <CardHeader
+            title="Promotion — free demo for new sign-ups"
+            subtitle={
+              promo.active
+                ? `ON since ${fmtDate(promo.started_at)} · ${promo.demo_days}-day demo on the first brand-new scale each new account connects`
+                : promo.ended_at
+                  ? `OFF since ${fmtDate(promo.ended_at)}`
+                  : 'OFF'
+            }
+            action={
+              <Button
+                variant={promo.active ? 'secondary' : 'primary'}
+                disabled={busy !== null}
+                onClick={() => void togglePromotion()}
+              >
+                {busy === 'promo' ? 'Saving…' : promo.active ? 'Turn off' : 'Turn on'}
+              </Button>
+            }
+          />
+          {promoDemos.length > 0 && (
+            <div className="px-4 py-3">
+              <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                Demos the promotion gave out. If one of these was actually sold, open it and press Paid.
+              </p>
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {promoDemos.map((d) => {
+                  const left = Math.ceil(
+                    (new Date(d.valid_until).getTime() - new Date(d.server_now).getTime()) / DAY,
+                  );
+                  return (
+                    <li key={d.serial} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                      <span className="min-w-0">
+                        <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">{d.serial}</span>
+                        <span className="ml-2 text-xs text-slate-500">{d.account_email ?? 'no account'}</span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <Pill tone={left <= 0 ? 'red' : left <= 3 ? 'red' : 'amber'}>
+                          {left <= 0 ? 'Ended' : `${left} day${left === 1 ? '' : 's'} left`}
+                        </Pill>
+                        <Button variant="ghost" onClick={() => openAccount(d.user_id)}>
+                          Open
+                        </Button>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </Card>
       )}
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
