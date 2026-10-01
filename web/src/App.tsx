@@ -11,6 +11,7 @@ import Truckloads from './pages/Truckloads';
 import Live from './pages/Live';
 import Manage from './pages/Manage';
 import Account from './pages/Account';
+import Admin from './pages/Admin';
 
 // Recharts and the Google Maps SDK are the two heaviest dependencies, and
 // neither is needed to sign in or read the records table. Splitting them out
@@ -70,6 +71,7 @@ export default function App() {
           />
           <Route path="manage" element={<Manage />} />
           <Route path="account" element={<Account />} />
+          <Route path="admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

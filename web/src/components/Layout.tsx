@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../state/AuthProvider';
 import { useData } from '../state/DataProvider';
 import { usePrefs } from '../state/PrefsProvider';
 import type { AreaUnit, DisplayUnit } from '../lib/units';
 import { Button, cx } from './ui';
+import { supabase } from '../lib/supabase';
 import RemisionRetryRunner from './RemisionRetryRunner';
 
 const NAV = [
@@ -43,6 +45,21 @@ function LiveBadge() {
 }
 
 export default function Layout() {
+  // The Admin tab appears only for admins. admin_whoami() answers for the caller
+  // alone; the page and every function behind it check again on the server, so
+  // hiding the tab is convenience, not the security.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void supabase.rpc('admin_whoami').then(({ data }) => {
+      if (live) setIsAdmin(data === true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const nav = isAdmin ? [...NAV, { to: '/admin', label: 'Admin', end: false }] : NAV;
+
   const { user, signOut } = useAuth();
   const { seasons } = useData();
   const { unit, setUnit, areaUnit, setAreaUnit, seasonId, setSeasonId, theme, toggleTheme } = usePrefs();
@@ -142,7 +159,7 @@ export default function Layout() {
         </div>
 
         <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 pb-1">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
