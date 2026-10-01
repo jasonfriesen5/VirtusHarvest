@@ -11513,7 +11513,10 @@ function _diagLicenceText(){
     case 'demo':               return 'demo, ' + Math.max(0, _licenceDaysLeft(st) || 0) + ' days left';
     case 'demo_ended':         return 'demo ended';
     case 'demo_other_account': return 'demo lent to another account';
-    case 'paid':               return 'paid until ' + String(st.validUntil || '').slice(0, 10);
+    case 'paid':
+      // Complimentary scales are stored as paid until 9999-12-31.
+      if(String(st.validUntil || '') >= '9000') return 'complimentary';
+      return 'paid until ' + String(st.validUntil || '').slice(0, 10);
     case 'paid_renewal_due':   return 'paid, renewal due since ' + String(st.validUntil || '').slice(0, 10);
     case 'unregistered':       return 'not registered';
     default:                   return String(st.status || '—');

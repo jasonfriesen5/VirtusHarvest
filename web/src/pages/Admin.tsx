@@ -32,7 +32,23 @@ type Scale = {
   server_now: string;
 };
 
-type Action = 'demo_30' | 'paid_1y' | 'extend_1y' | 'clear';
+type Action = 'demo_30' | 'paid_1y' | 'paid_3y' | 'paid_5y' | 'comp' | 'clear';
+
+type Payment = {
+  id: string;
+  kind: 'paid' | 'complimentary';
+  years: number | null;
+  valid_until: string;
+  invoice_path: string | null;
+  note: string | null;
+  created_at: string;
+  account_email: string | null;
+};
+
+/** Complimentary scales are stored as paid until 9999-12-31. */
+function isComplimentary(iso: string | null): boolean {
+  return !!iso && new Date(iso).getUTCFullYear() >= 9000;
+}
 
 const DAY = 86_400_000;
 
@@ -68,6 +84,7 @@ function Status({ scale }: { scale: Scale }) {
     if (d <= 0) return <Pill tone="red">Demo ended — stopped</Pill>;
     return <Pill tone={d <= 3 ? 'red' : 'amber'}>{`Demo · ${d} day${d === 1 ? '' : 's'} left`}</Pill>;
   }
+  if (isComplimentary(scale.valid_until)) return <Pill tone="green">Complimentary — no end</Pill>;
   if (d <= 0) return <Pill tone="blue">{`Renewal due since ${fmtDate(scale.valid_until)} — still weighs`}</Pill>;
   return <Pill tone="green">{`Paid until ${fmtDate(scale.valid_until)}`}</Pill>;
 }
@@ -81,6 +98,7 @@ export default function Admin() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [payments, setPayments] = useState<Record<string, Payment[]>>({});
 
   const loadAccounts = useCallback(async () => {
     const { data, error: err } = await supabase.rpc('admin_list_accounts');
@@ -92,7 +110,15 @@ export default function Admin() {
     setScales(null);
     const { data, error: err } = await supabase.rpc('admin_account_scales', { p_user_id: acct.user_id });
     if (err) throw err;
-    setScales((data ?? []) as Scale[]);
+    const list = (data ?? []) as Scale[];
+    setScales(list);
+    const entries = await Promise.all(
+      list.map(async (sc) => {
+        const r = await supabase.rpc('admin_scale_payments', { p_serial: sc.serial });
+        return [sc.serial, (r.data ?? []) as Payment[]] as const;
+      }),
+    );
+    setPayments(Object.fromEntries(entries));
   }, []);
 
   useEffect(() => {
@@ -144,6 +170,12 @@ export default function Admin() {
       );
       if (!ok) return;
     }
+    if (action === 'comp') {
+      const ok = window.confirm(
+        `Make ${scale.serial} complimentary?\n\nIt will never need paying for. You can change it later.`,
+      );
+      if (!ok) return;
+    }
     if (action === 'clear') {
       const ok = window.confirm(
         `Remove the licence for ${scale.serial}?\n\nIt goes back to "not registered", which weighs freely.`,
@@ -163,17 +195,65 @@ export default function Admin() {
       if (err) throw err;
       const label = {
         demo_30: 'lent as a 30-day demo',
-        paid_1y: 'marked paid for one year',
-        extend_1y: 'extended by one year',
+        paid_1y: 'paid for 1 year',
+        paid_3y: 'paid for 3 years',
+        paid_5y: 'paid for 5 years',
+        comp: 'made complimentary',
         clear: 'licence removed',
       }[action];
-      setNotice(`${scale.serial}: ${label}.`);
+      setNotice(
+        `${scale.serial}: ${label}.` +
+          (action.startsWith('paid') || action === 'comp' ? ' Attach the invoice PDF below.' : ''),
+      );
       await Promise.all([loadScales(selected), loadAccounts()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
+  }
+
+  async function attachInvoice(serial: string, pay: Payment, file: File) {
+    if (file.type !== 'application/pdf') {
+      setError('Invoices must be PDF files.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('That PDF is over 10 MB.');
+      return;
+    }
+    // The path is fixed by the server to <SERIAL>/<payment id>.pdf, so a record
+    // can only ever point at its own file; uploading again replaces it.
+    const path = `${serial}/${pay.id}.pdf`;
+    setBusy('invoice' + pay.id);
+    setError(null);
+    try {
+      const up = await supabase.storage
+        .from('invoices')
+        .upload(path, file, { contentType: 'application/pdf', upsert: true });
+      if (up.error) throw up.error;
+      const { error: err } = await supabase.rpc('admin_set_payment_invoice', {
+        p_payment_id: pay.id,
+        p_path: path,
+      });
+      if (err) throw err;
+      setNotice(`Invoice attached to ${serial}.`);
+      if (selected) await loadScales(selected);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function viewInvoice(path: string) {
+    // Private bucket: a short-lived signed link, opened straight away.
+    const { data, error: err } = await supabase.storage.from('invoices').createSignedUrl(path, 120);
+    if (err || !data) {
+      setError(err?.message ?? 'Could not open the invoice.');
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener');
   }
 
   if (isAdmin === null) return <Spinner label="Checking access…" />;
@@ -272,27 +352,75 @@ export default function Admin() {
                     <Status scale={s} />
                   </div>
                   <div className="mt-2.5 flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      disabled={busy !== null}
-                      onClick={() => void apply(s, 'demo_30')}
-                    >
+                    <Button variant="secondary" disabled={busy !== null} onClick={() => void apply(s, 'demo_30')}>
                       {busy === s.serial + 'demo_30' ? 'Saving…' : '30-day demo'}
                     </Button>
-                    <Button variant="primary" disabled={busy !== null} onClick={() => void apply(s, 'paid_1y')}>
-                      {busy === s.serial + 'paid_1y' ? 'Saving…' : 'Paid · 1 year'}
-                    </Button>
-                    {s.kind && (
-                      <Button variant="secondary" disabled={busy !== null} onClick={() => void apply(s, 'extend_1y')}>
-                        {busy === s.serial + 'extend_1y' ? 'Saving…' : '+1 year'}
+                    {(['paid_1y', 'paid_3y', 'paid_5y'] as const).map((a) => (
+                      <Button key={a} variant="primary" disabled={busy !== null} onClick={() => void apply(s, a)}>
+                        {busy === s.serial + a ? 'Saving…' : { paid_1y: 'Paid · 1 yr', paid_3y: 'Paid · 3 yrs', paid_5y: 'Paid · 5 yrs' }[a]}
                       </Button>
-                    )}
+                    ))}
+                    <Button variant="secondary" disabled={busy !== null} onClick={() => void apply(s, 'comp')}>
+                      {busy === s.serial + 'comp' ? 'Saving…' : 'Complimentary'}
+                    </Button>
                     {s.kind && (
                       <Button variant="ghost" disabled={busy !== null} onClick={() => void apply(s, 'clear')}>
                         {busy === s.serial + 'clear' ? 'Saving…' : 'Remove'}
                       </Button>
                     )}
                   </div>
+                  {(payments[s.serial]?.length ?? 0) > 0 && (
+                    <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-800">
+                      <p className="border-b border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:text-slate-300">
+                        Payments
+                      </p>
+                      <ul>
+                        {payments[s.serial].map((p) => (
+                          <li
+                            key={p.id}
+                            className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 text-xs first:border-t-0 dark:border-slate-800"
+                          >
+                            <span className="text-slate-700 dark:text-slate-300">
+                              {fmtDate(p.created_at)} ·{' '}
+                              {p.kind === 'complimentary'
+                                ? 'Complimentary'
+                                : `${p.years} year${p.years === 1 ? '' : 's'} → until ${fmtDate(p.valid_until)}`}
+                              {p.account_email ? ` · ${p.account_email}` : ''}
+                            </span>
+                            <span className="flex items-center gap-2">
+                              {p.invoice_path && (
+                                <Button variant="ghost" onClick={() => void viewInvoice(p.invoice_path!)}>
+                                  View PDF
+                                </Button>
+                              )}
+                              <label
+                                className={cx(
+                                  'cursor-pointer rounded-lg border border-slate-300 px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800',
+                                  busy !== null && 'pointer-events-none opacity-60',
+                                )}
+                              >
+                                {busy === 'invoice' + p.id
+                                  ? 'Uploading…'
+                                  : p.invoice_path
+                                    ? 'Replace PDF'
+                                    : 'Attach PDF'}
+                                <input
+                                  type="file"
+                                  accept="application/pdf"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (f) void attachInvoice(s.serial, p, f);
+                                  }}
+                                />
+                              </label>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
